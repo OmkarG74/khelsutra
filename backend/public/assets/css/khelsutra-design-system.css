@@ -1,0 +1,1071 @@
+/* ============================================================
+   KHELSUTRA MASTER UI/UX DESIGN SYSTEM
+   Single Source of Truth for the Entire KhelSutra Platform
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    /* Primary Master Colors */
+    --ks-navy: #0E1E3B;
+    --ks-sidebar: #0B1B35;
+    --ks-sidebar-hover: #14294A;
+    --ks-primary: #0B6EF3;
+    --ks-primary-hover: #095ED0;
+    --ks-primary-light: #E8F2FF;
+
+    /* Surfaces & Layout */
+    --ks-page-bg: #F3F7FC;
+    --ks-card-bg: #FFFFFF;
+
+    /* Typography Colors */
+    --ks-text: #13294B;
+    --ks-text-secondary: #667085;
+    --ks-text-muted: #98A2B3;
+
+    /* Borders */
+    --ks-border: #E2E8F0;
+    --ks-border-light: #EDF1F7;
+
+    /* Semantic Accents */
+    --ks-success: #16A34A;
+    --ks-success-light: #DCFCE7;
+    --ks-warning: #F59E0B;
+    --ks-warning-light: #FEF3C7;
+    --ks-danger: #EF4444;
+    --ks-danger-light: #FEE2E2;
+    --ks-info: #0EA5E9;
+    --ks-info-light: #E0F2FE;
+    --ks-purple: #7C3AED;
+    --ks-purple-light: #F3E8FF;
+    --ks-cyan: #06B6D4;
+    --ks-cyan-light: #CFFAFE;
+    --ks-gold: #F4B000;
+    --ks-gold-light: #FFF4D6;
+    --ks-white: #FFFFFF;
+    --ks-black: #111827;
+
+    /* Dimensions */
+    --ks-sidebar-width: 236px;
+    --ks-header-height: 70px;
+
+    /* Border Radii */
+    --ks-radius-sm: 6px;
+    --ks-radius-md: 9px;
+    --ks-radius-lg: 13px;
+    --ks-radius-pill: 999px;
+
+    /* Shadows */
+    --ks-shadow-card: 0 2px 10px rgba(15, 35, 70, 0.04);
+    --ks-shadow-dropdown: 0 8px 24px rgba(15, 35, 70, 0.10);
+    --ks-shadow-modal: 0 12px 40px rgba(15, 35, 70, 0.14);
+}
+
+/* ============================================================
+   GLOBAL TYPOGRAPHY & RESET
+   ============================================================ */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif !important;
+    background-color: var(--ks-page-bg);
+    color: var(--ks-text);
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Typography Scale */
+h1, .h1 { font-size: 32px; font-weight: 700; color: var(--ks-text); letter-spacing: -0.02em; }
+h2, .h2 { font-size: 24px; font-weight: 700; color: var(--ks-text); }
+h3, .h3 { font-size: 20px; font-weight: 600; color: var(--ks-text); }
+h4, .h4 { font-size: 18px; font-weight: 600; color: var(--ks-text); }
+h5, .h5 { font-size: 16px; font-weight: 600; color: var(--ks-text); }
+h6, .h6 { font-size: 14px; font-weight: 600; color: var(--ks-text); }
+
+.ks-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ks-text-secondary);
+}
+
+.ks-metric-lg {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--ks-text);
+    line-height: 1.1;
+}
+
+.ks-text-secondary { color: var(--ks-text-secondary) !important; }
+.ks-text-muted { color: var(--ks-text-muted) !important; }
+
+/* ============================================================
+   LAYOUT ENGINE
+   ============================================================ */
+
+.ks-app-layout {
+    display: flex;
+    min-height: 100vh;
+    background-color: var(--ks-page-bg);
+}
+
+/* Sidebar */
+.ks-sidebar {
+    width: var(--ks-sidebar-width);
+    background-color: var(--ks-navy);
+    min-height: 100vh;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ks-sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+.ks-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+}
+
+/* Sidebar Brand */
+.ks-sidebar-brand {
+    padding: 20px 18px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ks-logo-icon {
+    color: var(--ks-gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ks-brand-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #FFFFFF;
+    line-height: 1.1;
+    letter-spacing: 0.2px;
+}
+
+.ks-brand-subtitle {
+    font-size: 11px;
+    font-weight: 500;
+    color: #94A3B8;
+    margin-top: 2px;
+}
+
+/* Sidebar Navigation */
+.ks-sidebar-nav {
+    list-style: none;
+    padding: 14px 12px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-grow: 1;
+}
+
+.ks-nav-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    color: #D5E0F2;
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 500;
+    border-radius: var(--ks-radius-md);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    height: 42px;
+}
+
+.ks-nav-link i, .ks-nav-link svg {
+    color: #B8C6DB;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    transition: color 0.15s ease;
+}
+
+.ks-nav-link:hover {
+    background-color: var(--ks-sidebar-hover);
+    color: #FFFFFF;
+}
+
+.ks-nav-link:hover i, .ks-nav-link:hover svg {
+    color: #FFFFFF;
+}
+
+.ks-nav-link.active {
+    background-color: var(--ks-primary);
+    color: #FFFFFF;
+    font-weight: 600;
+}
+
+.ks-nav-link.active i, .ks-nav-link.active svg {
+    color: #FFFFFF;
+}
+
+/* Sidebar Decorative Bottom Area */
+.ks-sidebar-decorative {
+    padding: 16px 12px 20px;
+    margin-top: auto;
+    text-align: center;
+    position: relative;
+}
+
+.ks-sidebar-athletes-img {
+    width: 100%;
+    max-width: 200px;
+    height: auto;
+    opacity: 0.85;
+    margin: 0 auto 10px;
+    display: block;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
+}
+
+.ks-sidebar-tagline {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #94A3B8;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.ks-sidebar-subtagline {
+    font-size: 8.5px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: #64748B;
+    text-transform: uppercase;
+}
+
+/* Main Wrapper & Top Header */
+.ks-main-wrapper {
+    margin-left: var(--ks-sidebar-width);
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 100vh;
+}
+
+.ks-top-header {
+    height: var(--ks-header-height);
+    background-color: #FFFFFF;
+    border-bottom: 1px solid var(--ks-border-light);
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 1px 2px 0 rgba(15, 35, 70, 0.02);
+}
+
+/* Header Left: Organisation Selector */
+.ks-org-selector {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #EAF3FF;
+    border: 1px solid #D5E6FF;
+    color: var(--ks-primary);
+    padding: 8px 16px;
+    border-radius: var(--ks-radius-pill);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.ks-org-selector:hover {
+    background-color: #DFEDFF;
+    border-color: #C3DBFF;
+}
+
+/* Header Center: Global Search */
+.ks-global-search {
+    position: relative;
+    width: 100%;
+    max-width: 440px;
+}
+
+.ks-global-search i, .ks-global-search svg {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #526581;
+    pointer-events: none;
+}
+
+.ks-search-input {
+    width: 100%;
+    height: 42px;
+    background-color: #F8FAFD;
+    border: 1px solid #DCE5F1;
+    border-radius: 11px;
+    padding: 0 16px 0 42px;
+    font-size: 13.5px;
+    color: var(--ks-text);
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.ks-search-input:focus {
+    background-color: #FFFFFF;
+    border-color: var(--ks-primary);
+    box-shadow: 0 0 0 3px rgba(11, 110, 243, 0.12);
+}
+
+.ks-search-input::placeholder {
+    color: var(--ks-text-muted);
+}
+
+/* Header Right: Actions, Notification, User */
+.ks-header-right {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.ks-notification-btn {
+    position: relative;
+    background: transparent;
+    border: none;
+    padding: 6px;
+    cursor: pointer;
+    color: #526581;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: background-color 0.15s ease;
+}
+
+.ks-notification-btn:hover {
+    background-color: #F1F5F9;
+    color: var(--ks-text);
+}
+
+.ks-notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background-color: var(--ks-danger);
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: 700;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #FFFFFF;
+}
+
+.ks-user-widget {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: var(--ks-radius-md);
+    transition: background-color 0.15s ease;
+}
+
+.ks-user-widget:hover {
+    background-color: #F8FAFC;
+}
+
+.ks-avatar-circle {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background-color: var(--ks-primary);
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ks-user-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ks-text);
+    line-height: 1.2;
+}
+
+.ks-user-role {
+    font-size: 11.5px;
+    font-weight: 400;
+    color: var(--ks-text-secondary);
+}
+
+/* ============================================================
+   CONTENT BODY & PAGE HEADER
+   ============================================================ */
+
+.ks-page-body {
+    padding: 26px 28px;
+    flex-grow: 1;
+}
+
+.ks-page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.ks-page-title {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ks-text);
+    margin: 0 0 4px 0;
+    letter-spacing: -0.02em;
+}
+
+.ks-page-subtitle {
+    font-size: 13.5px;
+    color: var(--ks-text-secondary);
+    margin: 0;
+}
+
+.ks-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Date Indicator Widget */
+.ks-date-widget {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background-color: #FFFFFF;
+    border: 1px solid #D7E0EC;
+    border-radius: var(--ks-radius-md);
+    padding: 7px 14px;
+    height: 42px;
+}
+
+.ks-date-widget i, .ks-date-widget svg {
+    color: #526581;
+}
+
+.ks-date-text {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ks-text);
+    line-height: 1.2;
+}
+
+.ks-time-text {
+    font-size: 10.5px;
+    color: var(--ks-text-muted);
+}
+
+/* Buttons */
+.ks-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 18px;
+    border-radius: var(--ks-radius-md);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.ks-btn-primary {
+    background-color: var(--ks-primary);
+    color: #FFFFFF;
+    border-color: var(--ks-primary);
+    box-shadow: 0 2px 6px rgba(11, 110, 243, 0.2);
+}
+
+.ks-btn-primary:hover {
+    background-color: var(--ks-primary-hover);
+    border-color: var(--ks-primary-hover);
+    color: #FFFFFF;
+}
+
+.ks-btn-secondary {
+    background-color: #FFFFFF;
+    color: #16345C;
+    border-color: #D7E0EC;
+}
+
+.ks-btn-secondary:hover {
+    background-color: #F8FAFD;
+    border-color: #C5D4E8;
+    color: #16345C;
+}
+
+/* ============================================================
+   KPI CARDS & METRIC WIDGETS
+   ============================================================ */
+
+/* Top KPI Card (4 Column Row) */
+.ks-kpi-card {
+    background-color: var(--ks-card-bg);
+    border: 1px solid var(--ks-border);
+    border-radius: var(--ks-radius-lg);
+    padding: 20px;
+    box-shadow: var(--ks-shadow-card);
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ks-kpi-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(15, 35, 70, 0.07);
+}
+
+.ks-kpi-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.ks-icon-box {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ks-icon-blue   { background-color: var(--ks-primary-light); color: var(--ks-primary); }
+.ks-icon-purple { background-color: var(--ks-purple-light);  color: var(--ks-purple); }
+.ks-icon-green  { background-color: var(--ks-success-light); color: var(--ks-success); }
+.ks-icon-amber  { background-color: var(--ks-warning-light); color: var(--ks-warning); }
+.ks-icon-red    { background-color: var(--ks-danger-light);   color: var(--ks-danger); }
+.ks-icon-cyan   { background-color: var(--ks-cyan-light);    color: var(--ks-cyan); }
+.ks-icon-gold   { background-color: var(--ks-gold-light);    color: var(--ks-gold); }
+
+.ks-kpi-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ks-text-secondary);
+    margin-bottom: 4px;
+}
+
+.ks-kpi-value {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--ks-text);
+    line-height: 1.1;
+}
+
+.ks-kpi-bottom {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ks-trend-text {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--ks-text-secondary);
+}
+
+.ks-trend-positive {
+    color: var(--ks-success);
+    font-weight: 600;
+}
+
+.ks-sparkline {
+    width: 90px;
+    height: 28px;
+}
+
+/* Secondary KPI Card (5 Column Row) */
+.ks-compact-card {
+    background-color: var(--ks-card-bg);
+    border: 1px solid var(--ks-border);
+    border-radius: var(--ks-radius-lg);
+    padding: 14px 16px;
+    box-shadow: var(--ks-shadow-card);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.ks-compact-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(15, 35, 70, 0.06);
+}
+
+.ks-compact-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ks-compact-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.ks-compact-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--ks-text-secondary);
+    margin-bottom: 2px;
+}
+
+.ks-compact-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--ks-text);
+    line-height: 1.1;
+}
+
+.ks-compact-sub {
+    font-size: 11.5px;
+    color: var(--ks-text-secondary);
+}
+
+.ks-compact-chevron {
+    color: #94A3B8;
+    font-size: 16px;
+}
+
+/* ============================================================
+   CONTENT CARDS & DATA TABLES
+   ============================================================ */
+
+.ks-content-card {
+    background-color: var(--ks-card-bg);
+    border: 1px solid var(--ks-border);
+    border-radius: var(--ks-radius-lg);
+    box-shadow: var(--ks-shadow-card);
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+
+.ks-card-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--ks-border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ks-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ks-header-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ks-text);
+    margin: 0;
+}
+
+.ks-header-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ks-primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.ks-header-link:hover {
+    text-decoration: underline;
+}
+
+/* Master Data Table */
+.ks-table-responsive {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.ks-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+}
+
+.ks-table thead th {
+    background-color: #F8FAFD;
+    color: #526581;
+    font-size: 11.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 22px;
+    border-bottom: 1px solid var(--ks-border-light);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.ks-table tbody tr {
+    border-bottom: 1px solid var(--ks-border-light);
+    transition: background-color 0.12s ease;
+}
+
+.ks-table tbody tr:hover {
+    background-color: #F7FAFE;
+}
+
+.ks-table tbody td {
+    padding: 14px 22px;
+    font-size: 13.5px;
+    color: var(--ks-text);
+    vertical-align: middle;
+}
+
+/* Status Badges */
+.ks-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    height: 26px;
+    padding: 0 12px;
+    border-radius: var(--ks-radius-pill);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ks-badge-scheduled { background-color: var(--ks-primary-light); color: var(--ks-primary); }
+.ks-badge-confirmed { background-color: var(--ks-success-light); color: #15803D; }
+.ks-badge-completed { background-color: var(--ks-success-light); color: #15803D; }
+.ks-badge-pending   { background-color: var(--ks-warning-light); color: #B45309; }
+.ks-badge-rejected  { background-color: var(--ks-danger-light);  color: #B91C1C; }
+.ks-badge-cancelled { background-color: var(--ks-danger-light);  color: #B91C1C; }
+.ks-badge-live {
+    background-color: var(--ks-success-light);
+    color: #15803D;
+    font-weight: 700;
+}
+
+.ks-dot-live {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: var(--ks-success);
+    display: inline-block;
+    animation: ks-pulse 1.8s infinite;
+}
+
+@keyframes ks-pulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* Session Item */
+.ks-session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border: 1px solid var(--ks-border-light);
+    border-radius: var(--ks-radius-md);
+    margin-bottom: 10px;
+    background-color: #FFFFFF;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ks-session-item:hover {
+    border-color: #CBD5E1;
+    box-shadow: 0 2px 8px rgba(15, 35, 70, 0.04);
+}
+
+.ks-session-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.ks-session-icon {
+    font-size: 20px;
+    color: var(--ks-text);
+}
+
+.ks-session-name {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ks-text);
+    line-height: 1.2;
+}
+
+.ks-session-meta {
+    font-size: 12px;
+    color: var(--ks-text-secondary);
+    margin-top: 2px;
+}
+
+.ks-session-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ks-time-pill {
+    padding: 4px 10px;
+    border-radius: var(--ks-radius-pill);
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.ks-time-green  { background-color: var(--ks-success); }
+.ks-time-blue   { background-color: var(--ks-primary); }
+.ks-time-purple { background-color: var(--ks-purple); }
+
+/* ============================================================
+   DECORATIVE PROMOTIONAL BANNER
+   ============================================================ */
+
+.ks-promo-banner {
+    background: linear-gradient(135deg, #E8F0FE 0%, #D8E6FC 45%, #C2DCFA 100%);
+    border: 1px solid #D5E4F8;
+    border-radius: 16px;
+    padding: 26px 36px;
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+}
+
+.ks-promo-content {
+    position: relative;
+    z-index: 2;
+}
+
+.ks-promo-tag {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: #2563EB;
+    margin-bottom: 4px;
+}
+
+.ks-promo-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--ks-navy);
+    letter-spacing: -0.02em;
+    margin: 0 0 10px 0;
+}
+
+.ks-promo-accent-line {
+    width: 48px;
+    height: 4px;
+    background-color: var(--ks-primary);
+    border-radius: 2px;
+}
+
+.ks-promo-quote {
+    position: relative;
+    z-index: 2;
+    font-size: 14px;
+    font-style: italic;
+    font-weight: 500;
+    color: #1E3A8A;
+    text-align: right;
+    max-width: 340px;
+}
+
+.ks-promo-backdrop-svg {
+    position: absolute;
+    bottom: 0;
+    left: 25%;
+    right: 10%;
+    height: 100%;
+    opacity: 0.45;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ============================================================
+   FORM CONTROLS & FILTER BARS
+   ============================================================ */
+
+.ks-form-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #344563;
+    margin-bottom: 6px;
+    display: block;
+}
+
+.ks-form-control, .ks-form-select {
+    width: 100%;
+    height: 44px;
+    padding: 0 14px;
+    background-color: #FFFFFF;
+    border: 1px solid #D7E0EC;
+    border-radius: var(--ks-radius-md);
+    font-size: 13.5px;
+    color: var(--ks-text);
+    outline: none;
+    transition: all 0.15s ease;
+}
+
+.ks-form-control:focus, .ks-form-select:focus {
+    border-color: var(--ks-primary);
+    box-shadow: 0 0 0 3px rgba(11, 110, 243, 0.12);
+}
+
+.ks-filter-bar {
+    background-color: #FFFFFF;
+    border: 1px solid var(--ks-border);
+    border-radius: var(--ks-radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+/* Empty State */
+.ks-empty-state {
+    text-align: center;
+    padding: 56px 24px;
+}
+
+.ks-empty-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background-color: var(--ks-primary-light);
+    color: var(--ks-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.ks-empty-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ks-text);
+    margin-bottom: 6px;
+}
+
+.ks-empty-desc {
+    font-size: 13.5px;
+    color: var(--ks-text-secondary);
+    max-width: 400px;
+    margin: 0 auto 18px;
+}
+
+/* ============================================================
+   RESPONSIVE ERGONOMICS
+   ============================================================ */
+
+.ks-mobile-toggle {
+    display: none;
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: var(--ks-text);
+    cursor: pointer;
+    padding: 6px;
+}
+
+.ks-sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.5);
+    z-index: 1040;
+}
+
+@media (max-width: 1024px) {
+    .ks-global-search { max-width: 280px; }
+}
+
+@media (max-width: 860px) {
+    .ks-mobile-toggle { display: block; }
+    .ks-sidebar {
+        transform: translateX(-100%);
+    }
+    .ks-sidebar.ks-open {
+        transform: translateX(0);
+    }
+    .ks-sidebar-overlay.ks-open {
+        display: block;
+    }
+    .ks-main-wrapper {
+        margin-left: 0;
+    }
+    .ks-global-search { display: none; }
+    .ks-page-body { padding: 18px 16px; }
+    .ks-top-header { padding: 0 16px; }
+    .ks-promo-banner { flex-direction: column; align-items: flex-start; gap: 16px; }
+    .ks-promo-quote { text-align: left; max-width: 100%; }
+}

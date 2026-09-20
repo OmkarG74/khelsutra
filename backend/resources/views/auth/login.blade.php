@@ -3,75 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — KhelSutra Sports ERP</title>
+    <title>Sign In — KhelSutra Sports Platform</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <!-- KhelSutra Master Design System Stylesheet -->
+    <link rel="stylesheet" href="/assets/css/khelsutra-design-system.css">
     <style>
         body {
-            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+            background-color: var(--ks-page-bg);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Inter', sans-serif;
+            color: var(--ks-text);
+            padding: 24px;
         }
-        .login-card {
-            background: #ffffff;
-            border-radius: 0.75rem;
+        .ks-login-card {
+            background: var(--ks-card-bg);
+            border: 1px solid var(--ks-border);
+            border-radius: var(--ks-radius-modal);
+            box-shadow: var(--ks-shadow-card);
             width: 100%;
             max-width: 440px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-            padding: 2.5rem;
+            padding: 36px 32px;
+        }
+        .ks-brand-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .ks-brand-icon {
+            color: var(--ks-gold);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <div class="text-center mb-4">
-            <h3 class="fw-bold text-primary mb-1"><i class="bi bi-trophy-fill text-warning me-2"></i>KhelSutra</h3>
-            <p class="text-muted small">Multi-Organisation Sports Management Platform</p>
+    <div class="ks-login-card">
+        <div class="ks-brand-header">
+            <div class="ks-brand-icon">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94.63 1.5 1.98 2.63 3.61 2.96V19H7v2h10v-2h-4v-3.1c1.63-.33 2.98-1.46 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/>
+                </svg>
+            </div>
+            <div>
+                <h2 class="fw-bold text-navy mb-0" style="font-size: 24px; letter-spacing: -0.02em;">KhelSutra</h2>
+                <div class="small text-muted fw-medium">Sports Academy</div>
+            </div>
+        </div>
+
+        <div class="mb-4 text-center">
+            <h3 class="fw-bold text-navy" style="font-size: 18px;">Sign in to Portal</h3>
+            <p class="small text-muted mb-0">Enter your credentials to access operations dashboard</p>
         </div>
 
         <form action="/dashboard" method="GET">
             <div class="mb-3">
-                <label class="form-label small fw-semibold">Email or Username</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                    <input type="text" class="form-control" name="email" value="admin@khelsutra.com" required placeholder="name@example.com">
-                </div>
+                <label class="ks-form-label">Email Address *</label>
+                <input type="email" class="ks-form-control" name="email" value="admin@khelsutra.com" required placeholder="name@example.com">
             </div>
 
             <div class="mb-3">
-                <label class="form-label small fw-semibold">Password</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-lock"></i></span>
-                    <input type="password" class="form-control" name="password" value="SecretPassword123" required placeholder="••••••••">
-                </div>
+                <label class="ks-form-label">Password *</label>
+                <input type="password" class="ks-form-control" name="password" value="SecretPassword123" required placeholder="••••••••">
             </div>
 
             <div class="mb-3">
-                <label class="form-label small fw-semibold">Organisation Code (Optional)</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-building"></i></span>
-                    <input type="text" class="form-control" name="organization_code" value="ORG-DEMO" placeholder="e.g. ORG-DEMO">
-                </div>
+                <label class="ks-form-label">Role Switcher (Preview Mode)</label>
+                <select class="ks-form-select" name="role">
+                    <option value="sports_admin" selected>Sports Administrator</option>
+                    <option value="coach">Coach</option>
+                    <option value="athlete">Athlete</option>
+                    <option value="hr_finance">HR & Finance</option>
+                    <option value="venue_manager">Venue Manager</option>
+                    <option value="inventory_manager">Inventory Manager</option>
+                    <option value="super_admin">Super Admin</option>
+                </select>
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div class="form-check">
                     <input type="checkbox" class="form-check-input" id="rememberMe" checked>
-                    <label class="form-check-label small" for="rememberMe">Remember me</label>
+                    <label class="form-check-label small text-muted" for="rememberMe">Remember this browser</label>
                 </div>
-                <a href="#forgot" class="small text-decoration-none">Forgot password?</a>
+                <a href="#" class="small text-primary text-decoration-none fw-medium">Forgot password?</a>
             </div>
 
-            <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
-                Sign In to Portal
+            <button type="submit" class="ks-btn ks-btn-primary w-100 py-2 justify-content-center" style="height: 44px;">
+                <span>Sign In to Dashboard</span>
+                <i class="bi bi-arrow-right"></i>
             </button>
         </form>
 
-        <div class="mt-4 pt-3 border-top text-center text-muted small">
-            Secured by Multi-Tenant Access Control & RBAC
+        <div class="mt-4 pt-3 border-top text-center text-muted small" style="border-color: var(--ks-border-light) !important;">
+            Secured Multi-Tenant RBAC Platform
         </div>
     </div>
 </body>
