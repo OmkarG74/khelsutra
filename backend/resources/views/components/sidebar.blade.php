@@ -1,6 +1,6 @@
 <?php
-// Resolve current active role from query or session (default: Sports Administrator)
-$currentRole = strtolower($_GET['role'] ?? 'sports_admin');
+// Resolve current active role strictly from authenticated session (never from query parameters)
+$currentRole = $_SESSION['auth']['role_slug'] ?? 'sports_admin';
 $activePage = $activePage ?? 'dashboard';
 
 // Role-aware navigation definitions for all 7 application roles
@@ -109,10 +109,10 @@ $menuItems = $navMenus[$currentRole] ?? $navMenus['sports_admin'];
         <?php foreach ($menuItems as $item): ?>
             <?php 
                 $isActive = ($activePage === $item['key']); 
-                $url = $item['url'] . (str_contains($item['url'], '?') ? '&' : '?') . 'role=' . $currentRole;
+                $url = $item['url'];
             ?>
             <li>
-                <a href="<?= $url ?>" class="ks-nav-link <?= $isActive ? 'active' : '' ?>">
+                <a href="<?= htmlspecialchars($url) ?>" class="ks-nav-link <?= $isActive ? 'active' : '' ?>">
                     <i class="bi <?= $item['icon'] ?>"></i>
                     <span><?= htmlspecialchars($item['label']) ?></span>
                 </a>
@@ -121,7 +121,7 @@ $menuItems = $navMenus[$currentRole] ?? $navMenus['sports_admin'];
 
         <!-- Sign Out Action -->
         <li style="margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.06);">
-            <a href="/login" class="ks-nav-link">
+            <a href="/logout" class="ks-nav-link">
                 <i class="bi bi-box-arrow-right"></i>
                 <span>Sign Out</span>
             </a>

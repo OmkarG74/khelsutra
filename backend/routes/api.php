@@ -24,17 +24,18 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
         return $controller->logout();
     }
+
+    $authHeader = $requestData['headers']['authorization'] ?? '';
+    $token = trim(str_ireplace('Bearer ', '', $authHeader));
+    $authService = new \App\Services\Auth\AuthService();
+    $tokenUser = !empty($token) ? $authService->resolveUserByToken($token) : null;
+
     if ($uri === '/api/v1/auth/me' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
-        $authHeader = $requestData['headers']['authorization'] ?? '';
-        $token = str_replace('Bearer ', '', $authHeader);
-        $user = (new \App\Services\Auth\AuthService())->resolveUserByToken($token) ?? ($requestData['user'] ?? [
-            'id' => 1,
-            'name' => 'Sports Administrator',
-            'email' => 'admin@khelsutra.com',
-            'role' => ['id' => 2, 'name' => 'Sports Administrator'],
-            'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
-        ]);
+        $user = $tokenUser ?? ($requestData['user'] ?? null);
+        if (!$user) {
+            return ApiResponse::error('Unauthenticated: Valid Bearer token required.', null, 401);
+        }
         return $controller->me($user);
     }
     if ($uri === '/api/v1/auth/refresh' && $method === 'POST') {
@@ -42,47 +43,62 @@ return function ($uri, $method, $requestData = []) {
         return $controller->refresh();
     }
 
-    // 3. Resolve Tenant Context & Isolation
-    $tenantService = new TenantContextService();
-    $currentUser = $requestData['user'] ?? [
-        'id' => 1,
-        'email' => 'admin@khelsutra.com',
-        'role' => ['id' => 2, 'name' => 'Sports Administrator'],
-        'role_id' => 2
-    ];
+    // 3. Resolve Current User Context & Tenant Isolation
+    $currentUser = $tokenUser ?? ($requestData['user'] ?? [
+        'id' => 5,
+        'email' => 'sportsadmin@khelsutra.local',
+        'role' => ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'],
+        'role_id' => 2,
+        'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
+    ]);
 
-    $resolvedTenant = $tenantService->resolveTenant($requestData, $currentUser);
-    if (!$resolvedTenant && isset($requestData['headers']['x-organization-id'])) {
+    $currentRoleId = (int)($currentUser['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+    $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin');
+
+    // Tenant Resolution & Cross-Tenant Rejection
+    $requestedOrgId = isset($requestData['headers']['x-organization-id'])
+        ? (int)$requestData['headers']['x-organization-id']
+        : (isset($requestData['organization_id']) ? (int)$requestData['organization_id'] : null);
+
+    $userOrgId = isset($currentUser['organization']['id']) ? (int)$currentUser['organization']['id'] : 1;
+
+    if (!$isSuperAdmin && $requestedOrgId !== null && $requestedOrgId !== $userOrgId) {
         return ApiResponse::error('Access denied: Unauthorized cross-tenant access.', null, 403);
     }
-    $orgId = $resolvedTenant ? (int)$resolvedTenant['id'] : 1;
-    $performedBy = (int)($currentUser['id'] ?? 1);
 
-    // 4. Multi-Tenant Organizations Management
-    if ($uri === '/api/v1/organizations') {
-        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
-        if ($method === 'GET') return $controller->index($requestData);
-        if ($method === 'POST') return $controller->store($requestData, $performedBy);
-    }
-    if (preg_match('#^/api/v1/organizations/(\d+)$#', $uri, $m)) {
-        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
-        $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($targetId);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($targetId, $requestData, $performedBy);
-    }
-    if (preg_match('#^/api/v1/organizations/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
-        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
-        return $controller->updateStatus((int)$m[1], $requestData, $performedBy);
-    }
-    if (preg_match('#^/api/v1/organizations/(\d+)/access-logs$#', $uri, $m) && $method === 'GET') {
-        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
-        return $controller->accessLogs((int)$m[1]);
-    }
-    if (preg_match('#^/api/v1/organizations/(\d+)/settings$#', $uri, $m)) {
-        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
-        $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->getSettings($targetId);
-        if ($method === 'POST' || $method === 'PUT') return $controller->updateSettings($targetId, $requestData, $performedBy);
+    $orgId = $isSuperAdmin ? ($requestedOrgId ?: 1) : $userOrgId;
+    $performedBy = (int)($currentUser['id'] ?? 5);
+
+    // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
+    if (str_starts_with($uri, '/api/v1/organizations')) {
+        if (!$isSuperAdmin) {
+            return ApiResponse::error('Forbidden: Super Admin access required.', null, 403);
+        }
+        if ($uri === '/api/v1/organizations') {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            if ($method === 'GET') return $controller->index($requestData);
+            if ($method === 'POST') return $controller->store($requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->show($targetId);
+            if ($method === 'PUT' || $method === 'PATCH') return $controller->update($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            return $controller->updateStatus((int)$m[1], $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/access-logs$#', $uri, $m) && $method === 'GET') {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            return $controller->accessLogs((int)$m[1]);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/settings$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->getSettings($targetId);
+            if ($method === 'POST' || $method === 'PUT') return $controller->updateSettings($targetId, $requestData, $performedBy);
+        }
     }
 
     // 5. User Management & RBAC
@@ -112,6 +128,9 @@ return function ($uri, $method, $requestData = []) {
         return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->rolePermissions((int)$m[1]);
     }
     if ($uri === '/api/v1/permissions/override' && $method === 'POST') {
+        if (!$isSuperAdmin && $currentRoleId > 2) {
+            return ApiResponse::error('Forbidden: Insufficient privileges to modify permissions.', null, 403);
+        }
         return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->setOverride($orgId, $requestData, $performedBy);
     }
 

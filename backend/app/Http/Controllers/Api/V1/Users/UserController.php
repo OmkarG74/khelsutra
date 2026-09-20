@@ -41,6 +41,12 @@ class UserController extends Controller
             ], 422);
         }
 
+        // Role assignment protection
+        $targetRoleId = (int)($requestData['role_id'] ?? 2);
+        if ($targetRoleId === 1) {
+            return ApiResponse::error('DENIED: Unauthorized role assignment. Super Admin role cannot be created.', null, 403);
+        }
+
         $newUser = $this->userService->createUser($requestData, $orgId, $performedBy);
         if (!$newUser) {
             return ApiResponse::error('Failed to create user. A user with this email may already exist.', null, 409);
@@ -53,6 +59,17 @@ class UserController extends Controller
         $user = $this->userService->getUser($id);
         if (!$user || ($user['organization_id'] && (int)$user['organization_id'] !== $orgId)) {
             return ApiResponse::error('User not found in current organization.', null, 404);
+        }
+
+        // Role elevation / self-modification protection
+        if (isset($requestData['role_id'])) {
+            $targetRoleId = (int)$requestData['role_id'];
+            if ($id === $performedBy && $targetRoleId !== (int)$user['role_id']) {
+                return ApiResponse::error('DENIED: A user cannot change their own role.', null, 403);
+            }
+            if ($targetRoleId === 1) {
+                return ApiResponse::error('DENIED: Unauthorized role assignment. Super Admin role cannot be assigned.', null, 403);
+            }
         }
 
         $requestData['organization_id'] = $orgId;

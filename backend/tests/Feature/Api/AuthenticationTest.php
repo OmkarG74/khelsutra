@@ -17,14 +17,14 @@ class AuthenticationTest
     public function testLoginWithValidCredentials(): bool
     {
         $service = new AuthService();
-        $result = $service->login('admin@khelsutra.com', 'SecretPassword123', 'ORG-DEMO');
-        return ($result !== null && !empty($result['token']));
+        $result = $service->login('sportsadmin@khelsutra.local', 'KhelSutra@123', 'ORG-DEMO');
+        return ($result !== null && !empty($result['token']) && ($result['role']['id'] === 2));
     }
 
     public function testLoginWithInvalidPasswordFails(): bool
     {
         $service = new AuthService();
-        $result = $service->login('admin@khelsutra.com', 'WrongPasswordXYZ', 'ORG-DEMO');
+        $result = $service->login('sportsadmin@khelsutra.local', 'WrongPasswordXYZ', 'ORG-DEMO');
         return ($result === null);
     }
 }

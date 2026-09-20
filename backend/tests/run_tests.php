@@ -28,6 +28,41 @@ $tests = [
         $t = new \Tests\Feature\Api\AuthenticationTest();
         return $t->testLoginWithInvalidPasswordFails();
     },
+    'Feature: RBAC - All 7 Roles Authentication & Context' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testAllSevenRolesCanAuthenticate();
+    },
+    'Feature: RBAC - Role Query Parameter Simulation Removal' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testRoleSimulationQueryParameterIsIgnored();
+    },
+    'Feature: Tenant Isolation - Cross-Tenant Parameter Blocking' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testCrossTenantAccessAttemptIsBlocked();
+    },
+    'Feature: RBAC - Non-SuperAdmin Blocked From Platform Endpoints' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testNonSuperAdminRolesCannotAccessSuperAdminEndpoints();
+    },
+    'Feature: RBAC - Self Role Elevation Defense' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testSelfRoleElevationIsBlocked();
+    },
+    'Feature: RBAC - Unauthorized Permission Modification Defense' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testUnauthorizedPermissionManipulationIsBlocked();
+    },
+    'Feature: RBAC - Elimination of Switch Org & Role Preview Controls' => function() {
+        require_once __DIR__ . '/Feature/RoleIsolationTest.php';
+        $t = new \Tests\Feature\RoleIsolationTest();
+        return $t->testDemoControlsRemovedFromViews();
+    },
     'Feature: Organization SuperAdmin Access' => function() {
         require_once __DIR__ . '/Feature/Api/OrganizationAccessTest.php';
         $t = new \Tests\Feature\Api\OrganizationAccessTest();

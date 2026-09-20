@@ -37,9 +37,7 @@ class AuthService extends BaseService
         }
 
         // 2. Verify password
-        $passwordMatches = password_verify($password, $user['password']) 
-                        || $password === 'SecretPassword123' 
-                        || $password === 'password';
+        $passwordMatches = password_verify($password, $user['password']);
         if (!$passwordMatches) {
             return null;
         }
@@ -66,18 +64,41 @@ class AuthService extends BaseService
 
         $roleId = $membership ? (int)$membership['role_id'] : 2;
         $roleName = $membership['role_name'] ?? 'Sports Administrator';
-        $orgId = $membership ? (int)$membership['organization_id'] : 1;
-        $orgData = $membership ? [
-            'id' => $orgId,
-            'name' => $membership['org_name'],
-            'organization_code' => $membership['organization_code'],
-            'status' => $membership['org_status']
-        ] : [
-            'id' => 1,
-            'name' => 'KhelSutra Headquarters',
-            'organization_code' => 'ORG-DEMO',
-            'status' => 'active'
+
+        $roleSlugMap = [
+            1 => 'super_admin',
+            2 => 'sports_admin',
+            3 => 'hr_finance',
+            4 => 'coach',
+            5 => 'athlete',
+            6 => 'venue_manager',
+            7 => 'inventory_manager',
         ];
+        $roleSlug = $roleSlugMap[$roleId] ?? 'sports_admin';
+
+        if ($roleId === 1) {
+            // Super Admin has platform-level context, no normal tenant lock
+            $orgId = null;
+            $orgData = [
+                'id' => null,
+                'name' => 'KhelSutra Platform',
+                'organization_code' => 'PLATFORM',
+                'status' => 'active'
+            ];
+        } else {
+            $orgId = $membership ? (int)$membership['organization_id'] : 1;
+            $orgData = $membership ? [
+                'id' => $orgId,
+                'name' => $membership['org_name'],
+                'organization_code' => $membership['organization_code'],
+                'status' => $membership['org_status']
+            ] : [
+                'id' => 1,
+                'name' => 'Apex Sports Academy',
+                'organization_code' => 'ORG-DEMO',
+                'status' => 'active'
+            ];
+        }
 
         // 4. Resolve Base Role Permissions
         $permStmt = $this->pdo->prepare("
@@ -90,14 +111,17 @@ class AuthService extends BaseService
         $basePermissions = $permStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 
         // 5. Apply User Permission Overrides (grant/deny)
-        $overrideStmt = $this->pdo->prepare("
-            SELECT p.name, upo.override_type 
-            FROM user_permission_overrides upo 
-            JOIN permissions p ON upo.permission_id = p.id 
-            WHERE upo.user_id = :user_id AND upo.organization_id = :org_id
-        ");
-        $overrideStmt->execute([':user_id' => $user['id'], ':org_id' => $orgId]);
-        $overrides = $overrideStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $overrides = [];
+        if ($orgId) {
+            $overrideStmt = $this->pdo->prepare("
+                SELECT p.name, upo.override_type 
+                FROM user_permission_overrides upo 
+                JOIN permissions p ON upo.permission_id = p.id 
+                WHERE upo.user_id = :user_id AND upo.organization_id = :org_id
+            ");
+            $overrideStmt->execute([':user_id' => $user['id'], ':org_id' => $orgId]);
+            $overrides = $overrideStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        }
 
         $effectivePermissions = array_fill_keys($basePermissions, true);
         foreach ($overrides as $ovr) {
@@ -126,8 +150,19 @@ class AuthService extends BaseService
             "User {$user['email']} logged in successfully"
         );
 
-        // 8. Generate token
-        $token = bin2hex(random_bytes(32));
+        // 8. Generate tamper-proof signed HMAC token
+        $secret = env('APP_KEY', 'khelsutra-secret-key-32-chars-required!!');
+        $payload = [
+            'uid' => (int)$user['id'],
+            'oid' => $orgId,
+            'rid' => (int)$roleId,
+            'slug' => $roleSlug,
+            'iat' => time(),
+            'exp' => time() + (86400 * 7),
+        ];
+        $encodedPayload = rtrim(strtr(base64_encode(json_encode($payload)), '+/', '-_'), '=');
+        $signature = hash_hmac('sha256', $encodedPayload, $secret);
+        $token = $encodedPayload . '.' . $signature;
 
         return [
             'user' => [
@@ -144,6 +179,7 @@ class AuthService extends BaseService
             'role' => [
                 'id' => (int)$roleId,
                 'name' => $roleName,
+                'slug' => $roleSlug,
             ],
             'permissions' => $permissionsList,
             'token' => $token,
@@ -160,12 +196,87 @@ class AuthService extends BaseService
 
     public function resolveUserByToken(string $token): ?array
     {
-        // For local state/session integration, return default admin or cached token user
-        if (empty($token)) return null;
+        if (empty($token) || !str_contains($token, '.')) return null;
 
-        $stmt = $this->pdo->query("SELECT * FROM users WHERE status = 'active' AND deleted_at IS NULL ORDER BY id ASC LIMIT 1");
+        list($encodedPayload, $providedSignature) = explode('.', $token, 2);
+        $secret = env('APP_KEY', 'khelsutra-secret-key-32-chars-required!!');
+        $expectedSignature = hash_hmac('sha256', $encodedPayload, $secret);
+
+        if (!hash_equals($expectedSignature, $providedSignature)) {
+            return null; // Tampered or invalid token
+        }
+
+        $json = base64_decode(strtr($encodedPayload, '-_', '+/'));
+        $payload = json_decode($json, true);
+        if (!$payload || !isset($payload['uid'])) {
+            return null;
+        }
+
+        if (isset($payload['exp']) && $payload['exp'] < time()) {
+            return null; // Expired token
+        }
+
+        $userId = (int)$payload['uid'];
+        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE id = :id AND status = 'active' AND deleted_at IS NULL LIMIT 1");
+        $stmt->execute([':id' => $userId]);
         $user = $stmt->fetch();
         if (!$user) return null;
+
+        // Resolve organization & role from DB
+        $orgStmt = $this->pdo->prepare("
+            SELECT ou.*, o.name as org_name, o.organization_code, o.status as org_status, r.name as role_name 
+            FROM organization_users ou 
+            JOIN organizations o ON ou.organization_id = o.id 
+            JOIN roles r ON ou.role_id = r.id 
+            WHERE ou.user_id = :user_id 
+              AND ou.access_status = 'active'
+              AND o.deleted_at IS NULL
+            LIMIT 1
+        ");
+        $orgStmt->execute([':user_id' => $userId]);
+        $membership = $orgStmt->fetch();
+
+        $roleId = $membership ? (int)$membership['role_id'] : (int)($payload['rid'] ?? 2);
+        $roleName = $membership['role_name'] ?? 'Sports Administrator';
+
+        $roleSlugMap = [
+            1 => 'super_admin',
+            2 => 'sports_admin',
+            3 => 'hr_finance',
+            4 => 'coach',
+            5 => 'athlete',
+            6 => 'venue_manager',
+            7 => 'inventory_manager',
+        ];
+        $roleSlug = $roleSlugMap[$roleId] ?? 'sports_admin';
+
+        if ($roleId === 1) {
+            $orgData = [
+                'id' => null,
+                'name' => 'KhelSutra Platform',
+                'organization_code' => 'PLATFORM',
+                'status' => 'active'
+            ];
+            $orgId = null;
+        } else {
+            $orgId = $membership ? (int)$membership['organization_id'] : 1;
+            $orgData = $membership ? [
+                'id' => $orgId,
+                'name' => $membership['org_name'],
+                'organization_code' => $membership['organization_code'],
+                'status' => $membership['org_status']
+            ] : null;
+        }
+
+        // Load permissions
+        $permStmt = $this->pdo->prepare("
+            SELECT p.name 
+            FROM permissions p 
+            JOIN role_permissions rp ON p.id = rp.permission_id 
+            WHERE rp.role_id = :role_id
+        ");
+        $permStmt->execute([':role_id' => $roleId]);
+        $permissions = $permStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 
         return [
             'id' => (int)$user['id'],
@@ -173,15 +284,16 @@ class AuthService extends BaseService
             'first_name' => $user['first_name'],
             'last_name' => $user['last_name'],
             'email' => $user['email'],
+            'phone' => $user['phone'],
+            'status' => $user['status'],
+            'role_id' => $roleId,
             'role' => [
-                'id' => 2,
-                'name' => 'Sports Administrator'
+                'id' => $roleId,
+                'name' => $roleName,
+                'slug' => $roleSlug,
             ],
-            'organization' => [
-                'id' => 1,
-                'name' => 'Apex Sports Academy',
-                'organization_code' => 'ORG-DEMO'
-            ]
+            'organization' => $orgData,
+            'permissions' => $permissions,
         ];
     }
 }
