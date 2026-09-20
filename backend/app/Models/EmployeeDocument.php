@@ -4,25 +4,22 @@ namespace App\Models;
 
 use App\Traits\BelongsToOrganization;
 
-class CoachProfile
+class EmployeeDocument
 {
     use BelongsToOrganization;
 
-    protected string $table = 'coach_profiles';
+    protected string $table = 'employee_documents';
 
     public ?int $id = null;
     public int $organization_id;
     public int $employee_id;
-    public string $coach_code;
-    public ?string $specialization = null;
-    public ?string $qualification = null;
-    public ?string $certifications = null;
-    public ?float $experience_years = null;
-    public ?string $joining_date = null;
-    public ?string $license_number = null;
-    public ?string $license_expiry_date = null;
-    public string $status = 'active';
+    public string $document_type;
+    public ?string $document_number = null;
+    public string $file_path;
+    public ?string $issue_date = null;
+    public ?string $expiry_date = null;
     public ?string $notes = null;
+    public ?int $uploaded_by = null;
     public ?string $created_at = null;
     public ?string $updated_at = null;
     public ?string $deleted_at = null;
@@ -42,16 +39,13 @@ class CoachProfile
             'id' => $this->id,
             'organization_id' => $this->organization_id,
             'employee_id' => $this->employee_id,
-            'coach_code' => $this->coach_code,
-            'specialization' => $this->specialization,
-            'qualification' => $this->qualification,
-            'certifications' => $this->certifications,
-            'experience_years' => $this->experience_years,
-            'joining_date' => $this->joining_date,
-            'license_number' => $this->license_number,
-            'license_expiry_date' => $this->license_expiry_date,
-            'status' => $this->status,
+            'document_type' => $this->document_type,
+            'document_number' => $this->document_number,
+            'file_path' => $this->file_path,
+            'issue_date' => $this->issue_date,
+            'expiry_date' => $this->expiry_date,
             'notes' => $this->notes,
+            'uploaded_by' => $this->uploaded_by,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

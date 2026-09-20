@@ -75,15 +75,33 @@ if (str_starts_with($uri, '/api/')) {
 
 // 2. Web UI Route Handler
 $webRoutes = require __DIR__ . '/../routes/web.php';
-$viewTarget = $webRoutes[$uri] ?? $webRoutes['/'] ?? null;
+$viewTarget = $webRoutes[$uri] ?? null;
+$routeParams = [];
+
+if (!$viewTarget) {
+    foreach ($webRoutes as $pattern => $handler) {
+        if (str_contains($pattern, '{')) {
+            $regex = '#^' . preg_replace('#\{[a-zA-Z0-9_]+\}#', '([a-zA-Z0-9_-]+)', $pattern) . '$#';
+            if (preg_match($regex, $uri, $matches)) {
+                array_shift($matches);
+                $routeParams = $matches;
+                $viewTarget = $handler;
+                break;
+            }
+        }
+    }
+}
+$viewTarget = $viewTarget ?? $webRoutes['/'] ?? null;
 
 if ($viewTarget && is_callable($viewTarget)) {
-    $result = $viewTarget();
-    $viewPath = __DIR__ . '/../resources/views/' . $result['view'] . '.blade.php';
-    if (file_exists($viewPath)) {
-        // Render simple blade view
-        include $viewPath;
-        exit;
+    $result = $viewTarget(...$routeParams);
+    if (!empty($result['view'])) {
+        $viewPath = __DIR__ . '/../resources/views/' . $result['view'] . '.blade.php';
+        if (file_exists($viewPath)) {
+            extract($result['data'] ?? []);
+            include $viewPath;
+            exit;
+        }
     }
 }
 
