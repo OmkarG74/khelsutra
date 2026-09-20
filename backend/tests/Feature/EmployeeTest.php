@@ -12,14 +12,14 @@ class EmployeeTest
     public function testEmployeeCreationAndRetrieval(): bool
     {
         $service = new EmployeeService();
-        $code = 'EMP-TEST-' . rand(100, 999);
+        $code = 'EMP-TEST-' . strtoupper(bin2hex(random_bytes(4)));
 
         $emp = $service->createEmployee(1, [
             'employee_code' => $code,
             'first_name' => 'Suresh',
             'last_name' => 'Raina',
             'phone' => '+91 9988776655',
-            'email' => 'suresh.' . rand(100, 999) . '@khelsutra.com',
+            'email' => 'suresh.' . bin2hex(random_bytes(3)) . '@khelsutra.com',
             'department_id' => 1,
             'employee_category_id' => 1,
             'designation' => 'Fielding Coach',
