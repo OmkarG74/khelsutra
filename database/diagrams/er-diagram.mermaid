@@ -1,0 +1,48 @@
+erDiagram
+    ORGANIZATIONS ||--o{ ORGANIZATION_USERS : "has"
+    ORGANIZATIONS ||--o{ SPORTS : "manages"
+    ORGANIZATIONS ||--o{ DEPARTMENTS : "contains"
+    ORGANIZATIONS ||--o{ EMPLOYEES : "employs"
+    ORGANIZATIONS ||--o{ ATHLETES : "enrolls"
+    ORGANIZATIONS ||--o{ TEAMS : "fields"
+    ORGANIZATIONS ||--o{ VENUES : "operates"
+    ORGANIZATIONS ||--o{ TOURNAMENTS : "hosts"
+    ORGANIZATIONS ||--o{ BUDGETS : "allocates"
+
+    USERS ||--o{ ORGANIZATION_USERS : "belongs_to"
+    ROLES ||--o{ ORGANIZATION_USERS : "assigned_to"
+    ROLES ||--o{ ROLE_PERMISSIONS : "granted"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "includes"
+
+    EMPLOYEES ||--o| COACH_PROFILES : "specializes_as"
+    EMPLOYEES ||--o{ TEAM_COACHES : "coaches"
+
+    SPORTS ||--o{ SPORT_CATEGORIES : "categorized_by"
+    SPORTS ||--o{ ATHLETES : "primary_sport"
+    SPORTS ||--o{ TEAMS : "plays"
+
+    ATHLETES ||--o{ TEAM_MEMBERS : "plays_for"
+    ATHLETES ||--o{ TRAINING_ATTENDANCE : "attends"
+    ATHLETES ||--o{ ATHLETE_PERFORMANCE : "evaluates"
+    ATHLETES ||--o{ ATHLETE_INJURIES : "suffers"
+
+    TEAMS ||--o{ TEAM_MEMBERS : "roster"
+    TEAMS ||--o{ TEAM_COACHES : "guided_by"
+    TEAMS ||--o{ TRAINING_SESSIONS : "trains_in"
+    TEAMS ||--o{ TOURNAMENT_TEAMS : "registered_in"
+
+    VENUES ||--o{ VENUE_FACILITIES : "houses"
+    VENUE_FACILITIES ||--o{ VENUE_BOOKINGS : "booked_for"
+    VENUE_FACILITIES ||--o{ VENUE_MAINTENANCE : "maintained_by"
+    VENUE_FACILITIES ||--o{ HOUSEKEEPING_TASKS : "cleaned_by"
+
+    TOURNAMENTS ||--o{ TOURNAMENT_TEAMS : "includes"
+    TOURNAMENTS ||--o{ FIXTURES : "schedules"
+    FIXTURES ||--o| MATCHES : "conducts"
+
+    INVENTORY_ITEMS ||--o{ STOCK_TRANSACTIONS : "tracks"
+    EQUIPMENT ||--o{ EQUIPMENT_ASSIGNMENTS : "assigned_to"
+
+    PURCHASE_REQUESTS ||--o{ PURCHASE_ORDERS : "converts_to"
+    PURCHASE_ORDERS ||--o{ GOODS_RECEIPTS : "received_as"
+    PURCHASE_ORDERS ||--o{ VENDOR_INVOICES : "billed_by"

@@ -1,0 +1,64 @@
+name: KhelSutra Continuous Integration
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  backend-checks:
+    name: Backend Lint & Syntax Check
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: khelsutra
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo, pdo_mysql, bcmath, gd
+
+      - name: Check PHP Syntax
+        run: find backend -name "*.php" -exec php -l {} \;
+
+      - name: Test Database Schema Import
+        run: |
+          mysql -h 127.0.0.1 -u root -proot khelsutra < database/sports_management_database.sql
+          mysql -h 127.0.0.1 -u root -proot khelsutra < database/seeds/roles.sql
+          mysql -h 127.0.0.1 -u root -proot khelsutra < database/seeds/permissions.sql
+          mysql -h 127.0.0.1 -u root -proot khelsutra < database/seeds/reference-data.sql
+
+  mobile-checks:
+    name: Flutter Mobile Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: |
+          cd mobile
+          flutter pub get
+
+      - name: Run Flutter Analyze
+        run: |
+          cd mobile
+          flutter analyze

@@ -1,0 +1,49 @@
+#!/usr/bin/env php
+<?php
+
+define('LARAVEL_START', microtime(true));
+
+// Register Composer Autoloader if available
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require __DIR__ . '/vendor/autoload.php';
+} else {
+    // Standalone fallback autoloader for skeleton execution
+    spl_autoload_register(function ($class) {
+        $prefix = 'App\\';
+        $base_dir = __DIR__ . '/app/';
+        $len = strlen($prefix);
+        if (strncmp($prefix, $class, $len) !== 0) {
+            return;
+        }
+        $relative_class = substr($class, $len);
+        $file = $base_dir . str_replace('\\', '/', $relative_class) . '.php';
+        if (file_exists($file)) {
+            require $file;
+        }
+    });
+}
+
+echo "KhelSutra CLI Console (v1.0.0)\n";
+echo "Usage: php artisan <command>\n";
+echo "Available commands:\n";
+echo "  health        Run API and database health check\n";
+echo "  migrate       Verify database schema\n";
+echo "  test          Run test suite\n";
+
+if ($argc > 1) {
+    $command = $argv[1];
+    switch ($command) {
+        case 'health':
+            $controller = new \App\Http\Controllers\Api\V1\HealthController();
+            $res = $controller->check();
+            echo json_encode($res, JSON_PRETTY_PRINT) . "\n";
+            break;
+        case 'test':
+            echo "Running test suite...\n";
+            passthru("php ../scripts/test.ps1");
+            break;
+        default:
+            echo "Command '{$command}' acknowledged in skeleton mode.\n";
+            break;
+    }
+}

@@ -1,0 +1,335 @@
+{
+  "info": {
+    "_postman_id": "khelsutra-collection-v1",
+    "name": "KhelSutra API",
+    "description": "Postman Collection for KhelSutra Multi-Tenant Sports Management API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.token) {",
+                  "    pm.environment.set('token', jsonData.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@khelsutra.com\",\n  \"password\": \"SecretPassword123\",\n  \"organization_code\": \"ORG-DEMO\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Current Profile (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Athletes",
+      "item": [
+        {
+          "name": "List Athletes",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/athletes?page=1",
+              "host": ["{{base_url}}"],
+              "path": ["athletes"],
+              "query": [{ "key": "page", "value": "1" }]
+            }
+          }
+        },
+        {
+          "name": "Create Athlete",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Aarav\",\n  \"last_name\": \"Patel\",\n  \"date_of_birth\": \"2007-08-12\",\n  \"gender\": \"male\",\n  \"primary_sport_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/athletes",
+              "host": ["{{base_url}}"],
+              "path": ["athletes"]
+            }
+          }
+        },
+        {
+          "name": "Get Athlete By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/athletes/1",
+              "host": ["{{base_url}}"],
+              "path": ["athletes", "1"]
+            }
+          }
+        },
+        {
+          "name": "Update Athlete",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Aarav\",\n  \"last_name\": \"Patel\",\n  \"phone\": \"+919876543210\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/athletes/1",
+              "host": ["{{base_url}}"],
+              "path": ["athletes", "1"]
+            }
+          }
+        },
+        {
+          "name": "Delete Athlete",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/athletes/1",
+              "host": ["{{base_url}}"],
+              "path": ["athletes", "1"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teams",
+      "item": [
+        {
+          "name": "List Teams",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/teams",
+              "host": ["{{base_url}}"],
+              "path": ["teams"]
+            }
+          }
+        },
+        {
+          "name": "Create Team",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Titans U-18\",\n  \"sport_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/teams",
+              "host": ["{{base_url}}"],
+              "path": ["teams"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tournaments",
+      "item": [
+        {
+          "name": "List Tournaments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tournaments",
+              "host": ["{{base_url}}"],
+              "path": ["tournaments"]
+            }
+          }
+        },
+        {
+          "name": "Create Tournament",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Winter Cup 2026\",\n  \"sport_id\": 1,\n  \"tournament_level_id\": 2,\n  \"tournament_format_id\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/tournaments",
+              "host": ["{{base_url}}"],
+              "path": ["tournaments"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Venues",
+      "item": [
+        {
+          "name": "List Venues",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/venues",
+              "host": ["{{base_url}}"],
+              "path": ["venues"]
+            }
+          }
+        },
+        {
+          "name": "Create Venue",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" },
+              { "key": "X-Organization-ID", "value": "{{organization_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"City Olympic Arena\",\n  \"city\": \"Mumbai\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/venues",
+              "host": ["{{base_url}}"],
+              "path": ["venues"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,381 @@
+openapi: 3.0.3
+info:
+  title: KhelSutra Sports Management Platform API
+  version: 1.0.0
+  description: Multi-tenant Sports ERP and Operations Management REST API.
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local Development Environment
+  - url: https://api.staging.khelsutra.com/api/v1
+    description: Staging Environment
+  - url: https://api.khelsutra.com/api/v1
+    description: Production Environment
+
+paths:
+  /health:
+    get:
+      summary: System Health Check
+      description: Returns service status and verifies active MySQL connection.
+      responses:
+        '200':
+          description: Healthy status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Database connection failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      summary: Authenticate User
+      description: Authenticate user credentials and return Bearer API token with role permissions.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/logout:
+    post:
+      summary: Revoke Token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Successfully logged out
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+  /auth/me:
+    get:
+      summary: Get Current Profile
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile and tenant details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+  /auth/refresh:
+    post:
+      summary: Refresh Token
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: New active token issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+  /athletes:
+    get:
+      summary: List Athletes
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+          description: Page number
+      responses:
+        '200':
+          description: Paginated athletes list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+    post:
+      summary: Register Athlete
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAthleteRequest'
+      responses:
+        '201':
+          description: Athlete created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+  /teams:
+    get:
+      summary: List Teams
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Teams list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+    post:
+      summary: Create Team
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - sport_id
+              properties:
+                name:
+                  type: string
+                  example: "Strikers FC U-16"
+                sport_id:
+                  type: integer
+                  example: 1
+      responses:
+        '201':
+          description: Team created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+  /tournaments:
+    get:
+      summary: List Tournaments
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Tournaments list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+    post:
+      summary: Create Tournament
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - sport_id
+                - tournament_level_id
+                - tournament_format_id
+              properties:
+                name:
+                  type: string
+                  example: "State Monsoon Cup 2026"
+                sport_id:
+                  type: integer
+                  example: 1
+                tournament_level_id:
+                  type: integer
+                  example: 3
+                tournament_format_id:
+                  type: integer
+                  example: 1
+      responses:
+        '201':
+          description: Tournament created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+  /venues:
+    get:
+      summary: List Venues
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Venues list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+    post:
+      summary: Register Venue
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  example: "Apex Sports Complex"
+                city:
+                  type: string
+                  example: "Pune"
+      responses:
+        '201':
+          description: Venue created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandardResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: SanctumToken
+
+  schemas:
+    StandardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Operation completed successfully"
+        data:
+          type: object
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Validation failed"
+        errors:
+          type: object
+
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "KhelSutra API is healthy"
+        data:
+          type: object
+          properties:
+            application:
+              type: string
+              example: "KhelSutra"
+            status:
+              type: string
+              example: "ok"
+            database:
+              type: string
+              example: "connected"
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "admin@khelsutra.com"
+        password:
+          type: string
+          format: password
+          example: "SecretPassword123"
+        organization_code:
+          type: string
+          example: "ORG-DEMO"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Login successful"
+        data:
+          type: object
+          properties:
+            user:
+              type: object
+            organization:
+              type: object
+            role:
+              type: object
+            permissions:
+              type: array
+              items:
+                type: string
+            token:
+              type: string
+
+    CreateAthleteRequest:
+      type: object
+      required:
+        - first_name
+        - last_name
+        - date_of_birth
+        - gender
+        - primary_sport_id
+      properties:
+        first_name:
+          type: string
+          example: "Rohan"
+        last_name:
+          type: string
+          example: "Sharma"
+        date_of_birth:
+          type: string
+          format: date
+          example: "2008-05-14"
+        gender:
+          type: string
+          enum: [male, female, other]
+          example: "male"
+        primary_sport_id:
+          type: integer
+          example: 1
