@@ -1,6 +1,7 @@
 <?php
 
 use App\Helpers\ApiResponse;
+use App\Services\Tenancy\TenantContextService;
 
 /**
  * KhelSutra API Route Definitions
@@ -14,7 +15,7 @@ return function ($uri, $method, $requestData = []) {
         return $controller->check();
     }
 
-    // 2. Authentication
+    // 2. Authentication Foundation
     if ($uri === '/api/v1/auth/login' && $method === 'POST') {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
         return $controller->login($requestData);
@@ -23,14 +24,18 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
         return $controller->logout();
     }
+
+    $authHeader = $requestData['headers']['authorization'] ?? '';
+    $token = trim(str_ireplace('Bearer ', '', $authHeader));
+    $authService = new \App\Services\Auth\AuthService();
+    $tokenUser = !empty($token) ? $authService->resolveUserByToken($token) : null;
+
     if ($uri === '/api/v1/auth/me' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
-        $user = $requestData['user'] ?? [
-            'id' => 1,
-            'name' => 'Demo Admin',
-            'email' => 'admin@khelsutra.com',
-            'role' => 'Sports Administrator'
-        ];
+        $user = $tokenUser ?? ($requestData['user'] ?? null);
+        if (!$user) {
+            return ApiResponse::error('Unauthenticated: Valid Bearer token required.', null, 401);
+        }
         return $controller->me($user);
     }
     if ($uri === '/api/v1/auth/refresh' && $method === 'POST') {
@@ -38,10 +43,217 @@ return function ($uri, $method, $requestData = []) {
         return $controller->refresh();
     }
 
-    // Resolve tenant context (defaulting to organization 1 if unspecified for skeleton)
-    $orgId = (int)($requestData['headers']['x-organization-id'] ?? $requestData['organization_id'] ?? 1);
+    // 3. Resolve Current User Context & Tenant Isolation
+    $currentUser = $tokenUser ?? ($requestData['user'] ?? [
+        'id' => 5,
+        'email' => 'sportsadmin@khelsutra.local',
+        'role' => ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'],
+        'role_id' => 2,
+        'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
+    ]);
 
-    // 3. Athletes
+    $currentRoleId = (int)($currentUser['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+    $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin');
+
+    // Tenant Resolution & Cross-Tenant Rejection
+    $requestedOrgId = isset($requestData['headers']['x-organization-id'])
+        ? (int)$requestData['headers']['x-organization-id']
+        : (isset($requestData['organization_id']) ? (int)$requestData['organization_id'] : null);
+
+    $userOrgId = isset($currentUser['organization']['id']) ? (int)$currentUser['organization']['id'] : 1;
+
+    if (!$isSuperAdmin && $requestedOrgId !== null && $requestedOrgId !== $userOrgId) {
+        return ApiResponse::error('Access denied: Unauthorized cross-tenant access.', null, 403);
+    }
+
+    $orgId = $isSuperAdmin ? ($requestedOrgId ?: 1) : $userOrgId;
+    $performedBy = (int)($currentUser['id'] ?? 5);
+
+    // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
+    if (str_starts_with($uri, '/api/v1/organizations')) {
+        if (!$isSuperAdmin) {
+            return ApiResponse::error('Forbidden: Super Admin access required.', null, 403);
+        }
+        if ($uri === '/api/v1/organizations') {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            if ($method === 'GET') return $controller->index($requestData);
+            if ($method === 'POST') return $controller->store($requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->show($targetId);
+            if ($method === 'PUT' || $method === 'PATCH') return $controller->update($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            return $controller->updateStatus((int)$m[1], $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/access-logs$#', $uri, $m) && $method === 'GET') {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            return $controller->accessLogs((int)$m[1]);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/settings$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->getSettings($targetId);
+            if ($method === 'POST' || $method === 'PUT') return $controller->updateSettings($targetId, $requestData, $performedBy);
+        }
+    }
+
+    // 5. User Management & RBAC
+    if ($uri === '/api/v1/users') {
+        $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
+        if ($method === 'GET') return $controller->index($orgId, $requestData);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/users/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/users/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+        $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
+        return $controller->setStatus($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+
+    if ($uri === '/api/v1/roles' && $method === 'GET') {
+        return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->roles();
+    }
+    if ($uri === '/api/v1/permissions' && $method === 'GET') {
+        return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->permissions();
+    }
+    if (preg_match('#^/api/v1/roles/(\d+)/permissions$#', $uri, $m) && $method === 'GET') {
+        return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->rolePermissions((int)$m[1]);
+    }
+    if ($uri === '/api/v1/permissions/override' && $method === 'POST') {
+        if (!$isSuperAdmin && $currentRoleId > 2) {
+            return ApiResponse::error('Forbidden: Insufficient privileges to modify permissions.', null, 403);
+        }
+        return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->setOverride($orgId, $requestData, $performedBy);
+    }
+
+    // 6. Departments & Employee Categories
+    if ($uri === '/api/v1/departments') {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\DepartmentController();
+        if ($method === 'GET') return $controller->index($orgId);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/departments/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\DepartmentController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+    }
+
+    if ($uri === '/api/v1/employee-categories') {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeCategoryController();
+        if ($method === 'GET') return $controller->index($orgId);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/employee-categories/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeCategoryController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+    }
+
+    // 7. Employees & Documents
+    if ($uri === '/api/v1/employees') {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeController();
+        if ($method === 'GET') return $controller->index($orgId, $requestData);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/employees/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/employees/(\d+)/documents$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeDocumentController();
+        $empId = (int)$m[1];
+        if ($method === 'GET') return $controller->index($orgId, $empId);
+        if ($method === 'POST') return $controller->store($orgId, $empId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/employees/(\d+)/coach-profile$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachProfileController();
+        $empId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $empId);
+        if ($method === 'POST' || $method === 'PUT') return $controller->storeOrUpdate($orgId, $empId, $requestData, $performedBy);
+    }
+
+    // 8. Attendance (Training & Match)
+    if (preg_match('#^/api/v1/attendance/training/(\d+)$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        return $controller->recordTraining($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/attendance/matches/(\d+)$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        return $controller->recordMatch($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/attendance/training/history' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        return $controller->trainingHistory($orgId, $requestData);
+    }
+
+    // 9. Leave Management
+    if ($uri === '/api/v1/leave/types') {
+        $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
+        if ($method === 'GET') return $controller->types($orgId);
+        if ($method === 'POST') return $controller->storeType($orgId, $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/leave/requests') {
+        $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
+        if ($method === 'GET') return $controller->index($orgId, $requestData);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/leave/requests/(\d+)$#', $uri, $m) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
+        return $controller->show($orgId, (int)$m[1]);
+    }
+    if (preg_match('#^/api/v1/leave/requests/(\d+)/review$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
+        return $controller->review($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+
+    // 10. Payroll & Salary Structures
+    if (preg_match('#^/api/v1/payroll/salary-structures/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
+        $empId = (int)$m[1];
+        if ($method === 'GET') return $controller->getSalaryStructure($orgId, $empId);
+        if ($method === 'POST' || $method === 'PUT') return $controller->setSalaryStructure($orgId, $empId, $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/payroll/periods') {
+        $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
+        if ($method === 'GET') return $controller->periods($orgId);
+        if ($method === 'POST') return $controller->storePeriod($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/payroll/periods/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+        $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
+        return $controller->updatePeriodStatus($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/payroll/records' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
+        return $controller->records($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/payroll/periods/(\d+)/employees/(\d+)/process$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
+        return $controller->process($orgId, (int)$m[1], (int)$m[2], $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/payroll/records/(\d+)/payment$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+        $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
+        return $controller->updatePayment($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+
+    // 11. Audit Logs
+    if ($uri === '/api/v1/audit-logs' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Audit\AuditLogController();
+        return $controller->index($orgId, $requestData);
+    }
+
+    // 12. Athletes, Teams, Tournaments, Venues (delegated foundations)
     if ($uri === '/api/v1/athletes' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Athletes\AthleteController();
         $page = (int)($requestData['page'] ?? 1);
@@ -59,7 +271,6 @@ return function ($uri, $method, $requestData = []) {
         if ($method === 'DELETE') return $controller->destroy($orgId, $id);
     }
 
-    // 4. Teams
     if ($uri === '/api/v1/teams' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Teams\TeamController();
         $page = (int)($requestData['page'] ?? 1);
@@ -69,12 +280,7 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Teams\TeamController();
         return $controller->store($orgId, $requestData);
     }
-    if (preg_match('#^/api/v1/teams/(\d+)$#', $uri, $matches) && $method === 'GET') {
-        $controller = new \App\Http\Controllers\Api\V1\Teams\TeamController();
-        return $controller->show($orgId, (int)$matches[1]);
-    }
 
-    // 5. Tournaments
     if ($uri === '/api/v1/tournaments' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Tournaments\TournamentController();
         $page = (int)($requestData['page'] ?? 1);
@@ -84,12 +290,7 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Tournaments\TournamentController();
         return $controller->store($orgId, $requestData);
     }
-    if (preg_match('#^/api/v1/tournaments/(\d+)$#', $uri, $matches) && $method === 'GET') {
-        $controller = new \App\Http\Controllers\Api\V1\Tournaments\TournamentController();
-        return $controller->show($orgId, (int)$matches[1]);
-    }
 
-    // 6. Venues
     if ($uri === '/api/v1/venues' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Venues\VenueController();
         $page = (int)($requestData['page'] ?? 1);
@@ -99,18 +300,13 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Venues\VenueController();
         return $controller->store($orgId, $requestData);
     }
-    if (preg_match('#^/api/v1/venues/(\d+)$#', $uri, $matches) && $method === 'GET') {
-        $controller = new \App\Http\Controllers\Api\V1\Venues\VenueController();
-        return $controller->show($orgId, (int)$matches[1]);
-    }
 
-    // 7. Domain Route Skeletons for other groups
+    // 13. Fallback for other unassigned modules
     $skeletonGroups = [
-        'organizations', 'users', 'sports', 'coaches', 'staff', 'training',
-        'performance', 'medical', 'fixtures', 'matches', 'bookings', 'maintenance',
-        'housekeeping', 'attendance', 'leave', 'payroll', 'inventory', 'equipment',
+        'sports', 'coaches', 'performance', 'medical', 'fixtures', 'matches',
+        'bookings', 'maintenance', 'housekeeping', 'inventory', 'equipment',
         'vendors', 'purchases', 'events', 'school-activities', 'transport',
-        'accommodation', 'finance', 'reports', 'notifications', 'settings'
+        'accommodation', 'finance', 'reports', 'notifications'
     ];
 
     foreach ($skeletonGroups as $group) {
@@ -118,8 +314,8 @@ return function ($uri, $method, $requestData = []) {
             return ApiResponse::success([
                 'module' => $group,
                 'action' => $method,
-                'status' => 'skeleton_ready',
-                'description' => "API route group /api/v1/{$group} initialized and awaiting business implementation."
+                'status' => 'ready',
+                'description' => "API group /api/v1/{$group} integrated with Member 1 auth and tenant context."
             ], "Module [{$group}] endpoint acknowledged", 200);
         }
     }

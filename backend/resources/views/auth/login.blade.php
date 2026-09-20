@@ -68,28 +68,22 @@
             <p class="small text-muted mb-0">Enter your credentials to access operations dashboard</p>
         </div>
 
-        <form action="/dashboard" method="GET">
+        <?php if (!empty($_GET['error'])): ?>
+            <div class="alert alert-danger py-2 px-3 small rounded-3 mb-3 d-flex align-items-center gap-2">
+                <i class="bi bi-exclamation-octagon-fill text-danger"></i>
+                <span><?= htmlspecialchars($_GET['error']) ?></span>
+            </div>
+        <?php endif; ?>
+
+        <form action="/login" method="POST">
             <div class="mb-3">
                 <label class="ks-form-label">Email Address *</label>
-                <input type="email" class="ks-form-control" name="email" value="admin@khelsutra.com" required placeholder="name@example.com">
+                <input type="email" class="ks-form-control" name="email" value="<?= htmlspecialchars($_GET['email'] ?? 'sportsadmin@khelsutra.local') ?>" required placeholder="name@example.com">
             </div>
 
             <div class="mb-3">
                 <label class="ks-form-label">Password *</label>
-                <input type="password" class="ks-form-control" name="password" value="SecretPassword123" required placeholder="••••••••">
-            </div>
-
-            <div class="mb-3">
-                <label class="ks-form-label">Role Switcher (Preview Mode)</label>
-                <select class="ks-form-select" name="role">
-                    <option value="sports_admin" selected>Sports Administrator</option>
-                    <option value="coach">Coach</option>
-                    <option value="athlete">Athlete</option>
-                    <option value="hr_finance">HR & Finance</option>
-                    <option value="venue_manager">Venue Manager</option>
-                    <option value="inventory_manager">Inventory Manager</option>
-                    <option value="super_admin">Super Admin</option>
-                </select>
+                <input type="password" class="ks-form-control" name="password" required placeholder="••••••••">
             </div>
 
             <div class="d-flex justify-content-between align-items-center mb-4">
