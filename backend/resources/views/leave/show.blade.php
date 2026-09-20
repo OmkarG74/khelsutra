@@ -16,13 +16,10 @@ ob_start();
 ?>
 
 <div class="ks-page-header">
-    <div>
-        <div class="d-flex align-items-center gap-2 mb-1">
-            <a href="/leave" class="text-decoration-none small text-muted"><i class="bi bi-arrow-left"></i> Back to Leave Directory</a>
-        </div>
-        <h1 class="ks-page-title">Leave Request #<?= htmlspecialchars((string)($req['id'] ?? '')) ?></h1>
-        <p class="ks-page-subtitle">Review request details, verify overlapping dates, and execute authorization workflow.</p>
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="/leave" class="text-decoration-none small text-muted"><i class="bi bi-arrow-left"></i> Back to Leave</a>
     </div>
+    <h1 class="ks-page-title">Leave Request #<?= htmlspecialchars((string)($req['id'] ?? '')) ?></h1>
 </div>
 
 <?php if (!$req): ?>

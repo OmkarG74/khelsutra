@@ -1,212 +1,184 @@
 <?php
+$pageTitle = 'Venues — KhelSutra';
 $activePage = 'venues';
-$title = 'Venues & Facility Bookings — KhelSutra';
+$orgId = current_organization_id();
+
+$venueService = new \App\Services\Venue\VenueService();
+$page = (int)($_GET['page'] ?? 1);
+$search = trim($_GET['search'] ?? '');
+$status = trim($_GET['status'] ?? '');
+
+$result = $venueService->listVenues($orgId, $page, 15, $search ?: null, $status ?: null);
+$venues = $result['data'] ?? [];
+$total = $result['total'] ?? 0;
+$totalPages = $result['total_pages'] ?? 1;
 
 ob_start();
 ?>
 
-<!-- Page Header (Section 16) -->
-<div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Venues & Bookings</h1>
-        <p class="ks-page-subtitle">Manage academy grounds, court reservations, floodlight slots, and maintenance status.</p>
-    </div>
-    <div class="ks-header-actions">
-        <button class="ks-btn ks-btn-secondary" onclick="alert('Viewing Maintenance Log...');">
-            <i class="bi bi-tools"></i>
-            <span>Maintenance Log</span>
-        </button>
-        <button class="ks-btn ks-btn-primary" onclick="alert('Reserve Facility Slot');">
-            <i class="bi bi-plus-lg"></i>
-            <span>+ Book Facility</span>
-        </button>
-    </div>
-</div>
-
-<!-- KPI Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-purple">
-                    <i class="bi bi-building-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Venue Bookings</div>
-                    <div class="ks-kpi-value">6</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">Courts & grounds reserved today</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 18C20 18 30 24 50 16C70 8 78 4 88 12" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
+<div class="ks-content">
+    <!-- Clean Page Header Standard -->
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Venues</h1>
         </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-blue">
-                    <i class="bi bi-geo-alt-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Total Facilities</div>
-                    <div class="ks-kpi-value">5</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive">All operational</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 22C18 20 28 26 44 14C60 2 72 16 88 4" stroke="#0B6EF3" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-green">
-                    <i class="bi bi-lightning-charge-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Floodlight Readiness</div>
-                    <div class="ks-kpi-value">100%</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">Night sessions approved</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 14C22 10 42 18 62 12C74 8 82 14 88 6" stroke="#16A34A" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-amber">
-                    <i class="bi bi-clock-history fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Available Slots</div>
-                    <div class="ks-kpi-value">8</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text text-warning">Evening slots filling fast</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 20C16 16 34 8 52 14C70 20 78 12 88 6" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Facilities Grid -->
-<div class="row g-3">
-    <!-- Facility 1 -->
-    <div class="col-lg-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-green" style="width: 46px; height: 46px; border-radius: 12px;">
-                        <i class="bi bi-bounding-box fs-4"></i>
-                    </div>
-                    <div>
-                        <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Ground A - Main Arena</h3>
-                        <span class="small text-muted">Natural Grass Football Turf • 2,500 Seating</span>
-                    </div>
-                </div>
-                <span class="ks-badge ks-badge-confirmed">Operational</span>
-            </div>
-            <div class="small text-muted mb-3">
-                <div><i class="bi bi-check2-circle text-success me-1"></i> FIFA Certified surface • Floodlit</div>
-                <div class="mt-1"><i class="bi bi-calendar-event me-1"></i> <strong>Current Allocation:</strong> State Cup Match (22 Sep, 15:30)</div>
-            </div>
-            <div class="pt-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--ks-border-light) !important;">
-                <span class="small fw-semibold text-navy">4 Bookings Today</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Slot Schedule</button>
-            </div>
+        <div class="d-flex gap-2">
+            <a href="/venues/bookings/create" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+                <i class="bi bi-calendar-plus"></i> New Booking
+            </a>
+            <a href="/venues/create" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+                <i class="bi bi-plus-lg"></i> Add Venue
+            </a>
         </div>
     </div>
 
-    <!-- Facility 2 -->
-    <div class="col-lg-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-blue" style="width: 46px; height: 46px; border-radius: 12px;">
-                        <i class="bi bi-grid-3x3-gap-fill fs-4"></i>
-                    </div>
-                    <div>
-                        <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Court 2 - Turf Ground & Nets</h3>
-                        <span class="small text-muted">Synthetic Turf Cricket Pitch & 4 Practice Nets</span>
-                    </div>
+    <!-- Search & Filters Toolbar -->
+    <div class="card p-3 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+        <form method="GET" action="/venues" class="row g-2 align-items-center">
+            <div class="col-md-7">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button) 0 0 var(--ks-radius-button);">
+                        <i class="bi bi-search text-muted" style="font-size: 13px;"></i>
+                    </span>
+                    <input type="text" name="search" class="form-control border-start-0" placeholder="Search venue name, code, type, city..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="border-color: var(--ks-border); border-radius: 0 var(--ks-radius-button) var(--ks-radius-button) 0; font-size: 13px;">
                 </div>
-                <span class="ks-badge ks-badge-confirmed">Operational</span>
             </div>
-            <div class="small text-muted mb-3">
-                <div><i class="bi bi-check2-circle text-success me-1"></i> Bowling Machine Installed • Floodlit</div>
-                <div class="mt-1"><i class="bi bi-calendar-event me-1"></i> <strong>Current Allocation:</strong> Net Practice & Youth League</div>
+            <div class="col-md-3">
+                <select name="status" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
+                    <option value="">All Statuses</option>
+                    <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
+                    <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                    <option value="under_maintenance" <?= $status === 'under_maintenance' ? 'selected' : '' ?>>Under Maintenance</option>
+                </select>
             </div>
-            <div class="pt-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--ks-border-light) !important;">
-                <span class="small fw-semibold text-navy">3 Bookings Today</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Slot Schedule</button>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 500; font-size: 13px;">
+                    Filter
+                </button>
+                <?php if ($search || $status): ?>
+                    <a href="/venues" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;" title="Reset filters">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                <?php endif; ?>
             </div>
-        </div>
+        </form>
     </div>
 
-    <!-- Facility 3 -->
-    <div class="col-lg-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-purple" style="width: 46px; height: 46px; border-radius: 12px;">
-                        <i class="bi bi-circle-square fs-4"></i>
-                    </div>
-                    <div>
-                        <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Indoor Badminton Complex</h3>
-                        <span class="small text-muted">4 Wooden Synthetic Courts • Climate Controlled</span>
-                    </div>
-                </div>
-                <span class="ks-badge ks-badge-confirmed">Operational</span>
-            </div>
-            <div class="small text-muted mb-3">
-                <div><i class="bi bi-check2-circle text-success me-1"></i> BWF Standard Matting • LED Anti-Glare</div>
-                <div class="mt-1"><i class="bi bi-calendar-event me-1"></i> <strong>Current Allocation:</strong> Elite Squad Agility Drills</div>
-            </div>
-            <div class="pt-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--ks-border-light) !important;">
-                <span class="small fw-semibold text-navy">2 Courts Reserved</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Slot Schedule</button>
-            </div>
+    <!-- Venues Table -->
+    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff; overflow: hidden;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                    <tr>
+                        <th class="py-3 px-3 text-muted fw-semibold" style="width: 270px;">Venue</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Type</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Facilities</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Timings</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Location</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Status</th>
+                        <th class="py-3 px-3 text-muted fw-semibold text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($venues)): ?>
+                        <?php foreach ($venues as $venue): ?>
+                            <tr>
+                                <td class="py-3 px-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div style="width: 38px; height: 38px; border-radius: 8px; background: #EDE9FE; color: #7C3AED; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                            <i class="bi bi-geo-alt-fill"></i>
+                                        </div>
+                                        <div>
+                                            <a href="/venues/<?= (int)$venue['id'] ?>" class="fw-semibold text-decoration-none text-dark d-block">
+                                                <?= htmlspecialchars($venue['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                            <span class="text-muted small" style="font-family: monospace; font-size: 11px;"><?= htmlspecialchars($venue['venue_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-3 text-dark fw-medium">
+                                    <?= htmlspecialchars($venue['venue_type'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                        <?= (int)($venue['facility_count'] ?? 0) ?> Facilities
+                                    </span>
+                                </td>
+                                <td class="py-3 px-3 text-muted small">
+                                    <div><?= htmlspecialchars(substr($venue['opening_time'] ?? '', 0, 5), ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars(substr($venue['closing_time'] ?? '', 0, 5), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <?php if (!empty($venue['capacity'])): ?>
+                                        <div style="font-size: 11px;">Cap: <?= number_format($venue['capacity']) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-3 px-3 text-dark">
+                                    <div><?= htmlspecialchars($venue['city'] ?? 'Mumbai', ENT_QUOTES, 'UTF-8') ?></div>
+                                    <span class="text-muted small"><?= htmlspecialchars($venue['state'] ?? 'Maharashtra', ENT_QUOTES, 'UTF-8') ?></span>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <?php
+                                        $badge = match($venue['status'] ?? 'active') {
+                                            'active' => 'badge-success',
+                                            'under_maintenance' => 'badge-warning',
+                                            default => 'badge-secondary'
+                                        };
+                                    ?>
+                                    <span class="badge <?= $badge ?>" style="border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize;">
+                                        <?= htmlspecialchars(str_replace('_', ' ', $venue['status'] ?? 'active'), ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                </td>
+                                <td class="py-3 px-3 text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/venues/<?= (int)$venue['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Facilities & Bookings">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="/venues/<?= (int)$venue['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0 6px 6px 0;" title="Edit Venue">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="text-muted mb-2"><i class="bi bi-geo-alt fs-2"></i></div>
+                                <h6 class="fw-bold" style="color: var(--ks-navy);">No venues found</h6>
+                                <p class="text-muted small mb-3">No sports grounds or facilities match the selected filters.</p>
+                                <a href="/venues/create" class="btn btn-sm btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 500;">
+                                    <i class="bi bi-plus-lg me-1"></i> Add Venue
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
         </div>
-    </div>
 
-    <!-- Facility 4 -->
-    <div class="col-lg-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-cyan" style="width: 46px; height: 46px; border-radius: 12px;">
-                        <i class="bi bi-stopwatch fs-4"></i>
-                    </div>
-                    <div>
-                        <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Olympic Track & Field Ground</h3>
-                        <span class="small text-muted">8-Lane Synthetic Track & Long Jump Pit</span>
-                    </div>
+        <!-- Pagination -->
+        <?php if ($total > 0): ?>
+            <div class="card-footer d-flex align-items-center justify-content-between py-3 px-3 bg-white" style="border-top: 1px solid var(--ks-border);">
+                <div class="text-muted small">
+                    Showing <strong><?= count($venues) ?></strong> of <strong><?= (int)$total ?></strong> venues
                 </div>
-                <span class="ks-badge ks-badge-cyan">Maintenance Check</span>
+                <?php if ($totalPages > 1): ?>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">Previous</a>
+                            </li>
+                            <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+                                <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+                                    <a class="page-link" href="?page=<?= $p ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>"><?= $p ?></a>
+                                </li>
+                            <?php endfor; ?>
+                            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                <?php endif; ?>
             </div>
-            <div class="small text-muted mb-3">
-                <div><i class="bi bi-tools text-warning me-1"></i> Line marking inspection scheduled 13:00 - 14:30</div>
-                <div class="mt-1"><i class="bi bi-calendar-event me-1"></i> <strong>Next Fixture:</strong> Monsoon Shield (25 Sep)</div>
-            </div>
-            <div class="pt-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--ks-border-light) !important;">
-                <span class="small fw-semibold text-navy">Opens 15:00</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Slot Schedule</button>
-            </div>
-        </div>
+        <?php endif; ?>
     </div>
 </div>
 

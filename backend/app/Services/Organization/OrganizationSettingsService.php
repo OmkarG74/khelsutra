@@ -32,7 +32,15 @@ class OrganizationSettingsService extends BaseService
 
     public function getAllSettings(int $orgId): array
     {
-        return $this->getAll($orgId);
+        return $this->getSettingRows($orgId);
+    }
+
+    public function getSettingRows(int $orgId): array
+    {
+        if (!$this->pdo) return [];
+        $stmt = $this->pdo->prepare("SELECT id, organization_id, setting_key, setting_value, setting_type, updated_at FROM organization_settings WHERE organization_id = :org_id ORDER BY setting_key ASC");
+        $stmt->execute([':org_id' => $orgId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
     public function get(int $orgId, string $key, mixed $default = null): mixed

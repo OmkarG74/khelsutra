@@ -3,19 +3,33 @@ $activePage = 'settings';
 $title = 'Organisation Settings — KhelSutra Platform';
 
 $settingsService = new \App\Services\Organization\OrganizationSettingsService();
-$orgId = $_SESSION['current_organization_id'] ?? 1;
+$orgId = current_organization_id();
 
-$settings = $settingsService->getAllSettings($orgId);
+$rawSettings = isset($settings) ? $settings : $settingsService->getSettingRows($orgId);
+
+// Defensive normalization: ensure $settings is always an array of row records
+$settings = [];
+if (is_array($rawSettings)) {
+    if (!empty($rawSettings) && !isset($rawSettings[0]) && is_string(array_key_first($rawSettings))) {
+        // Associative map was returned, convert to record list
+        foreach ($rawSettings as $k => $v) {
+            $settings[] = [
+                'setting_key' => (string)$k,
+                'setting_value' => is_scalar($v) ? (string)$v : json_encode($v),
+                'setting_type' => gettype($v)
+            ];
+        }
+    } else {
+        $settings = $rawSettings;
+    }
+}
 
 ob_start();
 ?>
 
-<!-- Page Header (Section 44 & 45) -->
+<!-- Page Header (Rule 7 & 8: Clean Page Title + Action, No Subtitle) -->
 <div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Organisation Settings</h1>
-        <p class="ks-page-subtitle">Configure typed organisation parameters (string, integer, decimal, boolean, json).</p>
-    </div>
+    <h1 class="ks-page-title">Organisation Settings</h1>
     <div class="ks-header-actions">
         <button class="ks-btn ks-btn-primary" onclick="document.getElementById('settingModal').style.display='flex'">
             <i class="bi bi-plus-lg"></i>
@@ -49,18 +63,23 @@ ob_start();
                     </tr>
                 <?php else: ?>
                     <?php foreach ($settings as $s): ?>
+                        <?php
+                        $sKey = is_array($s) ? ($s['setting_key'] ?? '') : '';
+                        $sVal = is_array($s) ? ($s['setting_value'] ?? '') : (string)$s;
+                        $sType = is_array($s) ? ($s['setting_type'] ?? 'string') : 'string';
+                        ?>
                         <tr>
                             <td>
-                                <code class="fw-bold text-navy" style="font-size: 13px;"><?= htmlspecialchars($s['setting_key']) ?></code>
+                                <code class="fw-bold text-navy" style="font-size: 13px;"><?= htmlspecialchars((string)$sKey, ENT_QUOTES, 'UTF-8') ?></code>
                             </td>
                             <td>
-                                <span class="small font-monospace text-dark"><?= htmlspecialchars($s['setting_value'] ?? 'null') ?></span>
+                                <span class="small font-monospace text-dark"><?= htmlspecialchars((string)($sVal !== '' ? $sVal : 'null'), ENT_QUOTES, 'UTF-8') ?></span>
                             </td>
                             <td>
-                                <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($s['setting_type']) ?></span>
+                                <span class="ks-badge ks-badge-blue"><?= htmlspecialchars((string)$sType, ENT_QUOTES, 'UTF-8') ?></span>
                             </td>
                             <td style="text-align: right;">
-                                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;" onclick="editSetting(<?= htmlspecialchars(json_encode($s)) ?>)">
+                                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;" onclick="editSetting(<?= htmlspecialchars(json_encode(['setting_key' => $sKey, 'setting_value' => $sVal, 'setting_type' => $sType]), ENT_QUOTES, 'UTF-8') ?>)">
                                     Edit
                                 </button>
                             </td>
@@ -105,8 +124,8 @@ ob_start();
 
 <script>
 function editSetting(s) {
-    document.getElementById('setKey').value = s.setting_key;
-    document.getElementById('setType').value = s.setting_type;
+    document.getElementById('setKey').value = s.setting_key || '';
+    document.getElementById('setType').value = s.setting_type || 'string';
     document.getElementById('setVal').value = s.setting_value || '';
     document.getElementById('settingModal').style.display = 'flex';
 }

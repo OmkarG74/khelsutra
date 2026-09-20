@@ -19,10 +19,7 @@ ob_start();
 
 <!-- Page Header (Section 33 & 51) -->
 <div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Leave Management</h1>
-        <p class="ks-page-subtitle">Track, approve, and audit leave requests for employees, coaching staff, and athletes.</p>
-    </div>
+    <h1 class="ks-page-title">Leave Management</h1>
     <div class="ks-header-actions">
         <a href="/leave/create" class="ks-btn ks-btn-primary">
             <i class="bi bi-calendar-plus-fill"></i>

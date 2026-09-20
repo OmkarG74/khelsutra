@@ -18,6 +18,7 @@ spl_autoload_register(function ($class) {
 });
 
 require_once __DIR__ . '/../app/Helpers/ApiResponse.php';
+require_once __DIR__ . '/../app/Helpers/AuthContext.php';
 
 // Helper env function
 if (!function_exists('env')) {
@@ -82,7 +83,10 @@ if ($uri === '/logout') {
     exit;
 }
 
-// 2. API Route Handler
+// 2. Web Form Actions Dispatcher (POST Submissions)
+require __DIR__ . '/../routes/web_actions.php';
+
+// 3. API Route Handler
 if (str_starts_with($uri, '/api/')) {
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Organization-ID');

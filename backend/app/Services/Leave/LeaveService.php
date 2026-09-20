@@ -49,9 +49,37 @@ class LeaveService extends BaseService
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
-    public function listLeaveRequests(int $orgId, ?string $status = null, int $limit = 50, int $offset = 0): array
+    public function listLeaveRequests(int $orgId, string|array|null $statusOrFilters = null, int $limit = 50, int $offset = 0): array
     {
         if (!$this->pdo) return [];
+
+        $status = null;
+        $applicantType = null;
+
+        if (is_array($statusOrFilters)) {
+            $rawStatus = $statusOrFilters['status'] ?? null;
+            if (is_string($rawStatus) && !empty($rawStatus)) {
+                $status = trim($rawStatus);
+            }
+            $rawApplicant = $statusOrFilters['applicant_type'] ?? null;
+            if (is_string($rawApplicant) && in_array($rawApplicant, ['employee', 'athlete'], true)) {
+                $applicantType = $rawApplicant;
+            }
+            if (isset($statusOrFilters['limit'])) {
+                $limit = (int)$statusOrFilters['limit'];
+            }
+            if (isset($statusOrFilters['offset'])) {
+                $offset = (int)$statusOrFilters['offset'];
+            }
+        } elseif (is_string($statusOrFilters) && !empty($statusOrFilters)) {
+            $status = trim($statusOrFilters);
+        }
+
+        // Validate status against whitelist
+        $allowedStatuses = ['pending', 'approved', 'rejected', 'cancelled'];
+        if ($status !== null && !in_array($status, $allowedStatuses, true)) {
+            $status = null;
+        }
 
         $sql = "
             SELECT lr.*, lt.name as leave_type_name,
@@ -72,13 +100,18 @@ class LeaveService extends BaseService
             $params[':status'] = $status;
         }
 
+        if ($applicantType) {
+            $sql .= " AND lr.applicant_type = :applicant_type ";
+            $params[':applicant_type'] = $applicantType;
+        }
+
         $sql .= " ORDER BY lr.id DESC LIMIT :limit OFFSET :offset";
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $k => $v) {
             $stmt->bindValue($k, $v);
         }
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', max(1, $limit), PDO::PARAM_INT);
+        $stmt->bindValue(':offset', max(0, $offset), PDO::PARAM_INT);
         $stmt->execute();
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];

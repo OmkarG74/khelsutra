@@ -14,10 +14,7 @@ ob_start();
 
 <!-- Page Header (Section 36 & 52) -->
 <div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Payroll Management</h1>
-        <p class="ks-page-subtitle">Salary disbursements, decimal-safe compensation calculations, and audit-compliant payroll cycles.</p>
-    </div>
+    <h1 class="ks-page-title">Payroll</h1>
     <div class="ks-header-actions">
         <a href="/payroll/periods" class="ks-btn ks-btn-secondary">
             <i class="bi bi-calendar-range"></i>

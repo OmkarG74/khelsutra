@@ -38,6 +38,9 @@ if (!function_exists('base_path')) {
     }
 }
 
+require_once dirname(__DIR__) . '/app/Helpers/ApiResponse.php';
+require_once dirname(__DIR__) . '/app/Helpers/AuthContext.php';
+
 // Autoloader for App namespace
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
