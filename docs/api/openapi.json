@@ -1,0 +1,85 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "KhelSutra Platform API",
+    "description": "Foundation API for Multi-Tenancy, Authentication, RBAC, Staff/HR, Attendance, Leave, and Decimal-Safe Payroll",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8000/api/v1",
+      "description": "Local Development Server"
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "summary": "Authenticate user and resolve tenant context",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "password": { "type": "string" },
+                  "organization_code": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Authenticated successfully" },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "summary": "Get current authenticated profile and permissions",
+        "responses": {
+          "200": { "description": "Current user context" }
+        }
+      }
+    },
+    "/employees": {
+      "get": {
+        "summary": "List employees scoped to organization",
+        "responses": {
+          "200": { "description": "List of employees" }
+        }
+      },
+      "post": {
+        "summary": "Create an employee record across 6 sections",
+        "responses": {
+          "201": { "description": "Employee created" }
+        }
+      }
+    },
+    "/leave/requests": {
+      "get": {
+        "summary": "List leave applications",
+        "responses": {
+          "200": { "description": "Leave requests" }
+        }
+      },
+      "post": {
+        "summary": "Submit leave application",
+        "responses": {
+          "201": { "description": "Leave request submitted" }
+        }
+      }
+    },
+    "/payroll/dashboard": {
+      "get": {
+        "summary": "Payroll dashboard metrics",
+        "responses": {
+          "200": { "description": "Live gross, deductions, net salary metrics" }
+        }
+      }
+    }
+  }
+}
