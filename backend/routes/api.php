@@ -350,20 +350,29 @@ return function ($uri, $method, $requestData = []) {
     
     // Member 4: Operations Bookings
     if ($uri === '/api/v1/bookings' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\VenueBookingController();
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/bookings' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'create_booking')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\VenueBookingController();
         return $controller->store($orgId, $requestData);
     }
     if (preg_match('#^/api/v1/bookings/(\d+)/cancel$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_booking')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\VenueBookingController();
         return $controller->cancel($orgId, (int)$matches[1], $requestData);
     }
     if (preg_match('#^/api/v1/venues/(\d+)/availability$#', $uri, $matches) && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\VenueBookingController();
         return $controller->availability($orgId, (int)$matches[1], $requestData);
+    }
+    if (preg_match('#^/api/v1/facilities/(\d+)/availability$#', $uri, $matches) && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VenueBookingController();
+        return $controller->facilityAvailability($orgId, (int)$matches[1], $requestData);
     }
 
     

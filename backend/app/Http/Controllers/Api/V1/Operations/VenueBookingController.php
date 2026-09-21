@@ -52,6 +52,27 @@ class VenueBookingController
         return ApiResponse::success($check);
     }
 
+    public function facilityAvailability(int $orgId, int $facilityId, array $requestData): array
+    {
+        if (empty($requestData['date'])) {
+            return ApiResponse::error('Date is required', null, 400);
+        }
+
+        // We need to look up the venue_id for this facility
+        $facility = \App\Models\Facility::where('organization_id', $orgId)->findOrFail($facilityId);
+
+        $check = $this->availabilityService->checkAvailability(
+            $orgId,
+            $facility->venue_id,
+            $facilityId,
+            $requestData['date'],
+            $requestData['start_time'] ?? '00:00:00',
+            $requestData['end_time'] ?? '23:59:59'
+        );
+
+        return ApiResponse::success($check);
+    }
+
     public function store(int $orgId, array $requestData): array
     {
         $request = new VenueBookingRequest($requestData);
