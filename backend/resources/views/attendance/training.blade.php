@@ -124,7 +124,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-training-attendance">
             <thead>
                 <tr>
                     <th>Session ID</th>

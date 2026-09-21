@@ -26,10 +26,7 @@ ob_start();
 
 <!-- Page Header (Section 24, 45 & 47) -->
 <div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Employees & Staff</h1>
-        <p class="ks-page-subtitle">Multi-department staff roster, coaches, support crew, and HR administration.</p>
-    </div>
+    <h1 class="ks-page-title">Employees & Staff</h1>
     <div class="ks-header-actions">
         <a href="/hr/departments" class="ks-btn ks-btn-secondary">
             <i class="bi bi-diagram-3"></i>
@@ -153,7 +150,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-employees">
             <thead>
                 <tr>
                     <th>Employee</th>

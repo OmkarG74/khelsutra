@@ -33,11 +33,11 @@ if ($auth) {
         </div>
     </div>
 
-    <!-- Global Search (Section 11) -->
-    <div class="ks-global-search">
+    <!-- Global Search (Rule 41: Functional Search) -->
+    <form action="/search" method="GET" class="ks-global-search m-0">
         <i class="bi bi-search"></i>
-        <input type="text" class="ks-search-input" placeholder="Search athletes, teams, tournaments..." aria-label="Global Search">
-    </div>
+        <input type="text" name="q" value="<?= htmlspecialchars($_GET['q'] ?? '') ?>" class="ks-search-input" placeholder="Search athletes, teams, tournaments..." aria-label="Global Search">
+    </form>
 
     <!-- Header Right -->
     <div class="ks-header-right">

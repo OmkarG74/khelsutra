@@ -13,19 +13,16 @@ ob_start();
 ?>
 
 <div class="ks-page-header">
-    <div>
-        <div class="d-flex align-items-center gap-2 mb-1">
-            <a href="/leave" class="text-decoration-none small text-muted"><i class="bi bi-arrow-left"></i> Back to Leave Directory</a>
-        </div>
-        <h1 class="ks-page-title">Submit Leave Application</h1>
-        <p class="ks-page-subtitle">File leave request with dates validation, overlap prevention, and policy compliance.</p>
+    <div class="d-flex align-items-center gap-2 mb-1">
+        <a href="/leave" class="text-decoration-none small text-muted"><i class="bi bi-arrow-left"></i> Back to Leave</a>
     </div>
+    <h1 class="ks-page-title">Submit Leave Application</h1>
 </div>
 
 <div class="row justify-content-center">
     <div class="col-lg-8">
         <div class="ks-card p-4">
-            <form id="applyLeaveForm">
+            <form id="applyLeaveForm" method="POST" action="/leave/create">
                 <h5 class="fw-bold text-navy mb-3">Leave Application Details</h5>
 
                 <div class="row g-3 mb-4">
@@ -125,37 +122,6 @@ function calculateDays() {
         document.getElementById('totalDays').value = diff > 0 ? diff : 0;
     }
 }
-
-document.getElementById('applyLeaveForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const btn = document.getElementById('btnSubmit');
-    btn.disabled = true;
-    btn.innerHTML = '<span>Submitting...</span>';
-
-    const formData = new FormData(this);
-    const payload = Object.fromEntries(formData.entries());
-
-    try {
-        const res = await fetch('/api/v1/leave/requests', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        const result = await res.json();
-        if (result.success) {
-            alert('Leave application submitted successfully!');
-            window.location.href = '/leave/' + result.data.id;
-        } else {
-            alert(result.message || 'Error submitting leave');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-send-fill"></i><span>Submit Application</span>';
-        }
-    } catch (err) {
-        alert('Network or server error');
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-send-fill"></i><span>Submit Application</span>';
-    }
-});
 </script>
 
 <?php

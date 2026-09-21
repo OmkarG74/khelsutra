@@ -168,6 +168,119 @@ $tests = [
         $t = new \Tests\Feature\OrganizationSettingsTest();
         return $t->testTypedSettingsCasting();
     },
+
+    // ==========================================
+    // Sports Administrator Production Flows
+    // ==========================================
+    'Sports Admin: Athlete CRUD, Tenant Isolation & Soft Delete' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminAthleteFlow();
+    },
+    'Sports Admin: Coach Flow (Employees + Coach Profiles)' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminCoachFlow();
+    },
+    'Sports Admin: Team Management & Coach/Athlete Assignment' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminTeamFlow();
+    },
+    'Sports Admin: Training Sessions & Attendance Tracking' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminTrainingFlow();
+    },
+    'Sports Admin: Tournaments, Fixtures, Matches & Standings' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminTournamentFlow();
+    },
+    'Sports Admin: Venue, Facility & Booking Conflict Validation' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminVenueBookingConflictFlow();
+    },
+    'Sports Admin: Inventory Items & Stock Movements' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminInventoryFlow();
+    },
+    'Sports Admin: Live Database Operational Reports' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testSportsAdminOperationalReports();
+    },
+    'Sports Admin: Audit Logging Verification' => function() {
+        require_once __DIR__ . '/Feature/SportsAdminFlowTest.php';
+        $t = new \Tests\Feature\SportsAdminFlowTest();
+        return $t->testAuditLogVerification();
+    },
+
+    // ==========================================
+    // Regression Tests (Web Rendering & Bug Fixes)
+    // ==========================================
+    'Regression 1: Coach page renders without raw Blade directives' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testCoachPageRendersWithoutRawDirectives();
+    },
+    'Regression 2: Team page renders without raw Blade directives' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testTeamPageRendersWithoutRawDirectives();
+    },
+    'Regression 3: Tournament page renders without raw Blade directives' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testTournamentPageRendersWithoutRawDirectives();
+    },
+    'Regression 4: Venue page renders without raw Blade directives' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testVenuePageRendersWithoutRawDirectives();
+    },
+    'Regression 5: Inventory page renders without raw Blade directives' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testInventoryPageRendersWithoutRawDirectives();
+    },
+    'Regression 6: Leave accepts missing/valid scalar status' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testLeaveAcceptsValidScalarStatus();
+    },
+    'Regression 7: Leave rejects/normalizes array status input' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testLeaveNormalizesArrayStatusInput();
+    },
+    'Regression 8: Organisation Settings handles actual returned setting structure' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testOrganizationSettingsHandlesReturnedSettingStructure();
+    },
+    'Regression 9: Organisation Settings handles empty settings' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testOrganizationSettingsHandlesEmptySettings();
+    },
+    'Regression 10: Sports Administrator tenant context is dynamically resolved' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testTenantContextIsDynamicallyResolved();
+    },
+    'Regression 11: No organization ID is hardcoded in Sports Admin services' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testNoOrganizationIdHardcodedInServices();
+    },
+    'Regression 12: Unauthorized organization access remains blocked' => function() {
+        require_once __DIR__ . '/Feature/RegressionRenderTest.php';
+        $t = new \Tests\Feature\RegressionRenderTest();
+        return $t->testUnauthorizedOrganizationAccessRemainsBlocked();
+    },
 ];
 
 $passed = 0;

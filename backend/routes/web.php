@@ -15,23 +15,95 @@ return [
     '/athletes' => function() {
         return ['view' => 'sports/athletes'];
     },
+    '/athletes/create' => function() {
+        return ['view' => 'sports/athletes-create'];
+    },
+    '/athletes/{id}' => function($id) {
+        return ['view' => 'sports/athletes-show', 'data' => ['id' => $id]];
+    },
+    '/athletes/{id}/edit' => function($id) {
+        return ['view' => 'sports/athletes-edit', 'data' => ['id' => $id]];
+    },
+
     '/coaches' => function() {
         return ['view' => 'sports/coaches'];
     },
+    '/coaches/create' => function() {
+        return ['view' => 'sports/coaches-create'];
+    },
+    '/coaches/{id}' => function($id) {
+        return ['view' => 'sports/coaches-show', 'data' => ['id' => $id]];
+    },
+    '/coaches/{id}/edit' => function($id) {
+        return ['view' => 'sports/coaches-edit', 'data' => ['id' => $id]];
+    },
+
     '/teams' => function() {
         return ['view' => 'sports/teams'];
     },
+    '/teams/create' => function() {
+        return ['view' => 'sports/teams-create'];
+    },
+    '/teams/{id}' => function($id) {
+        return ['view' => 'sports/teams-show', 'data' => ['id' => $id]];
+    },
+    '/teams/{id}/edit' => function($id) {
+        return ['view' => 'sports/teams-edit', 'data' => ['id' => $id]];
+    },
+
     '/tournaments' => function() {
         return ['view' => 'competitions/tournaments'];
     },
+    '/tournaments/create' => function() {
+        return ['view' => 'competitions/tournaments-create'];
+    },
+    '/tournaments/{id}' => function($id) {
+        return ['view' => 'competitions/tournaments-show', 'data' => ['id' => $id]];
+    },
+    '/tournaments/{id}/edit' => function($id) {
+        return ['view' => 'competitions/tournaments-edit', 'data' => ['id' => $id]];
+    },
+
     '/training' => function() {
         return ['view' => 'sports/training'];
     },
+    '/training/create' => function() {
+        return ['view' => 'sports/training-create'];
+    },
+    '/training/{id}' => function($id) {
+        return ['view' => 'sports/training-show', 'data' => ['id' => $id]];
+    },
+    '/training/{id}/edit' => function($id) {
+        return ['view' => 'sports/training-edit', 'data' => ['id' => $id]];
+    },
+
     '/venues' => function() {
         return ['view' => 'venues/venues'];
     },
+    '/venues/create' => function() {
+        return ['view' => 'venues/venues-create'];
+    },
+    '/venues/bookings/create' => function() {
+        return ['view' => 'venues/bookings-create'];
+    },
+    '/venues/{id}' => function($id) {
+        return ['view' => 'venues/venues-show', 'data' => ['id' => $id]];
+    },
+    '/venues/{id}/edit' => function($id) {
+        return ['view' => 'venues/venues-edit', 'data' => ['id' => $id]];
+    },
+
     '/inventory' => function() {
         return ['view' => 'inventory/inventory'];
+    },
+    '/inventory/create' => function() {
+        return ['view' => 'inventory/inventory-create'];
+    },
+    '/inventory/{id}' => function($id) {
+        return ['view' => 'inventory/inventory-show', 'data' => ['id' => $id]];
+    },
+    '/inventory/{id}/edit' => function($id) {
+        return ['view' => 'inventory/inventory-edit', 'data' => ['id' => $id]];
     },
     '/hr-finance' => function() {
         return ['view' => 'hr/hr-finance'];
@@ -41,6 +113,9 @@ return [
     },
     '/settings' => function() {
         return ['view' => 'settings/settings'];
+    },
+    '/search' => function() {
+        return ['view' => 'search/index'];
     },
     '/login' => function() {
         return ['view' => 'auth/login'];

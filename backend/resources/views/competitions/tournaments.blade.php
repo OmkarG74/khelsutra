@@ -1,212 +1,195 @@
 <?php
+$pageTitle = 'Tournaments — KhelSutra';
 $activePage = 'tournaments';
-$title = 'Tournaments & Fixtures — KhelSutra';
+$orgId = current_organization_id();
+
+$tournService = new \App\Services\Tournament\TournamentService();
+$page = (int)($_GET['page'] ?? 1);
+$search = trim($_GET['search'] ?? '');
+$sportId = !empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null;
+$status = trim($_GET['status'] ?? '');
+
+$result = $tournService->listTournaments($orgId, $page, 15, $search ?: null, $status ?: null, $sportId);
+$tournaments = $result['data'] ?? [];
+$total = $result['total'] ?? 0;
+$totalPages = $result['total_pages'] ?? 1;
+
+$db = \App\Services\BaseService::getDatabaseConnection();
+$sportsStmt = $db->query("SELECT id, name FROM sports ORDER BY name ASC");
+$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
 ob_start();
 ?>
 
-<!-- Page Header (Section 16) -->
-<div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Tournaments & Fixtures</h1>
-        <p class="ks-page-subtitle">Organise championship brackets, match schedules, venue allocations, and official standings.</p>
+<div class="ks-content">
+    <!-- Clean Page Header Standard -->
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Tournaments</h1>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/tournaments/create" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+                <i class="bi bi-plus-lg"></i> Create Tournament
+            </a>
+        </div>
     </div>
-    <div class="ks-header-actions">
-        <button class="ks-btn ks-btn-secondary" onclick="alert('Exporting Tournament Schedules...');">
-            <i class="bi bi-download"></i>
-            <span>Export Fixtures</span>
-        </button>
-        <button class="ks-btn ks-btn-primary" onclick="alert('Open New Tournament Modal');">
-            <i class="bi bi-plus-lg"></i>
-            <span>+ New Tournament</span>
-        </button>
-    </div>
-</div>
 
-<!-- Tournaments Overview Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-xl-4 col-md-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-gold" style="width: 44px; height: 44px; border-radius: 12px;">
-                        <i class="bi bi-trophy-fill fs-5"></i>
-                    </div>
-                    <div>
-                        <h4 class="fw-bold text-navy mb-0" style="font-size: 16px;">State Cup 2026</h4>
-                        <span class="small text-muted">Football • Knockout Tournament</span>
-                    </div>
+    <!-- Search & Filters Toolbar -->
+    <div class="card p-3 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+        <form method="GET" action="/tournaments" class="row g-2 align-items-center">
+            <div class="col-md-5">
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button) 0 0 var(--ks-radius-button);">
+                        <i class="bi bi-search text-muted" style="font-size: 13px;"></i>
+                    </span>
+                    <input type="text" name="search" class="form-control border-start-0" placeholder="Search tournament name, code, organizer..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="border-color: var(--ks-border); border-radius: 0 var(--ks-radius-button) var(--ks-radius-button) 0; font-size: 13px;">
                 </div>
-                <span class="ks-badge ks-badge-scheduled">Next in 4 days</span>
             </div>
-            <div class="d-flex justify-content-between text-muted small mb-2">
-                <span>Teams Registered: <strong class="text-navy">16 Squads</strong></span>
-                <span>Matches: <strong class="text-navy">15 Fixtures</strong></span>
+            <div class="col-md-3">
+                <select name="sport_id" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
+                    <option value="">All Sports</option>
+                    <?php foreach ($sports as $sp): ?>
+                        <option value="<?= (int)$sp['id'] ?>" <?= $sportId == $sp['id'] ? 'selected' : '' ?>><?= htmlspecialchars($sp['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
-            <div class="d-flex justify-content-between align-items-center pt-3 border-top" style="border-color: var(--ks-border-light) !important;">
-                <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i> Ground A - Main Arena</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">View Brackets</button>
+            <div class="col-md-2">
+                <select name="status" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
+                    <option value="">All Statuses</option>
+                    <option value="draft" <?= $status === 'draft' ? 'selected' : '' ?>>Draft</option>
+                    <option value="registration_open" <?= $status === 'registration_open' ? 'selected' : '' ?>>Registration Open</option>
+                    <option value="ongoing" <?= $status === 'ongoing' ? 'selected' : '' ?>>Ongoing</option>
+                    <option value="completed" <?= $status === 'completed' ? 'selected' : '' ?>>Completed</option>
+                </select>
             </div>
-        </div>
+            <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-primary flex-grow-1" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 500; font-size: 13px;">
+                    Filter
+                </button>
+                <?php if ($search || $sportId || $status): ?>
+                    <a href="/tournaments" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;" title="Reset filters">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </form>
     </div>
 
-    <div class="col-xl-4 col-md-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-blue" style="width: 44px; height: 44px; border-radius: 12px;">
-                        <i class="bi bi-trophy-fill fs-5"></i>
-                    </div>
-                    <div>
-                        <h4 class="fw-bold text-navy mb-0" style="font-size: 16px;">District Youth League</h4>
-                        <span class="small text-muted">Cricket • Round Robin Group Stage</span>
-                    </div>
+    <!-- Tournaments Table -->
+    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff; overflow: hidden;">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
+                <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                    <tr>
+                        <th class="py-3 px-3 text-muted fw-semibold" style="width: 270px;">Tournament</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Sport & Level</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Format</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Dates</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Teams</th>
+                        <th class="py-3 px-3 text-muted fw-semibold">Status</th>
+                        <th class="py-3 px-3 text-muted fw-semibold text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (!empty($tournaments)): ?>
+                        <?php foreach ($tournaments as $tourn): ?>
+                            <tr>
+                                <td class="py-3 px-3">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div style="width: 38px; height: 38px; border-radius: 8px; background: #FEF3C7; color: #D97706; display: flex; align-items: center; justify-content: center; font-size: 16px;">
+                                            <i class="bi bi-trophy-fill"></i>
+                                        </div>
+                                        <div>
+                                            <a href="/tournaments/<?= (int)$tourn['id'] ?>" class="fw-semibold text-decoration-none text-dark d-block">
+                                                <?= htmlspecialchars($tourn['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                            <span class="text-muted small" style="font-family: monospace; font-size: 11px;"><?= htmlspecialchars($tourn['tournament_reference'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <div class="fw-medium text-dark"><?= htmlspecialchars($tourn['sport_name'] ?? 'General', ENT_QUOTES, 'UTF-8') ?></div>
+                                    <span class="badge bg-light text-secondary border px-1" style="font-size: 10px;"><?= htmlspecialchars($tourn['level_name'] ?? 'State', ENT_QUOTES, 'UTF-8') ?> Level</span>
+                                </td>
+                                <td class="py-3 px-3 text-dark">
+                                    <?= htmlspecialchars($tourn['format_name'] ?? 'Knockout', ENT_QUOTES, 'UTF-8') ?>
+                                </td>
+                                <td class="py-3 px-3 text-muted small">
+                                    <div><?= !empty($tourn['start_date']) ? date('M d, Y', strtotime($tourn['start_date'])) : '—' ?></div>
+                                    <div style="font-size: 11px;">to <?= !empty($tourn['end_date']) ? date('M d, Y', strtotime($tourn['end_date'])) : '—' ?></div>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-2 py-1">
+                                        <?= (int)($tourn['enrolled_teams_count'] ?? 0) ?> Squads
+                                    </span>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <?php
+                                        $badge = match($tourn['status'] ?? 'draft') {
+                                            'ongoing' => 'badge-success',
+                                            'registration_open' => 'badge-primary',
+                                            'completed' => 'badge-secondary',
+                                            'cancelled' => 'badge-danger',
+                                            default => 'badge-warning'
+                                        };
+                                    ?>
+                                    <span class="badge <?= $badge ?>" style="border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize;">
+                                        <?= htmlspecialchars(str_replace('_', ' ', $tourn['status'] ?? 'draft'), ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                </td>
+                                <td class="py-3 px-3 text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/tournaments/<?= (int)$tourn['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Tournament & Fixtures">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        <a href="/tournaments/<?= (int)$tourn['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0 6px 6px 0;" title="Edit Tournament">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="text-muted mb-2"><i class="bi bi-trophy fs-2"></i></div>
+                                <h6 class="fw-bold" style="color: var(--ks-navy);">No tournaments found</h6>
+                                <p class="text-muted small mb-3">No tournament championships match the current search or filters.</p>
+                                <a href="/tournaments/create" class="btn btn-sm btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 500;">
+                                    <i class="bi bi-plus-lg me-1"></i> Create Tournament
+                                </a>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <?php if ($total > 0): ?>
+            <div class="card-footer d-flex align-items-center justify-content-between py-3 px-3 bg-white" style="border-top: 1px solid var(--ks-border);">
+                <div class="text-muted small">
+                    Showing <strong><?= count($tournaments) ?></strong> of <strong><?= (int)$total ?></strong> tournaments
                 </div>
-                <span class="ks-badge ks-badge-scheduled">Active League</span>
+                <?php if ($totalPages > 1): ?>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                <a class="page-link" href="?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&sport_id=<?= $sportId ?>&status=<?= urlencode($status) ?>">Previous</a>
+                            </li>
+                            <?php for ($p = 1; $p <= $totalPages; $p++): ?>
+                                <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+                                    <a class="page-link" href="?page=<?= $p ?>&search=<?= urlencode($search) ?>&sport_id=<?= $sportId ?>&status=<?= urlencode($status) ?>"><?= $p ?></a>
+                                </li>
+                            <?php endfor; ?>
+                            <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                <a class="page-link" href="?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&sport_id=<?= $sportId ?>&status=<?= urlencode($status) ?>">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                <?php endif; ?>
             </div>
-            <div class="d-flex justify-content-between text-muted small mb-2">
-                <span>Teams Registered: <strong class="text-navy">12 Squads</strong></span>
-                <span>Matches: <strong class="text-navy">30 Fixtures</strong></span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center pt-3 border-top" style="border-color: var(--ks-border-light) !important;">
-                <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i> Court 2 - Turf Ground</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">View Brackets</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-4 col-md-6">
-        <div class="ks-card p-4">
-            <div class="d-flex align-items-center justify-content-between mb-3">
-                <div class="d-flex align-items-center gap-3">
-                    <div class="ks-icon-box ks-icon-green" style="width: 44px; height: 44px; border-radius: 12px;">
-                        <i class="bi bi-shield-check fs-5"></i>
-                    </div>
-                    <div>
-                        <h4 class="fw-bold text-navy mb-0" style="font-size: 16px;">Monsoon Shield</h4>
-                        <span class="small text-muted">Athletics & Badminton • Invitational</span>
-                    </div>
-                </div>
-                <span class="ks-badge ks-badge-confirmed">Confirmed</span>
-            </div>
-            <div class="d-flex justify-content-between text-muted small mb-2">
-                <span>Athletes Enrolled: <strong class="text-navy">88 Athletes</strong></span>
-                <span>Events: <strong class="text-navy">12 Categories</strong></span>
-            </div>
-            <div class="d-flex justify-content-between align-items-center pt-3 border-top" style="border-color: var(--ks-border-light) !important;">
-                <span class="small text-muted"><i class="bi bi-geo-alt me-1"></i> Olympic Track & Ground</span>
-                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">View Brackets</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Master Fixtures Table Card (matches Reference Table) -->
-<div class="ks-table-card">
-    <div class="ks-table-header">
-        <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-trophy" style="color: var(--ks-gold); font-size: 18px;"></i>
-            <span class="ks-card-title mb-0">Upcoming Fixtures & Matches</span>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-            <div class="position-relative" style="width: 260px;">
-                <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
-                <input type="text" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Filter matches, teams...">
-            </div>
-            <select class="ks-form-select" style="width: 150px; height: 38px; font-size: 13px;">
-                <option value="">All Tournaments</option>
-                <option value="state_cup">State Cup 2026</option>
-                <option value="youth_league">District Youth League</option>
-                <option value="monsoon">Monsoon Shield</option>
-            </select>
-        </div>
-    </div>
-
-    <div class="table-responsive">
-        <table class="ks-table">
-            <thead>
-                <tr>
-                    <th>Tournament</th>
-                    <th>Teams</th>
-                    <th>Venue Facility</th>
-                    <th>Schedule</th>
-                    <th>Status</th>
-                    <th style="text-align: right;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-trophy-fill" style="color: var(--ks-gold);"></i>
-                            <span class="fw-semibold text-navy">State Cup 2026</span>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">Titans U-18 vs Phoenix FC</span></td>
-                    <td>Ground A - Main Arena</td>
-                    <td>22 Sep, 15:30</td>
-                    <td><span class="ks-badge ks-badge-scheduled">Scheduled</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">Match Center</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-people-fill" style="color: var(--ks-primary);"></i>
-                            <span class="fw-semibold text-navy">District Youth League</span>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">Strikers U-14 vs St. Jude Academy</span></td>
-                    <td>Court 2 - Turf Ground</td>
-                    <td>23 Sep, 09:00</td>
-                    <td><span class="ks-badge ks-badge-scheduled">Scheduled</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">Match Center</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-shield-check" style="color: var(--ks-success);"></i>
-                            <span class="fw-semibold text-navy">Monsoon Shield</span>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">Apex Senior vs Blue Hawks</span></td>
-                    <td>Olympic Track & Ground</td>
-                    <td>25 Sep, 16:00</td>
-                    <td><span class="ks-badge ks-badge-confirmed">Confirmed</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">Match Center</button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-trophy-fill" style="color: var(--ks-gold);"></i>
-                            <span class="fw-semibold text-navy">State Cup 2026 (Semi-Final)</span>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">TBD vs TBD</span></td>
-                    <td>Ground A - Main Arena</td>
-                    <td>27 Sep, 17:00</td>
-                    <td><span class="ks-badge ks-badge-pending">Pending Draw</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">Match Center</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Table Footer -->
-    <div class="p-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--ks-border-light) !important;">
-        <div class="small text-muted">Showing 4 active upcoming fixtures</div>
-        <div class="d-flex gap-1">
-            <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;" disabled>Previous</button>
-            <button class="ks-btn ks-btn-primary" style="height: 32px; padding: 0 12px; font-size: 12px;">1</button>
-            <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Next</button>
-        </div>
+        <?php endif; ?>
     </div>
 </div>
 

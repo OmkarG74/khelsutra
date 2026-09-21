@@ -107,7 +107,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-users">
             <thead>
                 <tr>
                     <th>User</th>
@@ -132,9 +132,9 @@ ob_start();
                                     <div class="ks-avatar" style="width: 34px; height: 34px; border-radius: 50%; background: #0E1E3B; color: #FFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;">
                                         <?= strtoupper(substr($u['first_name'] ?? 'U', 0, 1) . substr($u['last_name'] ?? 'S', 0, 1)) ?>
                                     </div>
-                                    <div>
-                                        <div class="fw-bold text-navy"><?= htmlspecialchars(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? '')) ?></div>
-                                        <div class="small text-muted"><?= htmlspecialchars($u['uuid'] ?? '') ?></div>
+                                    <div style="min-width: 0;">
+                                        <div class="fw-bold text-navy text-truncate"><?= htmlspecialchars(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? '')) ?></div>
+                                        <div class="small text-muted ks-truncate"><?= htmlspecialchars($u['uuid'] ?? '') ?></div>
                                     </div>
                                 </div>
                             </td>
