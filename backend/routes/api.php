@@ -292,33 +292,59 @@ return function ($uri, $method, $requestData = []) {
     }
 
     if ($uri === '/api/v1/venues' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/venues' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'create_venue')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
         return $controller->store($orgId, $requestData);
     }
     if (preg_match('#^/api/v1/venues/(\d+)$#', $uri, $matches)) {
-        $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
         $id = (int)$matches[1];
-        if ($method === 'GET') return $controller->show($orgId, $id);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $id, $requestData);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $id);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
+        if ($method === 'GET') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->show($orgId, $id);
+        }
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'update_venue')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->update($orgId, $id, $requestData);
+        }
+        if ($method === 'DELETE') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_venue')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->destroy($orgId, $id);
+        }
     }
     if (preg_match('#^/api/v1/venues/(\d+)/facilities$#', $uri, $matches)) {
-        $controller = new \App\Http\Controllers\Api\V1\Operations\FacilityController();
         $venueId = (int)$matches[1];
-        if ($method === 'GET') return $controller->index($orgId, $venueId, $requestData);
-        if ($method === 'POST') return $controller->store($orgId, $venueId, $requestData);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\FacilityController();
+        if ($method === 'GET') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->index($orgId, $venueId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'update_venue')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->store($orgId, $venueId, $requestData);
+        }
     }
     if (preg_match('#^/api/v1/venues/(\d+)/facilities/(\d+)$#', $uri, $matches)) {
-        $controller = new \App\Http\Controllers\Api\V1\Operations\FacilityController();
         $venueId = (int)$matches[1];
         $id = (int)$matches[2];
-        if ($method === 'GET') return $controller->show($orgId, $venueId, $id);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $venueId, $id, $requestData);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $venueId, $id);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\FacilityController();
+        if ($method === 'GET') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->show($orgId, $venueId, $id);
+        }
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'update_venue')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->update($orgId, $venueId, $id, $requestData);
+        }
+        if ($method === 'DELETE') {
+            if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_venue')) return ApiResponse::error('Forbidden', null, 403);
+            return $controller->destroy($orgId, $venueId, $id);
+        }
     }
 
     
