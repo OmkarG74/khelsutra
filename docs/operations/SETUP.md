@@ -57,5 +57,7 @@ If you prefer a Dockerized environment, ensure Docker is installed.
    make test
    ```
 
-The application will be accessible at `http://localhost:8000` and phpMyAdmin at `http://localhost:8081`.
-To reset the database from the baseline dump, run `make db-reset`.
+The application will be accessible at `http://localhost:8000`.
+phpMyAdmin will be accessible at `http://localhost:8081` (Login with Username: `root` and Password: `root`).
+
+> **Warning:** To reset the database from the baseline dump, run `make db-reset`. Be aware that re-importing the dump will completely reset the database data.
