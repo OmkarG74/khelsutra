@@ -105,9 +105,9 @@ ob_start();
     </div>
 </div>
 
-<div class="row g-4 mb-4">
+<div class="ks-reports-grid">
     <!-- Athletes Distribution by Sport -->
-    <div class="col-lg-6">
+    <div>
         <div class="ks-card p-4 h-100">
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Athletes by Sport</h3>
@@ -139,7 +139,7 @@ ob_start();
     </div>
 
     <!-- Teams Distribution by Sport -->
-    <div class="col-lg-6">
+    <div>
         <div class="ks-card p-4 h-100">
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Teams by Sport</h3>
@@ -171,9 +171,9 @@ ob_start();
     </div>
 </div>
 
-<div class="row g-4 mb-4">
+<div class="ks-reports-grid">
     <!-- Venue Utilization -->
-    <div class="col-lg-6">
+    <div>
         <div class="ks-card p-4 h-100">
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Venue Utilization</h3>
@@ -205,7 +205,7 @@ ob_start();
     </div>
 
     <!-- Staff & Leave Status Summary -->
-    <div class="col-lg-6">
+    <div>
         <div class="ks-card p-4 h-100">
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="fw-bold text-navy mb-0" style="font-size: 16px;">Staff Leave Summary</h3>

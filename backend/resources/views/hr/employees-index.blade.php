@@ -150,7 +150,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-employees">
             <thead>
                 <tr>
                     <th>Employee</th>

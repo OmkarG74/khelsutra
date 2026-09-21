@@ -47,7 +47,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-settings">
             <thead>
                 <tr>
                     <th>Setting Key</th>

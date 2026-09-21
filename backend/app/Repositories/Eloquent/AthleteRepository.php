@@ -125,6 +125,23 @@ class AthleteRepository implements AthleteRepositoryInterface
         $dStmt->execute([':ath_id' => $id, ':org_id' => $organizationId]);
         $athlete['documents'] = $dStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        // Fetch linked user account if user_id exists
+        if (!empty($athlete['user_id'])) {
+            $uStmt = $this->pdo->prepare("
+                SELECT u.id, u.uuid, u.username, u.email, u.status as user_status, u.last_login_at,
+                       ou.access_status, ou.role_id, r.name as role_name
+                FROM users u
+                LEFT JOIN organization_users ou ON u.id = ou.user_id AND ou.organization_id = :org_id
+                LEFT JOIN roles r ON ou.role_id = r.id
+                WHERE u.id = :uid AND u.deleted_at IS NULL
+                LIMIT 1
+            ");
+            $uStmt->execute([':uid' => $athlete['user_id'], ':org_id' => $organizationId]);
+            $athlete['user_account'] = $uStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        } else {
+            $athlete['user_account'] = null;
+        }
+
         return $athlete;
     }
 
@@ -135,12 +152,14 @@ class AthleteRepository implements AthleteRepositoryInterface
         $this->pdo->beginTransaction();
         try {
             $athleteCode = $data['athlete_code'] ?? ('ATH-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)));
+            $userId = !empty($data['user_id']) ? (int)$data['user_id'] : null;
 
-            $sql = "INSERT INTO athletes (organization_id, athlete_code, first_name, middle_name, last_name, date_of_birth, gender, blood_group, current_sport_id, phone, email, address_line1, city, state, country, postal_code, registration_date, joining_date, status, notes, created_at, updated_at) 
-                    VALUES (:org_id, :athlete_code, :first_name, :middle_name, :last_name, :dob, :gender, :blood_group, :sport_id, :phone, :email, :addr, :city, :state, 'India', :zip, CURDATE(), CURDATE(), :status, :notes, NOW(), NOW())";
+            $sql = "INSERT INTO athletes (organization_id, user_id, athlete_code, first_name, middle_name, last_name, date_of_birth, gender, blood_group, current_sport_id, phone, email, address_line1, city, state, country, postal_code, registration_date, joining_date, status, notes, created_at, updated_at) 
+                    VALUES (:org_id, :user_id, :athlete_code, :first_name, :middle_name, :last_name, :dob, :gender, :blood_group, :sport_id, :phone, :email, :addr, :city, :state, 'India', :zip, CURDATE(), CURDATE(), :status, :notes, NOW(), NOW())";
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
                 ':org_id' => $data['organization_id'],
+                ':user_id' => $userId,
                 ':athlete_code' => $athleteCode,
                 ':first_name' => $data['first_name'],
                 ':middle_name' => $data['middle_name'] ?? null,
@@ -163,17 +182,22 @@ class AthleteRepository implements AthleteRepositoryInterface
             $data['athlete_code'] = $athleteCode;
 
             // Insert Guardian if provided
-            if (!empty($data['guardian_name'])) {
-                $gSql = "INSERT INTO athlete_guardians (organization_id, athlete_id, full_name, relationship, phone, email, is_primary, is_emergency_contact, created_at, updated_at)
-                         VALUES (:org_id, :ath_id, :name, :rel, :phone, :email, 1, :emrg, NOW(), NOW())";
+            $guardianName = trim(($data['guardian_first_name'] ?? '') . ' ' . ($data['guardian_last_name'] ?? '')) ?: ($data['guardian_name'] ?? '');
+            if (!empty($guardianName)) {
+                $gSql = "INSERT INTO athlete_guardians (organization_id, athlete_id, full_name, relationship, phone, email, address_line1, city, state, postal_code, is_primary, is_emergency_contact, created_at, updated_at)
+                         VALUES (:org_id, :ath_id, :name, :rel, :phone, :email, :addr, :city, :state, :zip, 1, :emrg, NOW(), NOW())";
                 $gStmt = $this->pdo->prepare($gSql);
                 $gStmt->execute([
                     ':org_id' => $data['organization_id'],
                     ':ath_id' => $athleteId,
-                    ':name' => $data['guardian_name'],
+                    ':name' => $guardianName,
                     ':rel' => $data['guardian_relationship'] ?? 'Guardian',
                     ':phone' => $data['guardian_phone'] ?? ($data['phone'] ?? ''),
                     ':email' => $data['guardian_email'] ?? null,
+                    ':addr' => $data['guardian_address_line1'] ?? null,
+                    ':city' => $data['guardian_city'] ?? null,
+                    ':state' => $data['guardian_state'] ?? null,
+                    ':zip' => $data['guardian_postal_code'] ?? null,
                     ':emrg' => !empty($data['is_emergency_contact']) ? 1 : 0,
                 ]);
             }
@@ -206,7 +230,7 @@ class AthleteRepository implements AthleteRepositoryInterface
         $this->pdo->beginTransaction();
         try {
             $allowedFields = [
-                'first_name', 'middle_name', 'last_name', 'date_of_birth', 'gender',
+                'user_id', 'first_name', 'middle_name', 'last_name', 'date_of_birth', 'gender',
                 'blood_group', 'current_sport_id', 'phone', 'email', 'status',
                 'address_line1', 'city', 'state', 'postal_code', 'notes'
             ];
@@ -227,7 +251,8 @@ class AthleteRepository implements AthleteRepositoryInterface
             }
 
             // Update guardian if provided
-            if (!empty($data['guardian_name'])) {
+            $guardianName = trim(($data['guardian_first_name'] ?? '') . ' ' . ($data['guardian_last_name'] ?? '')) ?: ($data['guardian_name'] ?? '');
+            if (!empty($guardianName)) {
                 $checkG = $this->pdo->prepare("SELECT id FROM athlete_guardians WHERE athlete_id = :ath_id AND organization_id = :org_id AND deleted_at IS NULL LIMIT 1");
                 $checkG->execute([':ath_id' => $id, ':org_id' => $organizationId]);
                 $gId = $checkG->fetchColumn();
@@ -238,7 +263,7 @@ class AthleteRepository implements AthleteRepositoryInterface
                         WHERE id = :gid
                     ");
                     $uG->execute([
-                        ':name' => $data['guardian_name'],
+                        ':name' => $guardianName,
                         ':rel' => $data['guardian_relationship'] ?? 'Guardian',
                         ':phone' => $data['guardian_phone'] ?? '',
                         ':email' => $data['guardian_email'] ?? null,
@@ -252,7 +277,7 @@ class AthleteRepository implements AthleteRepositoryInterface
                     $iG->execute([
                         ':org_id' => $organizationId,
                         ':ath_id' => $id,
-                        ':name' => $data['guardian_name'],
+                        ':name' => $guardianName,
                         ':rel' => $data['guardian_relationship'] ?? 'Guardian',
                         ':phone' => $data['guardian_phone'] ?? '',
                         ':email' => $data['guardian_email'] ?? null,

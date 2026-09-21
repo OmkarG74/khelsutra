@@ -36,15 +36,13 @@ ob_start();
 </div>
 
 <!-- Search & Filters Toolbar -->
-<div class="ks-table-card mb-4 p-3" style="background: #fff;">
-    <form method="GET" action="/coaches" class="row g-2 align-items-center m-0">
-        <div class="col-md-5">
-            <div class="position-relative">
-                <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
-                <input type="text" name="search" class="ks-form-control" placeholder="Search by coach name, code, specialization..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="padding-left: 34px; height: 38px; font-size: 13px;">
-            </div>
+<div class="ks-filter-bar mb-4">
+    <form method="GET" action="/coaches" class="ks-filter-grid">
+        <div class="position-relative">
+            <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
+            <input type="text" name="search" class="ks-form-control" placeholder="Search by coach name, code, specialization..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="padding-left: 34px; height: 38px; font-size: 13px;">
         </div>
-        <div class="col-md-3">
+        <div>
             <select name="specialization" class="ks-form-select" style="height: 38px; font-size: 13px;">
                 <option value="">All Specializations</option>
                 <?php foreach ($specializations as $sp): ?>
@@ -54,15 +52,15 @@ ob_start();
                 <?php endforeach; ?>
             </select>
         </div>
-        <div class="col-md-2">
+        <div>
             <select name="status" class="ks-form-select" style="height: 38px; font-size: 13px;">
                 <option value="">All Statuses</option>
                 <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
                 <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
             </select>
         </div>
-        <div class="col-md-2 d-flex gap-2">
-            <button type="submit" class="ks-btn ks-btn-primary flex-grow-1" style="height: 38px; font-size: 13px;">
+        <div class="d-flex gap-2">
+            <button type="submit" class="ks-btn ks-btn-primary" style="height: 38px; font-size: 13px; min-width: 90px;">
                 Filter
             </button>
             <?php if ($search || $spec || $status): ?>
@@ -84,7 +82,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-coaches">
             <thead>
                 <tr>
                     <th>Coach</th>

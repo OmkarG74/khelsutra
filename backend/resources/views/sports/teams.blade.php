@@ -22,73 +22,67 @@ $sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 ob_start();
 ?>
 
-<div class="ks-content">
-    <!-- Clean Page Header Standard -->
-    <div class="d-flex align-items-center justify-content-between mb-4">
+<div class="ks-page-header">
+    <div>
+        <h1 class="ks-page-title">Teams</h1>
+    </div>
+    <div class="ks-header-actions">
+        <a href="/teams/create" class="ks-btn ks-btn-primary" id="btnCreateTeam">
+            <i class="bi bi-plus-lg"></i> Create Team
+        </a>
+    </div>
+</div>
+
+<!-- Search & Filters Toolbar -->
+<div class="ks-filter-bar mb-4">
+    <form method="GET" action="/teams" class="ks-filter-grid">
+        <div class="position-relative">
+            <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
+            <input type="text" name="search" class="ks-form-control" placeholder="Search team name, code, age group..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="padding-left: 34px; height: 38px; font-size: 13px;">
+        </div>
         <div>
-            <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Teams</h1>
+            <select name="sport_id" class="ks-form-select" style="height: 38px; font-size: 13px;">
+                <option value="">All Sports</option>
+                <?php foreach ($sports as $sp): ?>
+                    <option value="<?= (int)$sp['id'] ?>" <?= $sportId == $sp['id'] ? 'selected' : '' ?>><?= htmlspecialchars($sp['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+            </select>
+        </div>
+        <div>
+            <select name="status" class="ks-form-select" style="height: 38px; font-size: 13px;">
+                <option value="">All Statuses</option>
+                <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
+                <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+            </select>
         </div>
         <div class="d-flex gap-2">
-            <a href="/teams/create" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
-                <i class="bi bi-plus-lg"></i> Create Team
-            </a>
+            <button type="submit" class="ks-btn ks-btn-primary" style="height: 38px; font-size: 13px; min-width: 90px;">
+                Filter
+            </button>
+            <?php if ($search || $sportId || $status): ?>
+                <a href="/teams" class="ks-btn ks-btn-secondary" style="height: 38px; font-size: 13px;" title="Reset filters">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+            <?php endif; ?>
         </div>
-    </div>
+    </form>
+</div>
 
-    <!-- Search & Filters Toolbar -->
-    <div class="card p-3 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-        <form method="GET" action="/teams" class="row g-2 align-items-center">
-            <div class="col-md-5">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button) 0 0 var(--ks-radius-button);">
-                        <i class="bi bi-search text-muted" style="font-size: 13px;"></i>
-                    </span>
-                    <input type="text" name="search" class="form-control border-start-0" placeholder="Search team name, code, age group..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="border-color: var(--ks-border); border-radius: 0 var(--ks-radius-button) var(--ks-radius-button) 0; font-size: 13px;">
-                </div>
-            </div>
-            <div class="col-md-3">
-                <select name="sport_id" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
-                    <option value="">All Sports</option>
-                    <?php foreach ($sports as $sp): ?>
-                        <option value="<?= (int)$sp['id'] ?>" <?= $sportId == $sp['id'] ? 'selected' : '' ?>><?= htmlspecialchars($sp['name'], ENT_QUOTES, 'UTF-8') ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select name="status" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
-                    <option value="">All Statuses</option>
-                    <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
-                    <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
-                </select>
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-grow-1" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 500; font-size: 13px;">
-                    Filter
-                </button>
-                <?php if ($search || $sportId || $status): ?>
-                    <a href="/teams" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;" title="Reset filters">
-                        <i class="bi bi-x-lg"></i>
-                    </a>
-                <?php endif; ?>
-            </div>
-        </form>
-    </div>
-
-    <!-- Teams Grid / Table View -->
-    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff; overflow: hidden;">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
-                    <tr>
-                        <th class="py-3 px-3 text-muted fw-semibold" style="width: 260px;">Team Name</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Sport</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Age Group</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Head Coach</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Roster Size</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Status</th>
-                        <th class="py-3 px-3 text-muted fw-semibold text-end">Actions</th>
-                    </tr>
-                </thead>
+<!-- Teams Grid / Table View -->
+<div class="ks-table-card">
+    <div class="table-responsive">
+        <table class="ks-table ks-table-teams">
+            <thead>
+                <tr>
+                    <th>Team Name</th>
+                    <th>Sport</th>
+                    <th>Age Group</th>
+                    <th>Head Coach</th>
+                    <th>Roster Size</th>
+                    <th>Status</th>
+                    <th style="text-align: right;">Actions</th>
+                </tr>
+            </thead>
                 <tbody>
                     <?php if (!empty($teams)): ?>
                         <?php foreach ($teams as $team): ?>
@@ -190,7 +184,6 @@ ob_start();
             </div>
         <?php endif; ?>
     </div>
-</div>
 
 <?php
 $slot = ob_get_clean();

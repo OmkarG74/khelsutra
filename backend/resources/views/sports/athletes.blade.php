@@ -74,7 +74,7 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-athletes">
             <thead>
                 <tr>
                     <th style="width: 50px;">#</th>

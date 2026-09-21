@@ -23,28 +23,114 @@ $userId = (int)($currentUser['id'] ?? 5);
 // 1. ATHLETE ACTIONS
 // ==========================================
 if ($uri === '/athletes/create') {
-    $firstName = trim($_POST['first_name'] ?? '');
-    $lastName = trim($_POST['last_name'] ?? '');
-    $dob = trim($_POST['date_of_birth'] ?? '');
-    $sportId = (int)($_POST['current_sport_id'] ?? 0);
-
-    if (empty($firstName) || empty($lastName) || empty($dob) || empty($sportId)) {
-        header('Location: /athletes/create?error=' . urlencode('Please provide all required fields (First Name, Last Name, Date of Birth, Sport).'));
+    $validator = new \App\Http\Requests\Athletes\StoreAthleteRequest($_POST, $_FILES);
+    $errors = $validator->validate();
+    if (!empty($errors)) {
+        $firstErr = reset($errors)[0];
+        header('Location: /athletes/create?error=' . urlencode($firstErr));
         exit;
     }
 
     $athleteService = new \App\Services\Athlete\AthleteService();
     try {
-        $created = $athleteService->registerAthlete($orgId, $_POST, $userId);
+        $created = $athleteService->registerAthlete($orgId, $_POST, $userId, $_FILES);
         $newId = $created['id'] ?? null;
-        if ($newId) {
-            header('Location: /athletes/' . $newId . '?success=' . urlencode('Athlete registered successfully.'));
-        } else {
-            header('Location: /athletes?success=' . urlencode('Athlete registered successfully.'));
+
+        // Fetch sport and team names for success summary
+        $sportName = 'General Sports';
+        if (!empty($created['current_sport_id'])) {
+            $db = \App\Services\BaseService::getDatabaseConnection();
+            $sStmt = $db->prepare("SELECT name FROM sports WHERE id = :id");
+            $sStmt->execute([':id' => $created['current_sport_id']]);
+            $sportName = $sStmt->fetchColumn() ?: 'General Sports';
         }
+        $teamName = 'No Team Assigned';
+        if (!empty($_POST['team_id'])) {
+            $db = \App\Services\BaseService::getDatabaseConnection();
+            $tStmt = $db->prepare("SELECT name FROM teams WHERE id = :id");
+            $tStmt->execute([':id' => (int)$_POST['team_id']]);
+            $teamName = $tStmt->fetchColumn() ?: 'No Team Assigned';
+        }
+
+        $_SESSION['athlete_created_success'] = [
+            'id' => $newId,
+            'name' => trim(($created['first_name'] ?? '') . ' ' . ($created['last_name'] ?? '')),
+            'athlete_code' => $created['athlete_code'] ?? '',
+            'sport_name' => $sportName,
+            'team_name' => $teamName,
+            'has_account' => !empty($created['created_user']),
+            'login_email' => $created['login_email'] ?? null,
+            'login_username' => $created['login_username'] ?? null,
+            'temp_password' => $created['temp_password'] ?? null,
+            'account_status' => $created['account_status'] ?? 'Active',
+            'uploaded_docs_count' => $created['uploaded_docs_count'] ?? 0,
+        ];
+
+        header('Location: /athletes/create?created=1&id=' . (int)$newId);
         exit;
     } catch (\Throwable $e) {
         header('Location: /athletes/create?error=' . urlencode('Unable to create athlete: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/athletes/(\d+)/documents/upload$#', $uri, $m)) {
+    $athleteId = (int)$m[1];
+    $athleteService = new \App\Services\Athlete\AthleteService();
+    try {
+        if (empty($_FILES['document_file']) || ($_FILES['document_file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            throw new \InvalidArgumentException('Please select a valid document file to upload.');
+        }
+        $athleteService->getDocumentService()->addDocument($orgId, $athleteId, $_POST, $_FILES['document_file'], $userId);
+        header('Location: /athletes/' . $athleteId . '?success=' . urlencode('Document uploaded successfully.'));
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /athletes/' . $athleteId . '?error=' . urlencode('Failed to upload document: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/athletes/(\d+)/documents/(\d+)/delete$#', $uri, $m)) {
+    $athleteId = (int)$m[1];
+    $docId = (int)$m[2];
+    $athleteService = new \App\Services\Athlete\AthleteService();
+    try {
+        $athleteService->getDocumentService()->deleteDocument($orgId, $athleteId, $docId, $userId);
+        header('Location: /athletes/' . $athleteId . '?success=' . urlencode('Document removed successfully.'));
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /athletes/' . $athleteId . '?error=' . urlencode('Failed to delete document: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/athletes/(\d+)/account/create$#', $uri, $m)) {
+    $athleteId = (int)$m[1];
+    $athleteService = new \App\Services\Athlete\AthleteService();
+    try {
+        $acc = $athleteService->createAthleteAccount($orgId, $athleteId, $_POST, $userId);
+        $_SESSION['athlete_account_provisioned'] = $acc;
+        header('Location: /athletes/' . $athleteId . '?success=' . urlencode('Login account provisioned successfully.'));
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /athletes/' . $athleteId . '?error=' . urlencode('Unable to create account: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/athletes/(\d+)/account/reset-password$#', $uri, $m)) {
+    $athleteId = (int)$m[1];
+    $athleteService = new \App\Services\Athlete\AthleteService();
+    try {
+        $newPwd = $athleteService->resetAthletePassword($orgId, $athleteId, $_POST['password'] ?? null, $userId);
+        $_SESSION['athlete_password_reset'] = [
+            'athlete_id' => $athleteId,
+            'temp_password' => $newPwd,
+        ];
+        header('Location: /athletes/' . $athleteId . '?success=' . urlencode('Password reset successfully.'));
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /athletes/' . $athleteId . '?error=' . urlencode('Unable to reset password: ' . $e->getMessage()));
         exit;
     }
 }
