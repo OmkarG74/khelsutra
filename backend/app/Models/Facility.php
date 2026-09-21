@@ -6,10 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use App\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
-class Venue extends Model
+class Facility extends Model
 {
     use BelongsToOrganization, SoftDeletes;
 
-    protected $table = 'venues';
+    protected $table = 'venue_facilities';
     protected $guarded = ['id'];
 }
