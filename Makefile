@@ -16,7 +16,7 @@ composer:
 	docker compose exec -w /var/www/html/backend app composer $(cmd)
 
 test:
-	docker compose exec -w /var/www/html/backend app php artisan test
+	docker compose exec -w /var/www/html/backend -e DB_DATABASE=khelsutra_test app php artisan test
 
 db-reset:
 	docker compose down -v
