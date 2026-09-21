@@ -31,4 +31,14 @@ class HousekeepingController
             return ApiResponse::error($e->getMessage(), null, 400);
         }
     }
+
+    public function update(int $orgId, int $id, array $requestData): array
+    {
+        try {
+            $task = $this->service->updateTask($orgId, $id, $requestData);
+            return ApiResponse::success($task->toArray(), 'Housekeeping task updated');
+        } catch (\Exception $e) {
+            return ApiResponse::error($e->getMessage(), null, 400);
+        }
+    }
 }

@@ -31,4 +31,14 @@ class MaintenanceController
             return ApiResponse::error($e->getMessage(), null, 400);
         }
     }
+
+    public function update(int $orgId, int $id, array $requestData): array
+    {
+        try {
+            $ticket = $this->service->updateTicket($orgId, $id, $requestData);
+            return ApiResponse::success($ticket->toArray(), 'Maintenance ticket updated');
+        } catch (\Exception $e) {
+            return ApiResponse::error($e->getMessage(), null, 400);
+        }
+    }
 }

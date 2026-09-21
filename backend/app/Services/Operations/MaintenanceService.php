@@ -22,8 +22,19 @@ class MaintenanceService
     public function updateTicket(int $orgId, int $id, array $data): VenueMaintenance
     {
         return DB::transaction(function () use ($orgId, $id, $data) {
-            $ticket = VenueMaintenance::where('organization_id', $orgId)->findOrFail($id);
+            $ticket = VenueMaintenance::where('organization_id', $orgId)->lockForUpdate()->findOrFail($id);
+            
             $ticket->update($data);
+
+            if ($ticket->status === 'completed' && $ticket->actual_cost > 0 && !$ticket->expense_id) {
+                $recorder = new \App\Services\Operations\ExpenseRecorder();
+                $expenseId = $recorder->recordExpense($orgId, $ticket->actual_cost, "Maintenance: " . $ticket->issue_title, [
+                    'vendor_id' => $ticket->assigned_vendor_id,
+                ]);
+                $ticket->expense_id = $expenseId;
+                $ticket->save();
+            }
+
             return $ticket;
         });
     }

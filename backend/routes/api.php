@@ -378,20 +378,34 @@ return function ($uri, $method, $requestData = []) {
     
     // Member 4: Operations Maintenance & Housekeeping
     if ($uri === '/api/v1/maintenance' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_maintenance')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\MaintenanceController();
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/maintenance' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_maintenance')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\MaintenanceController();
         return $controller->store($orgId, $requestData);
     }
+    if (preg_match('#^/api/v1/maintenance/(\d+)$#', $uri, $matches) && ($method === 'PUT' || $method === 'PATCH')) {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_maintenance')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\MaintenanceController();
+        return $controller->update($orgId, (int)$matches[1], $requestData);
+    }
     if ($uri === '/api/v1/housekeeping' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/housekeeping' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
         return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/housekeeping/(\d+)$#', $uri, $matches) && ($method === 'PUT' || $method === 'PATCH')) {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
+        return $controller->update($orgId, (int)$matches[1], $requestData);
     }
 
     // 13. Fallback for other unassigned modules
