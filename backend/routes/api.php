@@ -340,6 +340,25 @@ return function ($uri, $method, $requestData = []) {
         return $controller->availability($orgId, (int)$matches[1], $requestData);
     }
 
+    
+    // Member 4: Operations Maintenance & Housekeeping
+    if ($uri === '/api/v1/maintenance' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\MaintenanceController();
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/maintenance' && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\MaintenanceController();
+        return $controller->store($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/housekeeping' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/housekeeping' && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
+        return $controller->store($orgId, $requestData);
+    }
+
     // 13. Fallback for other unassigned modules
     $skeletonGroups = [
         'sports', 'coaches', 'performance', 'medical', 'fixtures', 'matches',
