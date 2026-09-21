@@ -292,13 +292,33 @@ return function ($uri, $method, $requestData = []) {
     }
 
     if ($uri === '/api/v1/venues' && $method === 'GET') {
-        $controller = new \App\Http\Controllers\Api\V1\Venues\VenueController();
-        $page = (int)($requestData['page'] ?? 1);
-        return $controller->index($orgId, $page);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
+        return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/venues' && $method === 'POST') {
-        $controller = new \App\Http\Controllers\Api\V1\Venues\VenueController();
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
         return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/venues/(\d+)$#', $uri, $matches)) {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VenueController();
+        $id = (int)$matches[1];
+        if ($method === 'GET') return $controller->show($orgId, $id);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $id, $requestData);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $id);
+    }
+    if (preg_match('#^/api/v1/venues/(\d+)/facilities$#', $uri, $matches)) {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\FacilityController();
+        $venueId = (int)$matches[1];
+        if ($method === 'GET') return $controller->index($orgId, $venueId, $requestData);
+        if ($method === 'POST') return $controller->store($orgId, $venueId, $requestData);
+    }
+    if (preg_match('#^/api/v1/venues/(\d+)/facilities/(\d+)$#', $uri, $matches)) {
+        $controller = new \App\Http\Controllers\Api\V1\Operations\FacilityController();
+        $venueId = (int)$matches[1];
+        $id = (int)$matches[2];
+        if ($method === 'GET') return $controller->show($orgId, $venueId, $id);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $venueId, $id, $requestData);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $venueId, $id);
     }
 
     // 13. Fallback for other unassigned modules
