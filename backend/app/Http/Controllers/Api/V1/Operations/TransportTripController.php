@@ -43,4 +43,14 @@ class TransportTripController
             return ApiResponse::error($e->getMessage(), null, $status);
         }
     }
+
+    public function update(int $orgId, int $id, array $requestData): array
+    {
+        try {
+            $trip = $this->service->updateTrip($orgId, $id, $requestData);
+            return ApiResponse::success($trip->toArray(), 'Trip updated');
+        } catch (Exception $e) {
+            return ApiResponse::error($e->getMessage(), null, 400);
+        }
+    }
 }

@@ -113,4 +113,24 @@ class TransportTripService
             return TransportPassenger::create($data);
         });
     }
+
+    public function updateTrip(int $orgId, int $tripId, array $data): TransportTrip
+    {
+        return DB::transaction(function () use ($orgId, $tripId, $data) {
+            $trip = TransportTrip::where('organization_id', $orgId)->lockForUpdate()->findOrFail($tripId);
+            
+            $trip->update($data);
+
+            if ($trip->status === 'completed' && isset($data['actual_cost']) && $data['actual_cost'] > 0 && !$trip->expense_id) {
+                $recorder = new \App\Services\Operations\ExpenseRecorder();
+                $expenseId = $recorder->recordExpense($orgId, $data['actual_cost'], "Transport Trip: " . $trip->trip_reference, [
+                    'event_id' => $trip->event_id ?? null,
+                ]);
+                $trip->expense_id = $expenseId;
+                $trip->save();
+            }
+
+            return $trip;
+        });
+    }
 }
