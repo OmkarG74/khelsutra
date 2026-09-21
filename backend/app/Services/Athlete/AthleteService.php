@@ -43,6 +43,27 @@ class AthleteService
      */
     public function registerAthlete(int $organizationId, array $data, ?int $performedBy = null, ?array $files = null): array
     {
+        // Enforce required fields
+        if (empty(trim($data['first_name'] ?? ''))) {
+            throw new \InvalidArgumentException('First name is required.');
+        }
+        if (empty(trim($data['last_name'] ?? ''))) {
+            throw new \InvalidArgumentException('Last name is required.');
+        }
+        if (empty($data['date_of_birth'])) {
+            throw new \InvalidArgumentException('Date of birth is required.');
+        }
+        if (empty($data['gender'])) {
+            throw new \InvalidArgumentException('Gender is required.');
+        }
+        $sportId = (int)($data['current_sport_id'] ?? ($data['primary_sport_id'] ?? 0));
+        if ($sportId <= 0) {
+            throw new \InvalidArgumentException('Primary sport selection is required.');
+        }
+        if (empty($data['status']) || !in_array($data['status'], ['active', 'inactive', 'injured', 'suspended'], true)) {
+            throw new \InvalidArgumentException('Valid athlete status is required.');
+        }
+
         $data['organization_id'] = $organizationId;
         $createdUserId = null;
         $tempPassword = null;
@@ -374,6 +395,33 @@ class AthleteService
     {
         $existing = $this->repository->findById($organizationId, $id);
         if (!$existing) return false;
+
+        // Ensure resulting athlete record preserves all required fields
+        $finalFirstName = isset($data['first_name']) ? trim($data['first_name']) : trim($existing['first_name'] ?? '');
+        $finalLastName = isset($data['last_name']) ? trim($data['last_name']) : trim($existing['last_name'] ?? '');
+        $finalDob = isset($data['date_of_birth']) ? trim($data['date_of_birth']) : trim($existing['date_of_birth'] ?? '');
+        $finalGender = isset($data['gender']) ? trim($data['gender']) : trim($existing['gender'] ?? '');
+        $finalSportId = isset($data['current_sport_id']) ? (int)$data['current_sport_id'] : (int)($existing['current_sport_id'] ?? 0);
+        $finalStatus = isset($data['status']) ? trim($data['status']) : trim($existing['status'] ?? '');
+
+        if (empty($finalFirstName)) {
+            throw new \InvalidArgumentException('First name is required.');
+        }
+        if (empty($finalLastName)) {
+            throw new \InvalidArgumentException('Last name is required.');
+        }
+        if (empty($finalDob)) {
+            throw new \InvalidArgumentException('Date of birth is required.');
+        }
+        if (empty($finalGender)) {
+            throw new \InvalidArgumentException('Gender is required.');
+        }
+        if ($finalSportId <= 0) {
+            throw new \InvalidArgumentException('Primary sport selection is required.');
+        }
+        if (empty($finalStatus) || !in_array($finalStatus, ['active', 'inactive', 'injured', 'suspended'], true)) {
+            throw new \InvalidArgumentException('Valid athlete status is required.');
+        }
 
         $updated = $this->repository->update($organizationId, $id, $data);
         if ($updated) {

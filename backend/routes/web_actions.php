@@ -139,9 +139,29 @@ if (preg_match('#^/athletes/(\d+)/edit$#', $uri, $m)) {
     $athleteId = (int)$m[1];
     $firstName = trim($_POST['first_name'] ?? '');
     $lastName = trim($_POST['last_name'] ?? '');
+    $dob = trim($_POST['date_of_birth'] ?? '');
+    $gender = trim($_POST['gender'] ?? '');
+    $sportId = (int)($_POST['current_sport_id'] ?? 0);
+    $status = trim($_POST['status'] ?? '');
 
     if (empty($firstName) || empty($lastName)) {
         header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('First Name and Last Name are required.'));
+        exit;
+    }
+    if (empty($dob)) {
+        header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('Date of Birth is required.'));
+        exit;
+    }
+    if (empty($gender)) {
+        header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('Gender is required.'));
+        exit;
+    }
+    if ($sportId <= 0) {
+        header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('Primary Sport is required.'));
+        exit;
+    }
+    if (empty($status) || !in_array($status, ['active', 'inactive', 'injured', 'suspended'], true)) {
+        header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('Valid Athlete Status is required.'));
         exit;
     }
 
@@ -179,12 +199,37 @@ if (preg_match('#^/athletes/(\d+)/delete$#', $uri, $m)) {
 if ($uri === '/coaches/create') {
     $firstName = trim($_POST['first_name'] ?? '');
     $lastName = trim($_POST['last_name'] ?? '');
+    $dob = trim($_POST['date_of_birth'] ?? '');
+    $gender = trim($_POST['gender'] ?? '');
+    $designation = trim($_POST['designation'] ?? '');
     $specialization = trim($_POST['specialization'] ?? '');
+    $status = trim($_POST['status'] ?? 'active');
 
-    if (empty($firstName) || empty($lastName) || empty($specialization)) {
-        header('Location: /coaches/create?error=' . urlencode('First Name, Last Name, and Specialization are required.'));
+    if (empty($firstName) || empty($lastName)) {
+        header('Location: /coaches/create?error=' . urlencode('First Name and Last Name are required.'));
         exit;
     }
+    if (empty($dob)) {
+        header('Location: /coaches/create?error=' . urlencode('Date of Birth is required.'));
+        exit;
+    }
+    if (empty($gender)) {
+        header('Location: /coaches/create?error=' . urlencode('Gender is required.'));
+        exit;
+    }
+    if (empty($designation)) {
+        header('Location: /coaches/create?error=' . urlencode('Designation is required.'));
+        exit;
+    }
+    if (empty($specialization)) {
+        header('Location: /coaches/create?error=' . urlencode('Specialization is required.'));
+        exit;
+    }
+    if (!in_array($status, ['active', 'inactive'], true)) {
+        header('Location: /coaches/create?error=' . urlencode('Valid Coach Status is required.'));
+        exit;
+    }
+    $_POST['status'] = $status;
 
     $coachService = new \App\Services\Coach\CoachService();
     try {
@@ -206,10 +251,34 @@ if (preg_match('#^/coaches/(\d+)/edit$#', $uri, $m)) {
     $coachId = (int)$m[1];
     $firstName = trim($_POST['first_name'] ?? '');
     $lastName = trim($_POST['last_name'] ?? '');
+    $dob = trim($_POST['date_of_birth'] ?? '');
+    $gender = trim($_POST['gender'] ?? '');
+    $designation = trim($_POST['designation'] ?? '');
     $specialization = trim($_POST['specialization'] ?? '');
+    $status = trim($_POST['status'] ?? '');
 
-    if (empty($firstName) || empty($lastName) || empty($specialization)) {
-        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('First Name, Last Name, and Specialization are required.'));
+    if (empty($firstName) || empty($lastName)) {
+        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('First Name and Last Name are required.'));
+        exit;
+    }
+    if (empty($dob)) {
+        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('Date of Birth is required.'));
+        exit;
+    }
+    if (empty($gender)) {
+        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('Gender is required.'));
+        exit;
+    }
+    if (empty($designation)) {
+        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('Designation is required.'));
+        exit;
+    }
+    if (empty($specialization)) {
+        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('Specialization is required.'));
+        exit;
+    }
+    if (empty($status) || !in_array($status, ['active', 'inactive'], true)) {
+        header('Location: /coaches/' . $coachId . '/edit?error=' . urlencode('Coach Status is required.'));
         exit;
     }
 
@@ -237,6 +306,49 @@ if (preg_match('#^/coaches/(\d+)/delete$#', $uri, $m)) {
         exit;
     } catch (\Throwable $e) {
         header('Location: /coaches?error=' . urlencode('Unable to delete coach: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/coaches/(\d+)/status$#', $uri, $m)) {
+    $coachId = (int)$m[1];
+    $status = trim($_POST['status'] ?? '');
+    if (!in_array($status, ['active', 'inactive'], true)) {
+        header('Location: /coaches?error=' . urlencode('Invalid status value.'));
+        exit;
+    }
+
+    // RBAC Authorization Check using existing PermissionService
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $canUpdate = false;
+
+    if (isset($_SESSION['auth'])) {
+        $canUpdate = $permissionService->hasPermission($_SESSION['auth'], 'coach.update', $orgId)
+                  || $permissionService->hasPermission($_SESSION['auth'], 'coach.manage', $orgId);
+    }
+    if (!$canUpdate) {
+        $perms = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('coach.update', $perms, true)
+                  || in_array('coach.manage', $perms, true)
+                  || ($userId === 1 || ($currentUser['role_id'] ?? 0) === 1);
+    }
+
+    if (!$canUpdate) {
+        header('Location: /coaches?error=' . urlencode('Unauthorized: You do not have permission to update coach status.'));
+        exit;
+    }
+
+    $coachService = new \App\Services\Coach\CoachService();
+    try {
+        $ok = $coachService->updateStatus($orgId, $coachId, $status, $userId);
+        if ($ok) {
+            header('Location: /coaches?success=' . urlencode('Coach status updated to ' . ucfirst($status) . '.'));
+        } else {
+            header('Location: /coaches?error=' . urlencode('Coach not found or access denied.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /coaches?error=' . urlencode('Unable to update coach status: ' . $e->getMessage()));
         exit;
     }
 }

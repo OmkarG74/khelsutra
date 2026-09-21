@@ -4,7 +4,7 @@ $title = 'Training Attendance — KhelSutra Platform';
 
 $attService = new \App\Services\Attendance\AttendanceService();
 $empService = new \App\Services\Staff\EmployeeService();
-$orgId = $_SESSION['current_organization_id'] ?? 1;
+$orgId = current_organization_id();
 
 $employees = $empService->listEmployees($orgId);
 

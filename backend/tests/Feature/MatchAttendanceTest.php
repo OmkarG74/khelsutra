@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\Attendance\AttendanceService;
+use App\Services\BaseService;
 
 class MatchAttendanceTest
 {
@@ -31,14 +32,25 @@ class MatchAttendanceTest
     public function testValidMatchAttendanceSucceeds(): bool
     {
         $service = new AttendanceService();
-        $record = $service->markMatchAttendance(1, [
-            'match_id' => 1,
-            'employee_id' => 2,
-            'attendance_status' => 'present',
-            'check_in_time' => '14:30:00',
-            'remarks' => 'Head coach on match bench'
-        ]);
+        $pdo = BaseService::getDatabaseConnection();
+        $recordId = null;
 
-        return (!empty($record['match_id']) && $record['attendance_status'] === 'present');
+        try {
+            $record = $service->markMatchAttendance(1, [
+                'match_id' => 1,
+                'employee_id' => 2,
+                'attendance_status' => 'present',
+                'check_in_time' => '14:30:00',
+                'remarks' => 'Head coach on match bench'
+            ]);
+
+            $recordId = $record['id'] ?? null;
+            return (!empty($record['match_id']) && $record['attendance_status'] === 'present');
+        } finally {
+            if ($recordId && $pdo) {
+                $stmt = $pdo->prepare("DELETE FROM match_attendance WHERE id = :id AND organization_id = 1");
+                $stmt->execute([':id' => $recordId]);
+            }
+        }
     }
 }

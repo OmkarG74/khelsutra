@@ -78,41 +78,48 @@ class SportsAdminFlowTest
     public function testSportsAdminCoachFlow(): bool
     {
         $service = new CoachService();
-        $code = 'EMP-COACH-' . rand(100, 999);
-        $email = 'coach.' . rand(1000, 9999) . '@testacademy.com';
+        $code = 'EMP-COACH-' . bin2hex(random_bytes(6));
+        $email = 'coach.' . bin2hex(random_bytes(6)) . '@testacademy.com';
+        $coachProfileId = 0;
 
-        // 1. Create Coach
-        $coach = $service->createCoach($this->orgId, [
-            'first_name' => 'Sanjay',
-            'last_name' => 'Bangar',
-            'email' => $email,
-            'employee_code' => $code,
-            'specialization' => 'Batting & Power Hitting',
-            'experience_years' => 12,
-            'license_level' => 'BCCI Level 3',
-        ], $this->userId);
+        try {
+            // 1. Create Coach
+            $coach = $service->createCoach($this->orgId, [
+                'first_name' => 'Sanjay',
+                'last_name' => 'Bangar',
+                'email' => $email,
+                'employee_code' => $code,
+                'specialization' => 'Batting & Power Hitting',
+                'experience_years' => 12,
+                'license_level' => 'BCCI Level 3',
+            ], $this->userId);
 
-        $coachProfileId = (int)($coach['coach_profile_id'] ?? $coach['id'] ?? 0);
-        if ($coachProfileId <= 0) return false;
+            $coachProfileId = (int)($coach['coach_profile_id'] ?? $coach['id'] ?? 0);
+            if ($coachProfileId <= 0) return false;
 
-        // 2. Fetch details
-        $details = $service->getCoach($this->orgId, $coachProfileId);
-        if (!$details || $details['specialization'] !== 'Batting & Power Hitting') return false;
+            // 2. Fetch details
+            $details = $service->getCoach($this->orgId, $coachProfileId);
+            if (!$details || $details['specialization'] !== 'Batting & Power Hitting') return false;
 
-        // 3. Cross-Tenant isolation check
-        $crossCheck = $service->getCoach(2, $coachProfileId);
-        if ($crossCheck !== null) return false;
+            // 3. Cross-Tenant isolation check
+            $crossCheck = $service->getCoach(2, $coachProfileId);
+            if ($crossCheck !== null) return false;
 
-        // 4. Update Coach
-        $ok = $service->updateCoach($this->orgId, $coachProfileId, [
-            'specialization' => 'High Performance Batting Specialist',
-            'license_level' => 'ICC Level 3 High Performance',
-            'experience_years' => 14,
-        ], $this->userId);
-        if (!$ok) return false;
+            // 4. Update Coach
+            $ok = $service->updateCoach($this->orgId, $coachProfileId, [
+                'specialization' => 'High Performance Batting Specialist',
+                'license_level' => 'ICC Level 3 High Performance',
+                'experience_years' => 14,
+            ], $this->userId);
+            if (!$ok) return false;
 
-        $updatedDetails = $service->getCoach($this->orgId, $coachProfileId);
-        return $updatedDetails['specialization'] === 'High Performance Batting Specialist';
+            $updatedDetails = $service->getCoach($this->orgId, $coachProfileId);
+            return $updatedDetails && $updatedDetails['specialization'] === 'High Performance Batting Specialist';
+        } finally {
+            if ($coachProfileId > 0) {
+                $service->deleteCoach($this->orgId, $coachProfileId, $this->userId);
+            }
+        }
     }
 
     public function testSportsAdminTeamFlow(): bool
@@ -161,40 +168,47 @@ class SportsAdminFlowTest
         $stmt->execute([':org' => $this->orgId]);
         $teamId = (int)$stmt->fetchColumn();
 
-        // 1. Schedule Session
-        $session = $service->createSession($this->orgId, [
-            'team_id' => $teamId > 0 ? $teamId : 1,
-            'title' => 'Automated Defensive Tactics Session',
-            'training_type' => 'tactical',
-            'training_date' => date('Y-m-d'),
-            'start_time' => '16:00:00',
-            'end_time' => '18:00:00',
-            'objectives' => 'High pressing and zonal marking drill',
-        ], $this->userId);
+        $sessionId = 0;
+        try {
+            // 1. Schedule Session
+            $session = $service->createSession($this->orgId, [
+                'team_id' => $teamId > 0 ? $teamId : 1,
+                'title' => 'Automated Defensive Tactics Session',
+                'training_type' => 'tactical',
+                'training_date' => date('Y-m-d'),
+                'start_time' => '16:00:00',
+                'end_time' => '18:00:00',
+                'objectives' => 'High pressing and zonal marking drill',
+            ], $this->userId);
 
-        if (empty($session['id'])) return false;
-        $sessionId = (int)$session['id'];
+            if (empty($session['id'])) return false;
+            $sessionId = (int)$session['id'];
 
-        // 2. Fetch session details
-        $details = $service->getSession($this->orgId, $sessionId);
-        if (!$details || $details['title'] !== 'Automated Defensive Tactics Session') return false;
+            // 2. Fetch session details
+            $details = $service->getSession($this->orgId, $sessionId);
+            if (!$details || $details['title'] !== 'Automated Defensive Tactics Session') return false;
 
-        // 3. Record Attendance
-        $stmt = $this->pdo->prepare("SELECT id FROM athletes WHERE organization_id = :org AND deleted_at IS NULL LIMIT 2");
-        $stmt->execute([':org' => $this->orgId]);
-        $athletes = $stmt->fetchAll(PDO::FETCH_COLUMN);
+            // 3. Record Attendance
+            $stmt = $this->pdo->prepare("SELECT id FROM athletes WHERE organization_id = :org AND deleted_at IS NULL LIMIT 2");
+            $stmt->execute([':org' => $this->orgId]);
+            $athletes = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
-        if (!empty($athletes)) {
-            $attendanceData = [];
-            foreach ($athletes as $aId) {
-                $attendanceData[(int)$aId] = 'present';
+            if (!empty($athletes)) {
+                $attendanceData = [];
+                foreach ($athletes as $aId) {
+                    $attendanceData[(int)$aId] = 'present';
+                }
+                $service->recordAttendance($this->orgId, $sessionId, $attendanceData, $this->userId);
+                $detailsAfter = $service->getSession($this->orgId, $sessionId);
+                if (empty($detailsAfter['roster_attendance'])) return false;
             }
-            $service->recordAttendance($this->orgId, $sessionId, $attendanceData, $this->userId);
-            $detailsAfter = $service->getSession($this->orgId, $sessionId);
-            if (empty($detailsAfter['roster_attendance'])) return false;
-        }
 
-        return true;
+            return true;
+        } finally {
+            if ($sessionId > 0) {
+                $service->deleteSession($this->orgId, $sessionId, $this->userId);
+            }
+        }
     }
 
     public function testSportsAdminTournamentFlow(): bool

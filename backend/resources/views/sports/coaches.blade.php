@@ -35,6 +35,19 @@ ob_start();
     </div>
 </div>
 
+<?php if (!empty($_GET['success'])): ?>
+    <div class="alert alert-success py-2 px-3 small rounded-3 mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-check-circle-fill text-success"></i>
+        <span><?= htmlspecialchars($_GET['success'], ENT_QUOTES, 'UTF-8') ?></span>
+    </div>
+<?php endif; ?>
+<?php if (!empty($_GET['error'])): ?>
+    <div class="alert alert-danger py-2 px-3 small rounded-3 mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-octagon-fill text-danger"></i>
+        <span><?= htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8') ?></span>
+    </div>
+<?php endif; ?>
+
 <!-- Search & Filters Toolbar -->
 <div class="ks-filter-bar mb-4">
     <form method="GET" action="/coaches" class="ks-filter-grid">
@@ -146,9 +159,12 @@ ob_start();
                             </td>
                             <td>
                                 <?php $cStatus = $coach['coach_status'] ?? 'active'; ?>
-                                <span class="ks-badge <?= $cStatus === 'active' ? 'ks-badge-confirmed' : 'ks-badge-scheduled' ?>">
-                                    <?= htmlspecialchars(ucfirst($cStatus), ENT_QUOTES, 'UTF-8') ?>
-                                </span>
+                                <form action="/coaches/<?= (int)$coach['coach_profile_id'] ?>/status" method="POST" class="d-inline m-0 p-0">
+                                    <input type="hidden" name="status" value="<?= $cStatus === 'active' ? 'inactive' : 'active' ?>">
+                                    <button type="submit" class="ks-badge <?= $cStatus === 'active' ? 'ks-badge-confirmed' : 'ks-badge-scheduled' ?>" style="cursor: pointer; border: 1px solid <?= $cStatus === 'active' ? '#BBF7D0' : '#BFDBFE' ?>; background-color: <?= $cStatus === 'active' ? '#DCFCE7' : '#DBEAFE' ?>; color: <?= $cStatus === 'active' ? '#166534' : '#1E40AF' ?>; padding: 0 10px; font-family: inherit;" title="Click to toggle status to <?= $cStatus === 'active' ? 'Inactive' : 'Active' ?>">
+                                        <?= htmlspecialchars(ucfirst($cStatus), ENT_QUOTES, 'UTF-8') ?>
+                                    </button>
+                                </form>
                             </td>
                             <td style="text-align: right;">
                                 <div class="btn-group btn-group-sm">

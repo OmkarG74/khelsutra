@@ -63,7 +63,14 @@ class StoreAthleteRequest
             $errors['current_sport_id'][] = 'Primary sport selection is required.';
         }
 
-        // 3. Account / Login validation
+        // 3. Athlete Status
+        if (empty(trim($this->data['status'] ?? ''))) {
+            $errors['status'][] = 'Athlete status is required.';
+        } elseif (!in_array($this->data['status'], ['active', 'inactive', 'injured', 'suspended'], true)) {
+            $errors['status'][] = 'Please select a valid athlete status.';
+        }
+
+        // 4. Account / Login validation
         $createAccount = !empty($this->data['create_account']) && ($this->data['create_account'] === '1' || $this->data['create_account'] === true || $this->data['create_account'] === 'on');
         if ($createAccount) {
             $loginEmail = trim($this->data['login_email'] ?? ($this->data['email'] ?? ''));

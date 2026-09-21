@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Services\Attendance\AttendanceService;
+use App\Services\BaseService;
 
 class TrainingAttendanceTest
 {
@@ -50,16 +51,27 @@ class TrainingAttendanceTest
     public function testValidEmployeeAttendanceSucceeds(): bool
     {
         $service = new AttendanceService();
-        $record = $service->markTrainingAttendance(1, [
-            'training_session_id' => 1,
-            'employee_id' => 1,
-            'attendance_status' => 'present',
-            'check_in_time' => '07:00:00',
-            'check_out_time' => '09:00:00',
-            'remarks' => 'Morning Badminton session',
-            'recorded_by' => 1
-        ]);
+        $pdo = BaseService::getDatabaseConnection();
+        $recordId = null;
 
-        return (!empty($record['training_session_id']) && $record['attendance_status'] === 'present');
+        try {
+            $record = $service->markTrainingAttendance(1, [
+                'training_session_id' => 1,
+                'employee_id' => 1,
+                'attendance_status' => 'present',
+                'check_in_time' => '07:00:00',
+                'check_out_time' => '09:00:00',
+                'remarks' => 'Morning Badminton session',
+                'recorded_by' => 1
+            ]);
+
+            $recordId = $record['id'] ?? null;
+            return (!empty($record['training_session_id']) && $record['attendance_status'] === 'present');
+        } finally {
+            if ($recordId && $pdo) {
+                $stmt = $pdo->prepare("DELETE FROM training_attendance WHERE id = :id AND organization_id = 1");
+                $stmt->execute([':id' => $recordId]);
+            }
+        }
     }
 }
