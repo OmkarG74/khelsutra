@@ -178,5 +178,6 @@ return [
     '/operations/venues/{venueId}/facilities' => function($venueId) { return ['view' => 'operations/facilities/index', 'data' => ['venueId' => $venueId]]; },
     '/operations/venues/{venueId}/facilities/create' => function($venueId) { return ['view' => 'operations/facilities/create', 'data' => ['venueId' => $venueId]]; },
     '/operations/venues/{venueId}/facilities/{id}/edit' => function($venueId, $id) { return ['view' => 'operations/facilities/edit', 'data' => ['venueId' => $venueId, 'id' => $id]]; },
+    '/operations/bookings' => function() { return ['view' => 'operations/bookings/index']; },
 ];
 
