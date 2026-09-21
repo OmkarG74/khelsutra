@@ -69,4 +69,17 @@ class EventService
             return SchoolActivity::create($data);
         });
     }
+
+    public function recordEventExpense(int $orgId, int $eventId, float $amount, string $description, ?int $vendorId = null): int
+    {
+        return DB::transaction(function () use ($orgId, $eventId, $amount, $description, $vendorId) {
+            $event = Event::where('organization_id', $orgId)->findOrFail($eventId);
+            
+            $recorder = new \App\Services\Operations\ExpenseRecorder();
+            return $recorder->recordExpense($orgId, $amount, $description, [
+                'event_id' => $event->id,
+                'vendor_id' => $vendorId
+            ]);
+        });
+    }
 }

@@ -182,6 +182,10 @@ return [
 
     '/operations/maintenance' => function() { return ['view' => 'operations/maintenance/index']; },
     '/operations/housekeeping' => function() { return ['view' => 'operations/housekeeping/index']; },
+    '/operations/events' => function() { return ['view' => 'operations/events/index']; },
+    '/operations/school-activities' => function() { return ['view' => 'operations/school-activities/index']; },
+    '/operations/transport' => function() { return ['view' => 'operations/transport/index']; },
+    '/operations/accommodation' => function() { return ['view' => 'operations/accommodation/index']; },
 ];
 
 

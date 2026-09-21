@@ -408,6 +408,92 @@ return function ($uri, $method, $requestData = []) {
         return $controller->update($orgId, (int)$matches[1], $requestData);
     }
 
+    // Member 4: Operations Events & School Activities
+    if ($uri === '/api/v1/events' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_events')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/events' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_events')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
+        return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/events/(\d+)/participants$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_events')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
+        return $controller->addParticipant($orgId, (int)$matches[1], $requestData);
+    }
+    if (preg_match('#^/api/v1/events/(\d+)/expenses$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_events')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
+        return $controller->recordExpense($orgId, (int)$matches[1], $requestData);
+    }
+    if ($uri === '/api/v1/school-activities' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_events')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\SchoolActivityController(new \App\Services\Operations\EventService());
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/school-activities' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_events')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\SchoolActivityController(new \App\Services\Operations\EventService());
+        return $controller->store($orgId, $requestData);
+    }
+
+    // Member 4: Operations Transport
+    if ($uri === '/api/v1/vehicles' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VehicleController(new \App\Services\Operations\VehicleService());
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/vehicles' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VehicleController(new \App\Services\Operations\VehicleService());
+        return $controller->store($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/trips' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/trips' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
+        return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/trips/(\d+)/passengers$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
+        return $controller->addPassenger($orgId, (int)$matches[1], $requestData);
+    }
+
+    // Member 4: Operations Accommodation
+    if ($uri === '/api/v1/accommodations' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_accommodation')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/accommodations' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_accommodation')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
+        return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/accommodations/(\d+)/rooms$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_accommodation')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
+        return $controller->storeRoom($orgId, (int)$matches[1], $requestData);
+    }
+    if ($uri === '/api/v1/room-allocations' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_accommodation')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\RoomAllocationController(new \App\Services\Operations\RoomAllocationService());
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/room-allocations' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_accommodation')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\RoomAllocationController(new \App\Services\Operations\RoomAllocationService());
+        return $controller->store($orgId, $requestData);
+    }
+
     // 13. Fallback for other unassigned modules
     $skeletonGroups = [
         'sports', 'coaches', 'performance', 'medical', 'fixtures', 'matches',
@@ -429,93 +515,3 @@ return function ($uri, $method, $requestData = []) {
 
     return ApiResponse::error('Endpoint not found', ['uri' => $uri, 'method' => $method], 404);
 };
-<?php
-$router->get('/api/v1/events', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
-    return $c->index(request());
-});
-$router->post('/api/v1/events', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
-    return $c->store(app(\App\Http\Requests\BaseFormRequest::class));
-});
-$router->post('/api/v1/events/{id}/participants', function ($id) {
-    $c = new \App\Http\Controllers\Api\V1\Operations\EventController(new \App\Services\Operations\EventService());
-    return $c->addParticipant(app(\App\Http\Requests\BaseFormRequest::class), $id);
-});
-
-$router->get('/api/v1/school-activities', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\SchoolActivityController(new \App\Services\Operations\EventService());
-    return $c->index(request());
-});
-$router->post('/api/v1/school-activities', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\SchoolActivityController(new \App\Services\Operations\EventService());
-    return $c->store(app(\App\Http\Requests\BaseFormRequest::class));
-});
-
-$router->get('/operations/events', function () {
-    ob_start();
-    include __DIR__ . '/backend/resources/views/operations/events/index.blade.php';
-    return ob_get_clean();
-});
-
-$router->get('/operations/school-activities', function () {
-    ob_start();
-    include __DIR__ . '/backend/resources/views/operations/school-activities/index.blade.php';
-    return ob_get_clean();
-});
-<?php
-$router->get('/api/v1/vehicles', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\VehicleController(new \App\Services\Operations\VehicleService());
-    return $c->index(request());
-});
-$router->post('/api/v1/vehicles', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\VehicleController(new \App\Services\Operations\VehicleService());
-    return $c->store(app(\App\Http\Requests\BaseFormRequest::class));
-});
-
-$router->get('/api/v1/trips', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
-    return $c->index(request());
-});
-$router->post('/api/v1/trips', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
-    return $c->store(app(\App\Http\Requests\BaseFormRequest::class));
-});
-$router->post('/api/v1/trips/{id}/passengers', function ($id) {
-    $c = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
-    return $c->addPassenger(app(\App\Http\Requests\BaseFormRequest::class), $id);
-});
-
-$router->get('/operations/transport', function () {
-    ob_start();
-    include __DIR__ . '/backend/resources/views/operations/transport/index.blade.php';
-    return ob_get_clean();
-});
-<?php
-$router->get('/api/v1/accommodations', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
-    return $c->index(request());
-});
-$router->post('/api/v1/accommodations', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
-    return $c->store(app(\App\Http\Requests\BaseFormRequest::class));
-});
-$router->post('/api/v1/accommodations/{id}/rooms', function ($id) {
-    $c = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
-    return $c->storeRoom(app(\App\Http\Requests\BaseFormRequest::class), $id);
-});
-
-$router->get('/api/v1/room-allocations', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\RoomAllocationController(new \App\Services\Operations\RoomAllocationService());
-    return $c->index(request());
-});
-$router->post('/api/v1/room-allocations', function () {
-    $c = new \App\Http\Controllers\Api\V1\Operations\RoomAllocationController(new \App\Services\Operations\RoomAllocationService());
-    return $c->store(app(\App\Http\Requests\BaseFormRequest::class));
-});
-
-$router->get('/operations/accommodation', function () {
-    ob_start();
-    include __DIR__ . '/backend/resources/views/operations/accommodation/index.blade.php';
-    return ob_get_clean();
-});

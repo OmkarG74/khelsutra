@@ -2,48 +2,34 @@
 
 namespace App\Http\Controllers\Api\V1\Operations;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\BaseFormRequest;
+use App\Helpers\ApiResponse;
 use App\Services\Operations\RoomAllocationService;
 use App\Models\AccommodationAllocation;
-use Illuminate\Http\Request;
 use Exception;
 
-class RoomAllocationController extends Controller
+class RoomAllocationController
 {
-    protected $service;
+    protected RoomAllocationService $service;
 
     public function __construct(RoomAllocationService $service)
     {
         $this->service = $service;
     }
 
-    public function index(Request $request)
+    public function index(int $orgId, array $requestData): array
     {
-        $orgId = $request->attributes->get('organization_id');
-        $alloc = AccommodationAllocation::where('organization_id', $orgId)->paginate(15);
-        return response()->json($alloc);
+        $alloc = AccommodationAllocation::where('organization_id', $orgId)->get();
+        return ApiResponse::success(['data' => $alloc->toArray()]);
     }
 
-    public function store(BaseFormRequest $request)
+    public function store(int $orgId, array $requestData): array
     {
-        $orgId = $request->attributes->get('organization_id');
-        $data = $request->validate([
-            'accommodation_id' => 'required|integer',
-            'room_id' => 'required|integer',
-            'check_in_date' => 'required|date',
-            'check_out_date' => 'nullable|date',
-            'athlete_id' => 'nullable|integer',
-            'employee_id' => 'nullable|integer',
-            'coach_id' => 'nullable|integer'
-        ]);
-
         try {
-            $alloc = $this->service->allocateRoom($orgId, $data);
-            return response()->json($alloc, 201);
+            $alloc = $this->service->allocateRoom($orgId, $requestData);
+            return ApiResponse::success($alloc->toArray(), 'Room allocated', 201);
         } catch (Exception $e) {
             $status = $e->getCode() == 409 ? 409 : 400;
-            return response()->json(['message' => $e->getMessage()], $status);
+            return ApiResponse::error($e->getMessage(), null, $status);
         }
     }
 }

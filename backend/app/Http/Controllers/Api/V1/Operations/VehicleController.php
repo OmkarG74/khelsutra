@@ -2,45 +2,33 @@
 
 namespace App\Http\Controllers\Api\V1\Operations;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\BaseFormRequest;
+use App\Helpers\ApiResponse;
 use App\Services\Operations\VehicleService;
 use App\Models\Vehicle;
-use Illuminate\Http\Request;
 use Exception;
 
-class VehicleController extends Controller
+class VehicleController
 {
-    protected $service;
+    protected VehicleService $service;
 
     public function __construct(VehicleService $service)
     {
         $this->service = $service;
     }
 
-    public function index(Request $request)
+    public function index(int $orgId, array $requestData): array
     {
-        $orgId = $request->attributes->get('organization_id');
-        $vehicles = Vehicle::where('organization_id', $orgId)->paginate(15);
-        return response()->json($vehicles);
+        $vehicles = Vehicle::where('organization_id', $orgId)->get();
+        return ApiResponse::success(['data' => $vehicles->toArray()]);
     }
 
-    public function store(BaseFormRequest $request)
+    public function store(int $orgId, array $requestData): array
     {
-        $orgId = $request->attributes->get('organization_id');
-        $data = $request->validate([
-            'vehicle_number' => 'required|string',
-            'vehicle_type' => 'required|string',
-            'capacity' => 'nullable|integer',
-            'driver_employee_id' => 'nullable|integer',
-            'status' => 'nullable|string'
-        ]);
-
         try {
-            $vehicle = $this->service->createVehicle($orgId, $data);
-            return response()->json($vehicle, 201);
+            $vehicle = $this->service->createVehicle($orgId, $requestData);
+            return ApiResponse::success($vehicle->toArray(), 'Vehicle created', 201);
         } catch (Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 400);
+            return ApiResponse::error($e->getMessage(), null, 400);
         }
     }
 }
