@@ -83,6 +83,8 @@ git checkout -b feature/operations-logistics   # or checkout if it exists
 ```
 
 - Never push to `main`; never commit directly to `develop`. PR against `develop`.
+- **No committing until I confirm** (in case of any bugs or visual glitches).
+- **No pushing to remote until I confirm** (for the same reason as above).
 - **Semantic commits, small and frequent:** `feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `chore:` (e.g. `feat: implement venue booking`, `test: add venue and logistics tests`).
 - One commit per logical unit (Docker, delta migration, model+service, controller+routes, tests).
 
