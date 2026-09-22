@@ -11,7 +11,7 @@ trait BelongsToOrganization
     public static function bootBelongsToOrganization(): void
     {
         // For standard Eloquent integration:
-        if (function_exists('addGlobalScope')) {
+        if (method_exists(static::class, 'addGlobalScope')) {
             static::addGlobalScope('organization', function ($builder) {
                 if (defined('CURRENT_ORGANIZATION_ID') && CURRENT_ORGANIZATION_ID !== null) {
                     $builder->where('organization_id', CURRENT_ORGANIZATION_ID);

@@ -38,9 +38,27 @@ if ($argc > 1) {
             $res = $controller->check();
             echo json_encode($res, JSON_PRETTY_PRINT) . "\n";
             break;
+        case 'migrate':
+            require __DIR__ . '/bootstrap/app.php';
+            echo "Running migrations...\n";
+            $migrations = glob(__DIR__ . '/database/migrations/*.php');
+            if ($migrations) {
+                sort($migrations);
+                foreach ($migrations as $file) {
+                    $migration = require $file;
+                    if (is_object($migration) && method_exists($migration, 'up')) {
+                        $migration->up();
+                        echo "Migrated: " . basename($file) . "\n";
+                    } else if (is_object($migration)) {
+                        echo "Skipped (no up method): " . basename($file) . "\n";
+                    }
+                }
+            }
+            echo "Migrations complete.\n";
+            break;
         case 'test':
             echo "Running test suite...\n";
-            passthru("php ../scripts/test.ps1");
+            passthru(__DIR__ . "/vendor/bin/phpunit --configuration " . __DIR__ . "/phpunit.xml");
             break;
         default:
             echo "Command '{$command}' acknowledged in skeleton mode.\n";
