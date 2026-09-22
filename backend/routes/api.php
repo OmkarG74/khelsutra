@@ -460,6 +460,17 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Operations\VehicleController(new \App\Services\Operations\VehicleService());
         return $controller->store($orgId, $requestData);
     }
+    if (preg_match('#^/api/v1/vehicles/(\d+)/location$#', $uri, $matches) && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VehicleController(new \App\Services\Operations\VehicleService());
+        return $controller->location($orgId, (int)$matches[1]);
+    }
+    if ($uri === '/api/v1/tracking/position' && $method === 'POST') {
+        // Assume devices send a bearer token matching an org's api key, for now just reuse manage_transport
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\VehicleTrackingController(new \App\Services\Operations\VehicleTrackingService());
+        return $controller->storePosition($orgId, $requestData);
+    }
     if ($uri === '/api/v1/trips' && $method === 'GET') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_transport')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
@@ -474,6 +485,11 @@ return function ($uri, $method, $requestData = []) {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
         return $controller->update($orgId, (int)$matches[1], $requestData);
+    }
+    if (preg_match('#^/api/v1/trips/(\d+)/route-history$#', $uri, $matches) && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
+        return $controller->routeHistory($orgId, (int)$matches[1]);
     }
     if (preg_match('#^/api/v1/trips/(\d+)/passengers$#', $uri, $matches) && $method === 'POST') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);

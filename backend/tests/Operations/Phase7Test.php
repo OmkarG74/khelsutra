@@ -34,6 +34,7 @@ class Phase7Test extends TestCase
         DB::table('athletes')->insertOrIgnore([
             'id' => 100,
             'organization_id' => 1,
+            'athlete_code' => 'A-100',
             'first_name' => 'John',
             'last_name' => 'Doe',
             'gender' => 'male',

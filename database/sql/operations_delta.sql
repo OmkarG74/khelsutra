@@ -98,3 +98,33 @@ DELIMITER ;
 
 CALL sp_upgrade_operations_delta();
 DROP PROCEDURE sp_upgrade_operations_delta;
+
+CREATE TABLE IF NOT EXISTS vehicle_positions (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    organization_id BIGINT UNSIGNED NOT NULL,
+    vehicle_id BIGINT UNSIGNED NOT NULL,
+    latitude DECIMAL(10, 7) NOT NULL,
+    longitude DECIMAL(10, 7) NOT NULL,
+    speed DECIMAL(5, 2) NULL,
+    heading INT NULL,
+    recorded_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_vp_org_veh_time (organization_id, vehicle_id, recorded_at),
+    CONSTRAINT fk_vp_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS geofences (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    organization_id BIGINT UNSIGNED NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    venue_id BIGINT UNSIGNED NULL,
+    latitude DECIMAL(10, 7) NOT NULL,
+    longitude DECIMAL(10, 7) NOT NULL,
+    radius_meters INT NOT NULL DEFAULT 100,
+    created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_gf_org (organization_id),
+    CONSTRAINT fk_gf_venue FOREIGN KEY (venue_id) REFERENCES venues(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

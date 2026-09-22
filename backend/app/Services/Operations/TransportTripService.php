@@ -133,4 +133,10 @@ class TransportTripService
             return $trip;
         });
     }
+
+    public function getRouteHistory(int $orgId, int $tripId): array
+    {
+        $trackingService = new VehicleTrackingService();
+        return $trackingService->getRouteHistoryForTrip($orgId, $tripId);
+    }
 }

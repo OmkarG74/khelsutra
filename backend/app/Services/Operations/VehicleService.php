@@ -18,6 +18,15 @@ class VehicleService
         });
     }
 
+    public function updateVehicle(int $orgId, int $id, array $data): Vehicle
+    {
+        return DB::transaction(function () use ($orgId, $id, $data) {
+            $vehicle = Vehicle::where('organization_id', $orgId)->lockForUpdate()->findOrFail($id);
+            $vehicle->update($data);
+            return $vehicle;
+        });
+    }
+
     public function deleteVehicle(int $orgId, int $id): bool
     {
         return DB::transaction(function () use ($orgId, $id) {
@@ -36,5 +45,13 @@ class VehicleService
 
             return $vehicle->delete();
         });
+    }
+
+    public function getLiveLocation(int $orgId, int $id): ?array
+    {
+        $trackingService = new VehicleTrackingService();
+        $position = $trackingService->getLivePosition($orgId, $id);
+        
+        return $position ? $position->toArray() : null;
     }
 }
