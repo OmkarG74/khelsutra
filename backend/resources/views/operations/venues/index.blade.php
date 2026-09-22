@@ -120,17 +120,26 @@ function loadVenues() {
             const tbody = document.getElementById('venuesTableBody');
             tbody.innerHTML = '';
             if (res.data && res.data.data) {
+                const escapeHtml = (unsafe) => {
+                    if (unsafe == null) return '';
+                    return String(unsafe)
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                };
                 res.data.data.forEach((v, index) => {
                     tbody.innerHTML += `
                         <tr>
                             <td>${index + 1}</td>
-                            <td><div class="fw-semibold text-navy">${v.name}</div></td>
-                            <td><span class="fw-medium text-navy">${v.venue_code}</span></td>
-                            <td>${v.venue_type || '-'}</td>
-                            <td>${v.city || '-'}</td>
+                            <td><div class="fw-semibold text-navy">${escapeHtml(v.name)}</div></td>
+                            <td><span class="fw-medium text-navy">${escapeHtml(v.venue_code)}</span></td>
+                            <td>${escapeHtml(v.venue_type) || '-'}</td>
+                            <td>${escapeHtml(v.city) || '-'}</td>
                             <td>
                                 <span class="ks-badge ks-badge-${v.status === 'active' ? 'success' : 'warning'}">
-                                    ${v.status}
+                                    ${escapeHtml(v.status)}
                                 </span>
                             </td>
                             <td style="text-align: right;">

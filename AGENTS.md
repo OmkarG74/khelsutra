@@ -50,7 +50,7 @@ If a needed class from another member doesn't exist yet: create a thin interface
 4. **SoftDeletes (`deleted_at` exists) on:** venues, venue_facilities, venue_bookings, venue_maintenance, housekeeping_tasks, events, school_activities, vehicles, accommodations. **No `deleted_at` on:** transport_trips, transport_passengers, accommodation_rooms, accommodation_allocations, event_participants → cancel via `status` (or delete only when no dependants).
 5. **References/codes unique per org:** `venue_code`, `booking_reference`, `maintenance_reference`, `task_reference`, `event_reference`, `trip_reference`, `vehicle_number`. Generate server-side (see §5.5), never trust client values without a uniqueness check.
 6. **`users` has NO `organization_id`.** Tenancy is via `organization_users` (`organization_id`, `user_id`, `role_id`, `employee_id`, `athlete_id`, `access_status`).
-7. **Keys named `fk_*` are plain indexes — there are NO foreign-key constraints, and every table is `ENGINE=MyISAM`.** See §4 — this breaks transactions and row locks. Referential integrity and tenant ownership must be enforced in application code.
+7. **Keys named `fk_*` do include explicit foreign-key constraints.** Ensure they are respected when inserting test data or updating records. While the baseline schema may have been imported with InnoDB, ensure explicit transaction locking is used for critical paths. Referential integrity and tenant ownership must be enforced in application code.
 8. Money is `decimal(14,2)`; coordinates `decimal(10,7)`; default country `'India'`.
 
 ## 4. Schema Delta (additive migration — the ONLY schema changes I make)

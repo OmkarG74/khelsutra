@@ -13,7 +13,6 @@ class Phase8Test extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::beginTransaction();
         
         DB::table('organizations')->insertOrIgnore([
@@ -32,6 +31,12 @@ class Phase8Test extends TestCase
 
     public function test_room_allocation_logic()
     {
+        DB::table('athletes')->insertOrIgnore([
+            ['id' => 1, 'organization_id' => 1, 'first_name' => 'A1', 'last_name' => 'A1', 'gender' => 'male', 'date_of_birth' => '2000-01-01', 'blood_group' => 'O+', 'status' => 'active'],
+            ['id' => 2, 'organization_id' => 1, 'first_name' => 'A2', 'last_name' => 'A2', 'gender' => 'male', 'date_of_birth' => '2000-01-01', 'blood_group' => 'O+', 'status' => 'active'],
+            ['id' => 3, 'organization_id' => 1, 'first_name' => 'A3', 'last_name' => 'A3', 'gender' => 'male', 'date_of_birth' => '2000-01-01', 'blood_group' => 'O+', 'status' => 'active']
+        ]);
+
         $accService = new AccommodationService();
         $allocService = new RoomAllocationService();
 

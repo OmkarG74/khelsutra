@@ -94,16 +94,25 @@ function loadFacilities() {
             const tbody = document.getElementById('facilitiesTableBody');
             tbody.innerHTML = '';
             if (res.data && res.data.data) {
+                const escapeHtml = (unsafe) => {
+                    if (unsafe == null) return '';
+                    return String(unsafe)
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                };
                 res.data.data.forEach((f, index) => {
                     tbody.innerHTML += `
                         <tr>
                             <td>${index + 1}</td>
-                            <td><div class="fw-semibold text-navy">${f.name}</div></td>
-                            <td>${f.facility_type || '-'}</td>
-                            <td>${f.capacity || '-'}</td>
+                            <td><div class="fw-semibold text-navy">${escapeHtml(f.name)}</div></td>
+                            <td>${escapeHtml(f.facility_type) || '-'}</td>
+                            <td>${escapeHtml(f.capacity) || '-'}</td>
                             <td>
                                 <span class="ks-badge ks-badge-${f.status === 'active' ? 'success' : 'warning'}">
-                                    ${f.status}
+                                    ${escapeHtml(f.status)}
                                 </span>
                             </td>
                             <td style="text-align: right;">

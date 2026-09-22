@@ -30,6 +30,7 @@ class Phase3Test extends TestCase
     protected function tearDown(): void
     {
         DB::rollBack();
+        DB::statement("SET FOREIGN_KEY_CHECKS=1;");
         parent::tearDown();
     }
 

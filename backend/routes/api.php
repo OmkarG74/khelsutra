@@ -32,25 +32,22 @@ return function ($uri, $method, $requestData = []) {
 
     if ($uri === '/api/v1/auth/me' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
-        $user = $tokenUser ?? ($requestData['user'] ?? null);
-        if (!$user) {
+        if (!$tokenUser) {
             return ApiResponse::error('Unauthenticated: Valid Bearer token required.', null, 401);
         }
-        return $controller->me($user);
+        return $controller->me($tokenUser);
     }
     if ($uri === '/api/v1/auth/refresh' && $method === 'POST') {
         $controller = new \App\Http\Controllers\Api\V1\Auth\AuthController();
         return $controller->refresh();
     }
 
+    if (!$tokenUser) {
+        return ApiResponse::error('Unauthorized', null, 401);
+    }
+
     // 3. Resolve Current User Context & Tenant Isolation
-    $currentUser = $tokenUser ?? ($requestData['user'] ?? [
-        'id' => 5,
-        'email' => 'sportsadmin@khelsutra.local',
-        'role' => ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'],
-        'role_id' => 2,
-        'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
-    ]);
+    $currentUser = $tokenUser;
 
     $currentRoleId = (int)($currentUser['role']['id'] ?? ($currentUser['role_id'] ?? 2));
     $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin');
@@ -67,7 +64,7 @@ return function ($uri, $method, $requestData = []) {
     }
 
     $orgId = $isSuperAdmin ? ($requestedOrgId ?: 1) : $userOrgId;
-    $performedBy = (int)($currentUser['id'] ?? 5);
+    $performedBy = (int)$currentUser['id'];
 
     // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
     if (str_starts_with($uri, '/api/v1/organizations')) {

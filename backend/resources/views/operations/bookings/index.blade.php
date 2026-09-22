@@ -93,16 +93,25 @@ function loadBookings() {
             const tbody = document.getElementById('bookingsTableBody');
             tbody.innerHTML = '';
             if (res.data && res.data.data) {
+                const escapeHtml = (unsafe) => {
+                    if (unsafe == null) return '';
+                    return String(unsafe)
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                };
                 res.data.data.forEach((b, index) => {
                     tbody.innerHTML += `
                         <tr>
                             <td>${index + 1}</td>
-                            <td><span class="fw-medium text-navy">${b.booking_reference}</span></td>
-                            <td>${b.booking_date} <br><small class="text-muted">${b.start_time} - ${b.end_time}</small></td>
-                            <td>Venue: ${b.venue_id} <br><small class="text-muted">Facility: ${b.facility_id || 'All'}</small></td>
+                            <td><span class="fw-medium text-navy">${escapeHtml(b.booking_reference)}</span></td>
+                            <td>${escapeHtml(b.booking_date)} <br><small class="text-muted">${escapeHtml(b.start_time)} - ${escapeHtml(b.end_time)}</small></td>
+                            <td>Venue: ${escapeHtml(b.venue_id)} <br><small class="text-muted">Facility: ${escapeHtml(b.facility_id) || 'All'}</small></td>
                             <td>
                                 <span class="ks-badge ks-badge-${b.status === 'approved' ? 'success' : (b.status === 'cancelled' ? 'danger' : 'warning')}">
-                                    ${b.status}
+                                    ${escapeHtml(b.status)}
                                 </span>
                             </td>
                             <td style="text-align: right;">
