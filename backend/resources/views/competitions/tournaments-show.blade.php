@@ -10,10 +10,27 @@ $teamStmt = $db->prepare("SELECT id, name FROM teams WHERE organization_id = :or
 $teamStmt->execute([':org_id' => $orgId]);
 $allTeams = $teamStmt ? $teamStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
-// Venues for adding fixture
-$venueStmt = $db->prepare("SELECT id, name FROM venues WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
-$venueStmt->execute([':org_id' => $orgId]);
-$allVenues = $venueStmt ? $venueStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+// Eligible venues via service (no raw database queries in Blade)
+$eligibleVenues = $tournament ? $tournService->getEligibleVenues($orgId, $tournId) : [];
+
+// Active participating teams (excluding withdrawn)
+$activeEnrolledTeams = array_filter($tournament['participating_teams'] ?? [], function($pt) {
+    return ($pt['status'] ?? '') !== 'withdrawn';
+});
+
+// RBAC check for tournament management visibility
+$permissionService = new \App\Services\Rbac\PermissionService();
+$currentUserId = current_user_id() ?? 0;
+$userPermissions = $currentUserId > 0 ? $permissionService->getUserPermissions($currentUserId, $orgId) : [];
+$userPayload = array_merge(
+    $_SESSION['auth'] ?? [],
+    $_SESSION['auth']['user'] ?? ($currentUser ?? []),
+    ['id' => $currentUserId, 'permissions' => $userPermissions]
+);
+$canManageTournaments = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+                     || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId)
+                     || in_array('tournament.manage', $userPermissions, true)
+                     || in_array('tournament.update', $userPermissions, true);
 
 $pageTitle = $tournament ? htmlspecialchars($tournament['name'] . ' — Tournament Details') : 'Tournament Details';
 $activePage = 'tournaments';
@@ -86,6 +103,17 @@ ob_start();
                         <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">
                             <i class="bi bi-calendar-event me-2" style="color: var(--ks-blue);"></i> Fixtures & Matches (<?= count($tournament['fixtures'] ?? []) ?>)
                         </h5>
+                        <?php if ($canManageTournaments && 
+                                   !in_array($tournament['status'] ?? '', ['completed', 'cancelled'], true) && 
+                                   in_array($tournament['format_name'] ?? '', ['League', 'Round Robin', 'Knockout'], true) && 
+                                   empty($tournament['fixtures']) && 
+                                   count($activeEnrolledTeams) >= 2): ?>
+                            <form action="/tournaments/<?= (int)$tournament['id'] ?>/fixtures/generate" method="POST" class="d-inline m-0" onsubmit="return confirm('Generate fixtures for all participating teams?');">
+                                <button type="submit" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1" style="background: var(--ks-blue); border-color: var(--ks-blue); font-size: 12px; padding: 4px 12px; border-radius: var(--ks-radius-button);">
+                                    <i class="bi bi-magic"></i> Generate Fixtures
+                                </button>
+                            </form>
+                        <?php endif; ?>
                     </div>
 
                     <?php if (!empty($tournament['fixtures']) && count($tournament['fixtures']) > 0): ?>
@@ -99,45 +127,64 @@ ob_start();
                                         </span>
                                     </div>
 
-                                    <div class="row align-items-center py-2">
-                                        <div class="col-5 text-end">
-                                            <div class="fw-bold fs-6 text-dark"><?= htmlspecialchars($fix['home_team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                            <span class="text-muted small">Home</span>
-                                        </div>
-                                        <div class="col-2 text-center">
-                                            <?php if (($fix['match_status'] ?? '') === 'completed'): ?>
+                                    <?php if (($fix['match_status'] ?? '') === 'completed'): ?>
+                                        <div class="row align-items-center py-2">
+                                            <div class="col-5 text-end">
+                                                <div class="fw-bold fs-6 text-dark"><?= htmlspecialchars($fix['home_team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                                                <span class="text-muted small">Home</span>
+                                            </div>
+                                            <div class="col-2 text-center">
                                                 <div class="fw-bold fs-5 text-primary">
                                                     <?= (int)$fix['home_score'] ?> - <?= (int)$fix['away_score'] ?>
                                                 </div>
                                                 <span class="badge bg-success-subtle text-success small" style="font-size: 10px;">Final</span>
-                                            <?php else: ?>
-                                                <div class="text-muted fw-bold">VS</div>
-                                                <span class="badge bg-light text-secondary small" style="font-size: 10px;">Scheduled</span>
-                                            <?php endif; ?>
+                                            </div>
+                                            <div class="col-5 text-start">
+                                                <div class="fw-bold fs-6 text-dark"><?= htmlspecialchars($fix['away_team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                                                <span class="text-muted small">Away</span>
+                                            </div>
                                         </div>
-                                        <div class="col-5 text-start">
-                                            <div class="fw-bold fs-6 text-dark"><?= htmlspecialchars($fix['away_team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                            <span class="text-muted small">Away</span>
-                                        </div>
-                                    </div>
+                                    <?php else: ?>
+                                        <!-- Active Score Entry Row: Clean Horizontal Match Control -->
+                                        <form action="/tournaments/<?= (int)$tournament['id'] ?>/matches/<?= (int)$fix['id'] ?>/result" method="POST" class="py-2">
+                                            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 gap-md-3">
+                                                <div class="d-flex align-items-center justify-content-end text-end flex-grow-1" style="min-width: 110px;">
+                                                    <div>
+                                                        <div class="fw-bold fs-6 text-dark text-truncate" style="max-width: 170px;"><?= htmlspecialchars($fix['home_team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                                                        <span class="text-muted small">Home</span>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center justify-content-center gap-2 flex-shrink-0">
+                                                    <input type="number" name="home_score" class="form-control text-center fw-semibold ks-score-input" placeholder="0" min="0" required
+                                                           style="width: 60px; height: 38px; font-size: 15px; padding: 4px 6px; border-radius: var(--ks-radius-input, 6px); border-color: var(--ks-border);">
+                                                    <span class="text-muted fw-bold fs-5 px-1" style="line-height: 1; user-select: none;">&ndash;</span>
+                                                    <input type="number" name="away_score" class="form-control text-center fw-semibold ks-score-input" placeholder="0" min="0" required
+                                                           style="width: 60px; height: 38px; font-size: 15px; padding: 4px 6px; border-radius: var(--ks-radius-input, 6px); border-color: var(--ks-border);">
+                                                </div>
+                                                <div class="d-flex align-items-center justify-content-start text-start flex-grow-1" style="min-width: 110px;">
+                                                    <div>
+                                                        <div class="fw-bold fs-6 text-dark text-truncate" style="max-width: 170px;"><?= htmlspecialchars($fix['away_team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                                                        <span class="text-muted small">Away</span>
+                                                    </div>
+                                                </div>
+                                                <div class="d-flex align-items-center flex-shrink-0">
+                                                    <button type="submit" class="btn btn-sm btn-primary d-inline-flex align-items-center justify-content-center"
+                                                            style="background: var(--ks-blue); border-color: var(--ks-blue); font-size: 13px; font-weight: 600; height: 38px; padding: 0 16px; border-radius: var(--ks-radius-button); white-space: nowrap;">
+                                                        Save Score
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </form>
+                                    <?php endif; ?>
 
                                     <div class="d-flex align-items-center justify-content-between pt-2 border-top mt-2">
                                         <span class="text-muted small">
                                             <i class="bi bi-geo-alt me-1"></i> <?= htmlspecialchars($fix['venue_name'] ?? 'Main Field', ENT_QUOTES, 'UTF-8') ?>
                                         </span>
-
-                                        <!-- Enter Score Form Trigger / Inline form -->
-                                        <?php if (($fix['match_status'] ?? '') !== 'completed'): ?>
-                                            <form action="/tournaments/<?= (int)$tournament['id'] ?>/matches/<?= (int)$fix['id'] ?>/result" method="POST" class="d-flex align-items-center gap-2">
-                                                <input type="number" name="home_score" class="form-control form-control-sm text-center" placeholder="H" min="0" required style="width: 48px; font-size: 12px;">
-                                                <span class="text-muted">-</span>
-                                                <input type="number" name="away_score" class="form-control form-control-sm text-center" placeholder="A" min="0" required style="width: 48px; font-size: 12px;">
-                                                <button type="submit" class="btn btn-sm btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue); font-size: 11px; padding: 4px 10px;">
-                                                    Save Score
-                                                </button>
-                                            </form>
-                                        <?php else: ?>
+                                        <?php if (($fix['match_status'] ?? '') === 'completed'): ?>
                                             <span class="badge bg-light text-secondary border small">Result Recorded</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-light text-secondary small" style="font-size: 10px;">Scheduled</span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -176,10 +223,17 @@ ob_start();
                             <div class="col-md-3">
                                 <label class="form-label small text-muted mb-1">Venue</label>
                                 <select name="venue_id" class="form-select form-select-sm" required style="font-size: 12px;">
-                                    <option value="">Select Venue</option>
-                                    <?php foreach ($allVenues as $vn): ?>
-                                        <option value="<?= (int)$vn['id'] ?>"><?= htmlspecialchars($vn['name'], ENT_QUOTES, 'UTF-8') ?></option>
-                                    <?php endforeach; ?>
+                                    <?php if (!empty($tournament['venues']) && count($tournament['venues']) > 0): ?>
+                                        <option value="">Select Venue</option>
+                                        <?php foreach ($tournament['venues'] as $vn): ?>
+                                            <option value="<?= (int)($vn['venue_id'] ?? $vn['id']) ?>">
+                                                <?= htmlspecialchars($vn['venue_name'] ?? ($vn['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                                <?= !empty($vn['is_primary']) ? ' (Primary)' : '' ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <option value="">No venues assigned yet</option>
+                                    <?php endif; ?>
                                 </select>
                             </div>
                             <div class="col-md-4">
@@ -253,39 +307,128 @@ ob_start();
                     <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
                         <i class="bi bi-people me-2" style="color: var(--ks-blue);"></i> Enrolled Squads (<?= count($tournament['participating_teams'] ?? []) ?>)
                     </h5>
+                    <?php
+                        $activeParticipatingTeamIds = [];
+                        foreach ($tournament['participating_teams'] ?? [] as $pt) {
+                            if (($pt['status'] ?? 'approved') !== 'withdrawn') {
+                                $activeParticipatingTeamIds[] = (int)$pt['team_id'];
+                            }
+                        }
+                    ?>
                     <?php if (!empty($tournament['participating_teams']) && count($tournament['participating_teams']) > 0): ?>
                         <div class="d-flex flex-column gap-2">
                             <?php foreach ($tournament['participating_teams'] as $tm): ?>
+                                <?php $isWithdrawn = ($tm['status'] ?? '') === 'withdrawn'; ?>
                                 <div class="d-flex align-items-center justify-content-between p-2 border rounded" style="background: var(--ks-page-bg);">
                                     <div>
-                                        <div class="fw-semibold text-dark small"><?= htmlspecialchars($tm['team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="fw-semibold <?= $isWithdrawn ? 'text-muted text-decoration-line-through' : 'text-dark' ?> small"><?= htmlspecialchars($tm['team_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
                                         <span class="text-muted" style="font-size: 11px;"><?= htmlspecialchars($tm['team_code'] ?? '', ENT_QUOTES, 'UTF-8') ?> &bull; <?= htmlspecialchars($tm['age_group'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
                                     </div>
-                                    <span class="badge bg-success-subtle text-success small" style="font-size: 10px;">Confirmed</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <?php if ($isWithdrawn): ?>
+                                            <span class="badge bg-secondary-subtle text-secondary small" style="font-size: 10px;">Withdrawn</span>
+                                        <?php else: ?>
+                                            <span class="badge bg-success-subtle text-success small" style="font-size: 10px;">Confirmed</span>
+                                            <?php if (!in_array($tournament['status'] ?? '', ['completed', 'cancelled'], true)): ?>
+                                                <form action="/tournaments/<?= (int)$tournament['id'] ?>/teams/<?= (int)$tm['team_id'] ?>/remove" method="POST" class="d-inline m-0" onsubmit="return confirm('Withdraw this team from the tournament?');">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 10px; line-height: 1.4;">
+                                                        Withdraw
+                                                    </button>
+                                                </form>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
                     <?php else: ?>
                         <p class="text-muted small mb-0">No teams currently enrolled in this tournament.</p>
                     <?php endif; ?>
+
+                    <!-- Minimal Extension: Register Existing Team -->
+                    <?php if (!in_array($tournament['status'] ?? '', ['completed', 'cancelled'], true)): ?>
+                        <?php
+                            $eligibleTeams = array_filter($allTeams, function($t) use ($activeParticipatingTeamIds) {
+                                return !in_array((int)$t['id'], $activeParticipatingTeamIds, true);
+                            });
+                        ?>
+                        <?php if (!empty($eligibleTeams)): ?>
+                            <div class="mt-3 pt-3 border-top">
+                                <form action="/tournaments/<?= (int)$tournament['id'] ?>/teams/add" method="POST" class="d-flex flex-column gap-2">
+                                    <label class="form-label small fw-semibold text-muted mb-0" for="team_id">Register Team</label>
+                                    <div class="d-flex gap-2">
+                                        <select name="team_id" id="team_id" class="form-select form-select-sm" required style="font-size: 12px;">
+                                            <option value="">-- Select Team --</option>
+                                            <?php foreach ($eligibleTeams as $et): ?>
+                                                <option value="<?= (int)$et['id'] ?>">
+                                                    <?= htmlspecialchars($et['name'], ENT_QUOTES, 'UTF-8') ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-primary text-nowrap" style="background: var(--ks-blue); border-color: var(--ks-blue); font-size: 12px; padding: 4px 12px;">
+                                            <i class="bi bi-plus-lg me-1"></i> Register
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Assigned Venues Card -->
                 <div class="card p-4 mb-3" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
                     <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                        <i class="bi bi-geo-alt me-2" style="color: var(--ks-blue);"></i> Assigned Venues
+                        <i class="bi bi-geo-alt me-2" style="color: var(--ks-blue);"></i> Assigned Venues (<?= count($tournament['venues'] ?? []) ?>)
                     </h5>
                     <?php if (!empty($tournament['venues']) && count($tournament['venues']) > 0): ?>
                         <div class="d-flex flex-column gap-2">
                             <?php foreach ($tournament['venues'] as $vn): ?>
-                                <div class="p-2 border rounded" style="background: var(--ks-page-bg);">
-                                    <div class="fw-semibold text-dark small"><?= htmlspecialchars($vn['venue_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
-                                    <span class="text-muted" style="font-size: 11px;"><?= htmlspecialchars($vn['city'] ?? '', ENT_QUOTES, 'UTF-8') ?> &bull; <?= htmlspecialchars($vn['venue_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                                <div class="d-flex align-items-center justify-content-between p-2 border rounded" style="background: var(--ks-page-bg);">
+                                    <div>
+                                        <div class="fw-semibold text-dark small"><?= htmlspecialchars($vn['venue_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                                        <span class="text-muted" style="font-size: 11px;">
+                                            <?= htmlspecialchars($vn['city'] ?? '', ENT_QUOTES, 'UTF-8') ?> &bull; <?= htmlspecialchars($vn['venue_code'] ?? '', ENT_QUOTES, 'UTF-8') ?>
+                                            <?php if (!empty($vn['is_primary'])): ?>
+                                                &bull; <span class="badge bg-primary-subtle text-primary" style="font-size: 9px;">Primary</span>
+                                            <?php endif; ?>
+                                        </span>
+                                    </div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <?php if ($canManageTournaments && !in_array($tournament['status'] ?? '', ['completed', 'cancelled'], true)): ?>
+                                            <form action="/tournaments/<?= (int)$tournament['id'] ?>/venues/<?= (int)($vn['venue_id'] ?? $vn['id']) ?>/remove" method="POST" class="d-inline m-0" onsubmit="return confirm('Remove this venue from the tournament?');">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 10px; line-height: 1.4;">
+                                                    Remove
+                                                </button>
+                                            </form>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                             <?php endforeach; ?>
                         </div>
                     <?php else: ?>
                         <p class="text-muted small mb-0">No venues assigned yet.</p>
+                    <?php endif; ?>
+
+                    <!-- Minimal Extension: Assign Available Venue -->
+                    <?php if ($canManageTournaments && !in_array($tournament['status'] ?? '', ['completed', 'cancelled'], true) && !empty($eligibleVenues)): ?>
+                        <div class="mt-3 pt-3 border-top">
+                            <form action="/tournaments/<?= (int)$tournament['id'] ?>/venues/add" method="POST" class="d-flex flex-column gap-2">
+                                <label class="form-label small fw-semibold text-muted mb-0" for="venue_id">Assign Venue</label>
+                                <div class="d-flex gap-2">
+                                    <select name="venue_id" id="venue_id" class="form-select form-select-sm" required style="font-size: 12px;">
+                                        <option value="">-- Select Venue --</option>
+                                        <?php foreach ($eligibleVenues as $ev): ?>
+                                            <option value="<?= (int)$ev['id'] ?>">
+                                                <?= htmlspecialchars($ev['name'], ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($ev['city'] ?? '', ENT_QUOTES, 'UTF-8') ?>)
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-primary text-nowrap" style="background: var(--ks-blue); border-color: var(--ks-blue); font-size: 12px; padding: 4px 12px;">
+                                        <i class="bi bi-plus-lg me-1"></i> Assign
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     <?php endif; ?>
                 </div>
 

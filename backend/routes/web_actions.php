@@ -16,8 +16,8 @@ $currentUser = $_SESSION['auth']['user'] ?? [
     'first_name' => 'Rajesh',
     'last_name' => 'Sharma'
 ];
-$orgId = (int)($_SESSION['auth']['organization']['id'] ?? 1);
-$userId = (int)($currentUser['id'] ?? 5);
+$orgId = current_organization_id();
+$userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
 
 // ==========================================
 // 1. ATHLETE ACTIONS
@@ -180,12 +180,105 @@ if (preg_match('#^/athletes/(\d+)/edit$#', $uri, $m)) {
     }
 }
 
-if (preg_match('#^/athletes/(\d+)/delete$#', $uri, $m)) {
+if (preg_match('#^/athletes/(\d+)/status$#', $uri, $m)) {
     $athleteId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $status = trim($_POST['status'] ?? '');
+    if (!in_array($status, ['active', 'inactive'], true)) {
+        header('Location: /athletes?error=' . urlencode('Invalid status value.'));
+        exit;
+    }
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdate = $permissionService->hasPermission($userPayload, 'athlete.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'athlete.edit', $orgId);
+
+    if (!$canUpdate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('athlete.update', $userPermissions, true)
+                  || in_array('athlete.edit', $userPermissions, true);
+    }
+
+    if (!$canUpdate) {
+        header('Location: /athletes?error=' . urlencode('Unauthorized: You do not have permission to update athlete status.'));
+        exit;
+    }
+
     $athleteService = new \App\Services\Athlete\AthleteService();
     try {
+        $ok = $athleteService->updateStatus($orgId, $athleteId, $status, $userId);
+        if ($ok) {
+            header('Location: /athletes?success=' . urlencode('Athlete status updated to ' . ucfirst($status) . '.'));
+        } else {
+            header('Location: /athletes?error=' . urlencode('Athlete not found or access denied.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /athletes?error=' . urlencode('Unable to update athlete status: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/athletes/(\d+)/delete$#', $uri, $m)) {
+    $athleteId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canDelete = $permissionService->hasPermission($userPayload, 'athlete.delete', $orgId)
+              || $permissionService->hasPermission($userPayload, 'athlete.update', $orgId);
+
+    if (!$canDelete) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canDelete = in_array('athlete.delete', $userPermissions, true)
+                  || in_array('athlete.update', $userPermissions, true);
+    }
+
+    if (!$canDelete) {
+        header('Location: /athletes?error=' . urlencode('Unauthorized: You do not have permission to delete athletes.'));
+        exit;
+    }
+
+    $athleteService = new \App\Services\Athlete\AthleteService();
+    $existing = $athleteService->getAthlete($orgId, $athleteId);
+    if (!$existing) {
+        header('Location: /athletes?error=' . urlencode('Athlete not found or access denied.'));
+        exit;
+    }
+
+    try {
         $ok = $athleteService->deleteAthlete($orgId, $athleteId, $userId);
-        header('Location: /athletes?success=' . urlencode('Athlete record removed successfully.'));
+        if ($ok) {
+            header('Location: /athletes?success=' . urlencode('Athlete record removed successfully.'));
+        } else {
+            header('Location: /athletes?error=' . urlencode('Failed to remove athlete.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /athletes?error=' . urlencode('Unable to delete athlete: ' . $e->getMessage()));
@@ -299,10 +392,50 @@ if (preg_match('#^/coaches/(\d+)/edit$#', $uri, $m)) {
 
 if (preg_match('#^/coaches/(\d+)/delete$#', $uri, $m)) {
     $coachId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canDelete = $permissionService->hasPermission($userPayload, 'coach.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'coach.update', $orgId);
+
+    if (!$canDelete) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canDelete = in_array('coach.manage', $userPermissions, true)
+                  || in_array('coach.update', $userPermissions, true);
+    }
+
+    if (!$canDelete) {
+        header('Location: /coaches?error=' . urlencode('Unauthorized: You do not have permission to delete coaches.'));
+        exit;
+    }
+
     $coachService = new \App\Services\Coach\CoachService();
+    $existing = $coachService->getCoach($orgId, $coachId);
+    if (!$existing) {
+        header('Location: /coaches?error=' . urlencode('Coach not found or access denied.'));
+        exit;
+    }
+
     try {
         $ok = $coachService->deleteCoach($orgId, $coachId, $userId);
-        header('Location: /coaches?success=' . urlencode('Coach record removed successfully.'));
+        if ($ok) {
+            header('Location: /coaches?success=' . urlencode('Coach record removed successfully.'));
+        } else {
+            header('Location: /coaches?error=' . urlencode('Failed to remove coach.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /coaches?error=' . urlencode('Unable to delete coach: ' . $e->getMessage()));
@@ -320,17 +453,23 @@ if (preg_match('#^/coaches/(\d+)/status$#', $uri, $m)) {
 
     // RBAC Authorization Check using existing PermissionService
     $permissionService = new \App\Services\Rbac\PermissionService();
-    $canUpdate = false;
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdate = $permissionService->hasPermission($userPayload, 'coach.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'coach.manage', $orgId);
 
-    if (isset($_SESSION['auth'])) {
-        $canUpdate = $permissionService->hasPermission($_SESSION['auth'], 'coach.update', $orgId)
-                  || $permissionService->hasPermission($_SESSION['auth'], 'coach.manage', $orgId);
-    }
     if (!$canUpdate) {
-        $perms = $permissionService->getUserPermissions($userId, $orgId);
-        $canUpdate = in_array('coach.update', $perms, true)
-                  || in_array('coach.manage', $perms, true)
-                  || ($userId === 1 || ($currentUser['role_id'] ?? 0) === 1);
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('coach.update', $userPermissions, true)
+                  || in_array('coach.manage', $userPermissions, true);
     }
 
     if (!$canUpdate) {
@@ -405,15 +544,341 @@ if (preg_match('#^/teams/(\d+)/edit$#', $uri, $m)) {
     }
 }
 
-if (preg_match('#^/teams/(\d+)/delete$#', $uri, $m)) {
+if (preg_match('#^/teams/(\d+)/status$#', $uri, $m)) {
     $teamId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $status = trim($_POST['status'] ?? '');
+    if (!in_array($status, ['active', 'inactive'], true)) {
+        header('Location: /teams?error=' . urlencode('Invalid status value.'));
+        exit;
+    }
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdate = $permissionService->hasPermission($userPayload, 'team.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canUpdate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('team.update', $userPermissions, true)
+                  || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canUpdate) {
+        header('Location: /teams?error=' . urlencode('Unauthorized: You do not have permission to update team status.'));
+        exit;
+    }
+
     $teamService = new \App\Services\Team\TeamService();
     try {
+        $ok = $teamService->updateStatus($orgId, $teamId, $status, $userId);
+        if ($ok) {
+            header('Location: /teams?success=' . urlencode('Team status updated to ' . ucfirst($status) . '.'));
+        } else {
+            header('Location: /teams?error=' . urlencode('Team not found or access denied.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams?error=' . urlencode('Unable to update team status: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/teams/(\d+)/delete$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canDelete = $permissionService->hasPermission($userPayload, 'team.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'team.update', $orgId);
+
+    if (!$canDelete) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canDelete = in_array('team.manage', $userPermissions, true)
+                  || in_array('team.update', $userPermissions, true);
+    }
+
+    if (!$canDelete) {
+        header('Location: /teams?error=' . urlencode('Unauthorized: You do not have permission to delete teams.'));
+        exit;
+    }
+
+    $teamService = new \App\Services\Team\TeamService();
+    $existing = $teamService->getTeam($orgId, $teamId);
+    if (!$existing) {
+        header('Location: /teams?error=' . urlencode('Team not found or access denied.'));
+        exit;
+    }
+
+    try {
         $ok = $teamService->deleteTeam($orgId, $teamId, $userId);
-        header('Location: /teams?success=' . urlencode('Team record removed successfully.'));
+        if ($ok) {
+            header('Location: /teams?success=' . urlencode('Team record removed successfully.'));
+        } else {
+            header('Location: /teams?error=' . urlencode('Failed to remove team.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /teams?error=' . urlencode('Unable to delete team: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/teams/(\d+)/roster/add$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization check using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManageRoster = $permissionService->hasPermission($userPayload, 'team.members.manage', $orgId)
+                    || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canManageRoster) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManageRoster = in_array('team.members.manage', $userPermissions, true)
+                        || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canManageRoster) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unauthorized: You do not have permission to manage team rosters.'));
+        exit;
+    }
+
+    $athleteId = (int)($_POST['athlete_id'] ?? 0);
+    if ($athleteId <= 0) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Please select a valid athlete to add.'));
+        exit;
+    }
+
+    $teamService = new \App\Services\Team\TeamService();
+    try {
+        $ok = $teamService->addAthlete($orgId, $teamId, $athleteId, $_POST, $userId);
+        if ($ok) {
+            header('Location: /teams/' . $teamId . '?success=' . urlencode('Athlete added to team roster successfully.'));
+        } else {
+            header('Location: /teams/' . $teamId . '?error=' . urlencode('Failed to add athlete to team roster.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to add athlete: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/teams/(\d+)/roster/(\d+)/remove$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $athleteId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization check using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManageRoster = $permissionService->hasPermission($userPayload, 'team.members.manage', $orgId)
+                    || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canManageRoster) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManageRoster = in_array('team.members.manage', $userPermissions, true)
+                        || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canManageRoster) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unauthorized: You do not have permission to manage team rosters.'));
+        exit;
+    }
+
+    if ($athleteId <= 0) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Invalid athlete specified.'));
+        exit;
+    }
+
+    $teamService = new \App\Services\Team\TeamService();
+    try {
+        $ok = $teamService->removeAthlete($orgId, $teamId, $athleteId, $userId);
+        if ($ok) {
+            header('Location: /teams/' . $teamId . '?success=' . urlencode('Athlete removed from active roster successfully.'));
+        } else {
+            header('Location: /teams/' . $teamId . '?error=' . urlencode('Failed to remove athlete from roster.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to remove athlete: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/teams/(\d+)/coaches/assign$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization check using PermissionService semantics (no role-name bypasses)
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManageCoaches = $permissionService->hasPermission($userPayload, 'team.coaches.manage', $orgId)
+                     || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canManageCoaches) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManageCoaches = in_array('team.coaches.manage', $userPermissions, true)
+                         || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canManageCoaches) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unauthorized: You do not have permission to manage team coaches.'));
+        exit;
+    }
+
+    $coachId = (int)($_POST['coach_id'] ?? 0);
+    if ($coachId <= 0) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Please select a valid coach to assign.'));
+        exit;
+    }
+
+    $role = trim((string)($_POST['coach_role'] ?? 'head_coach'));
+
+    // Primary checkbox semantics:
+    // Explicit true => true; Explicit false => false; Omitted/Not passed => null (use service default convention)
+    $isPrimary = null;
+    if (isset($_POST['is_primary'])) {
+        $val = $_POST['is_primary'];
+        if (is_array($val)) {
+            $val = end($val);
+        }
+        $isPrimary = in_array((string)$val, ['1', 'true', 'on', 'yes'], true);
+    }
+
+    $teamService = new \App\Services\Team\TeamService();
+    try {
+        $ok = $teamService->assignCoach($orgId, $teamId, $coachId, $role, $isPrimary, $userId);
+        if ($ok) {
+            header('Location: /teams/' . $teamId . '?success=' . urlencode('Coach assigned to team staff successfully.'));
+        } else {
+            header('Location: /teams/' . $teamId . '?error=' . urlencode('Failed to assign coach to team staff.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to assign coach: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/teams/(\d+)/coaches/(\d+)/remove$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $coachId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization check using PermissionService semantics (no role-name bypasses)
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManageCoaches = $permissionService->hasPermission($userPayload, 'team.coaches.manage', $orgId)
+                     || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canManageCoaches) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManageCoaches = in_array('team.coaches.manage', $userPermissions, true)
+                         || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canManageCoaches) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unauthorized: You do not have permission to manage team coaches.'));
+        exit;
+    }
+
+    if ($coachId <= 0) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Invalid coach specified.'));
+        exit;
+    }
+
+    $teamService = new \App\Services\Team\TeamService();
+    try {
+        $ok = $teamService->removeCoach($orgId, $teamId, $coachId, $userId);
+        if ($ok) {
+            header('Location: /teams/' . $teamId . '?success=' . urlencode('Coach removed from active coaching staff successfully.'));
+        } else {
+            header('Location: /teams/' . $teamId . '?error=' . urlencode('Failed to remove coach from team staff.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to remove coach: ' . $e->getMessage()));
         exit;
     }
 }
@@ -504,17 +969,122 @@ if (preg_match('#^/training/(\d+)/delete$#', $uri, $m)) {
 // 5. TOURNAMENT ACTIONS
 // ==========================================
 if ($uri === '/tournaments/create') {
-    $name = trim($_POST['name'] ?? '');
-    $sportId = (int)($_POST['sport_id'] ?? 0);
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
 
-    if (empty($name) || empty($sportId)) {
-        header('Location: /tournaments/create?error=' . urlencode('Tournament Name and Sport are required.'));
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canCreate = $permissionService->hasPermission($userPayload, 'tournament.create', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId);
+
+    if (!$canCreate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canCreate = in_array('tournament.create', $userPermissions, true)
+                  || in_array('tournament.manage', $userPermissions, true);
+    }
+
+    if (!$canCreate) {
+        header('Location: /tournaments?error=' . urlencode('Unauthorized: You do not have permission to create tournaments.'));
         exit;
     }
 
+    // Input Validation & Sanitization
+    $name = trim($_POST['name'] ?? '');
+    $sportId = (int)($_POST['sport_id'] ?? 0);
+    $startDate = trim($_POST['start_date'] ?? '');
+    $endDate = trim($_POST['end_date'] ?? '');
+    $status = trim($_POST['status'] ?? 'draft');
+    $levelId = !empty($_POST['tournament_level_id']) ? (int)$_POST['tournament_level_id'] : 1;
+    $formatId = !empty($_POST['tournament_format_id']) ? (int)$_POST['tournament_format_id'] : 1;
+    $venueId = !empty($_POST['venue_id']) ? (int)$_POST['venue_id'] : null;
+
+    if (empty($name)) {
+        header('Location: /tournaments/create?error=' . urlencode('Tournament Name is required.'));
+        exit;
+    }
+
+    if ($sportId <= 0) {
+        header('Location: /tournaments/create?error=' . urlencode('Please select a valid sport.'));
+        exit;
+    }
+
+    if (empty($startDate) || !strtotime($startDate)) {
+        header('Location: /tournaments/create?error=' . urlencode('Valid Start Date is required.'));
+        exit;
+    }
+
+    if (empty($endDate) || !strtotime($endDate)) {
+        header('Location: /tournaments/create?error=' . urlencode('Valid End Date is required.'));
+        exit;
+    }
+
+    if (strtotime($endDate) < strtotime($startDate)) {
+        header('Location: /tournaments/create?error=' . urlencode('End Date cannot be earlier than Start Date.'));
+        exit;
+    }
+
+    $validStatuses = ['draft', 'registration_open', 'registration_closed', 'ongoing', 'completed', 'cancelled'];
+    if (!in_array($status, $validStatuses, true)) {
+        header('Location: /tournaments/create?error=' . urlencode('Invalid tournament status selected.'));
+        exit;
+    }
+
+    // Tenant isolation: verify primary venue belongs to current organization
+    if (!empty($venueId)) {
+        $db = \App\Services\BaseService::getDatabaseConnection();
+        $vStmt = $db->prepare("SELECT id FROM venues WHERE id = :id AND organization_id = :org_id AND deleted_at IS NULL LIMIT 1");
+        $vStmt->execute([':id' => $venueId, ':org_id' => $orgId]);
+        if (!$vStmt->fetchColumn()) {
+            header('Location: /tournaments/create?error=' . urlencode('Selected venue is invalid or does not belong to your organization.'));
+            exit;
+        }
+    }
+
+    // Sanitize team_ids array
+    $teamIds = [];
+    if (!empty($_POST['team_ids']) && is_array($_POST['team_ids'])) {
+        foreach ($_POST['team_ids'] as $tid) {
+            $tInt = (int)$tid;
+            if ($tInt > 0) {
+                $teamIds[] = $tInt;
+            }
+        }
+    }
+
+    $payload = [
+        'name' => $name,
+        'sport_id' => $sportId,
+        'tournament_level_id' => $levelId,
+        'tournament_format_id' => $formatId,
+        'status' => $status,
+        'start_date' => $startDate,
+        'end_date' => $endDate,
+        'venue_id' => $venueId,
+        'organizer_name' => trim($_POST['organizer_name'] ?? 'Apex Sports Academy'),
+        'location_name' => trim($_POST['location_name'] ?? 'Main Stadium Complex'),
+        'city' => trim($_POST['city'] ?? 'Mumbai'),
+        'state' => trim($_POST['state'] ?? 'Maharashtra'),
+        'description' => trim($_POST['description'] ?? ''),
+        'rules' => trim($_POST['rules'] ?? ''),
+        'team_ids' => $teamIds,
+    ];
+
     $tournService = new \App\Services\Tournament\TournamentService();
     try {
-        $created = $tournService->createTournament($orgId, $_POST, $userId);
+        $created = $tournService->createTournament($orgId, $payload, $userId);
         $tournId = $created['id'] ?? null;
         if ($tournId) {
             header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Tournament created successfully.'));
@@ -530,16 +1100,104 @@ if ($uri === '/tournaments/create') {
 
 if (preg_match('#^/tournaments/(\d+)/edit$#', $uri, $m)) {
     $tournId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdate = $permissionService->hasPermission($userPayload, 'tournament.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId);
+
+    if (!$canUpdate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('tournament.update', $userPermissions, true)
+                  || in_array('tournament.manage', $userPermissions, true);
+    }
+
+    if (!$canUpdate) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to update tournaments.'));
+        exit;
+    }
+
+    // Verify tournament exists and belongs to current organization (tenant isolation)
+    $tournService = new \App\Services\Tournament\TournamentService();
+    $existing = $tournService->getTournament($orgId, $tournId);
+    if (!$existing) {
+        header('Location: /tournaments?error=' . urlencode('Tournament not found or access denied.'));
+        exit;
+    }
+
+    // Input Validation & Sanitization
     $name = trim($_POST['name'] ?? '');
+    $sportId = (int)($_POST['sport_id'] ?? 0);
+    $startDate = trim($_POST['start_date'] ?? '');
+    $endDate = trim($_POST['end_date'] ?? '');
+    $status = trim($_POST['status'] ?? '');
+    $levelId = !empty($_POST['tournament_level_id']) ? (int)$_POST['tournament_level_id'] : null;
+    $formatId = !empty($_POST['tournament_format_id']) ? (int)$_POST['tournament_format_id'] : null;
 
     if (empty($name)) {
         header('Location: /tournaments/' . $tournId . '/edit?error=' . urlencode('Tournament Name is required.'));
         exit;
     }
 
-    $tournService = new \App\Services\Tournament\TournamentService();
+    if ($sportId <= 0) {
+        header('Location: /tournaments/' . $tournId . '/edit?error=' . urlencode('Please select a valid sport.'));
+        exit;
+    }
+
+    if (empty($startDate) || !strtotime($startDate)) {
+        header('Location: /tournaments/' . $tournId . '/edit?error=' . urlencode('Valid Start Date is required.'));
+        exit;
+    }
+
+    if (empty($endDate) || !strtotime($endDate)) {
+        header('Location: /tournaments/' . $tournId . '/edit?error=' . urlencode('Valid End Date is required.'));
+        exit;
+    }
+
+    if (strtotime($endDate) < strtotime($startDate)) {
+        header('Location: /tournaments/' . $tournId . '/edit?error=' . urlencode('End Date cannot be earlier than Start Date.'));
+        exit;
+    }
+
+    $validStatuses = ['draft', 'registration_open', 'registration_closed', 'ongoing', 'completed', 'cancelled'];
+    if (!empty($status) && !in_array($status, $validStatuses, true)) {
+        header('Location: /tournaments/' . $tournId . '/edit?error=' . urlencode('Invalid tournament status selected.'));
+        exit;
+    }
+
+    $payload = [
+        'name' => $name,
+        'sport_id' => $sportId,
+        'tournament_level_id' => $levelId ?? $existing['tournament_level_id'],
+        'tournament_format_id' => $formatId ?? $existing['tournament_format_id'],
+        'status' => !empty($status) ? $status : $existing['status'],
+        'start_date' => $startDate,
+        'end_date' => $endDate,
+        'organizer_name' => trim($_POST['organizer_name'] ?? ($existing['organizer_name'] ?? '')),
+        'location_name' => trim($_POST['location_name'] ?? ($existing['location_name'] ?? '')),
+        'city' => trim($_POST['city'] ?? ($existing['city'] ?? '')),
+        'state' => trim($_POST['state'] ?? ($existing['state'] ?? '')),
+        'description' => trim($_POST['description'] ?? ($existing['description'] ?? '')),
+        'rules' => trim($_POST['rules'] ?? ($existing['rules'] ?? '')),
+    ];
+
     try {
-        $ok = $tournService->updateTournament($orgId, $tournId, $_POST, $userId);
+        $ok = $tournService->updateTournament($orgId, $tournId, $payload, $userId);
         if ($ok) {
             header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Tournament updated successfully.'));
         } else {
@@ -552,19 +1210,164 @@ if (preg_match('#^/tournaments/(\d+)/edit$#', $uri, $m)) {
     }
 }
 
-if (preg_match('#^/tournaments/(\d+)/fixtures/create$#', $uri, $m)) {
+if (preg_match('#^/tournaments/(\d+)/fixtures/generate$#', $uri, $m)) {
     $tournId = (int)$m[1];
-    $homeId = (int)($_POST['home_team_id'] ?? 0);
-    $awayId = (int)($_POST['away_team_id'] ?? 0);
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
 
-    if (empty($homeId) || empty($awayId) || $homeId === $awayId) {
-        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Please select two distinct teams for the fixture.'));
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManage = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId);
+
+    if (!$canManage) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManage = in_array('tournament.manage', $userPermissions, true)
+                  || in_array('tournament.update', $userPermissions, true);
+    }
+
+    if (!$canManage) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to generate fixtures.'));
         exit;
     }
 
     $tournService = new \App\Services\Tournament\TournamentService();
     try {
-        $tournService->createFixture($orgId, $tournId, $_POST, $userId);
+        $result = $tournService->generateFixtures($orgId, $tournId, $userId);
+        header('Location: /tournaments/' . $tournId . '?success=' . urlencode("Successfully generated {$result['count']} fixtures."));
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unable to generate fixtures: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/tournaments/(\d+)/fixtures/create$#', $uri, $m)) {
+    $tournId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManage = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId);
+
+    if (!$canManage) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManage = in_array('tournament.manage', $userPermissions, true)
+                  || in_array('tournament.update', $userPermissions, true);
+    }
+
+    if (!$canManage) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to schedule fixtures.'));
+        exit;
+    }
+
+    // Tenant verification: ensure tournament exists and belongs to current tenant
+    $tournService = new \App\Services\Tournament\TournamentService();
+    $tournament = $tournService->getTournament($orgId, $tournId);
+    if (!$tournament) {
+        header('Location: /tournaments?error=' . urlencode('Tournament not found or access denied.'));
+        exit;
+    }
+
+    $homeId = (int)($_POST['home_team_id'] ?? 0);
+    $awayId = (int)($_POST['away_team_id'] ?? 0);
+    $venueId = (int)($_POST['venue_id'] ?? 0);
+    $roundName = trim($_POST['round_name'] ?? 'Round 1');
+    $scheduledDate = trim($_POST['scheduled_date'] ?? '');
+    $scheduledStartTime = trim($_POST['scheduled_start_time'] ?? '');
+
+    if ($homeId <= 0 || $awayId <= 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Please select both home and away teams.'));
+        exit;
+    }
+
+    if ($homeId === $awayId) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Home and away teams must be distinct.'));
+        exit;
+    }
+
+    if ($venueId <= 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Please select a valid venue.'));
+        exit;
+    }
+
+    if (empty($scheduledDate) || !strtotime($scheduledDate)) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Valid match date is required.'));
+        exit;
+    }
+
+    if (empty($scheduledStartTime)) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Valid start time is required.'));
+        exit;
+    }
+
+    // Tenant isolation: verify venue belongs to current organization
+    $db = \App\Services\BaseService::getDatabaseConnection();
+    $vStmt = $db->prepare("SELECT id FROM venues WHERE id = :v_id AND organization_id = :org_id AND deleted_at IS NULL LIMIT 1");
+    $vStmt->execute([':v_id' => $venueId, ':org_id' => $orgId]);
+    if (!$vStmt->fetchColumn()) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Selected venue is invalid or does not belong to your organization.'));
+        exit;
+    }
+
+    // Verify venue is assigned to this tournament
+    $tvStmt = $db->prepare("SELECT 1 FROM tournament_venues WHERE tournament_id = :tour_id AND venue_id = :v_id LIMIT 1");
+    $tvStmt->execute([':tour_id' => $tournId, ':v_id' => $venueId]);
+    if (!$tvStmt->fetchColumn()) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Selected venue is not assigned to this tournament. Please assign the venue to the tournament first.'));
+        exit;
+    }
+
+    // Verify both teams belong to the tournament
+    $ttStmt = $db->prepare("SELECT team_id FROM tournament_teams WHERE tournament_id = :tour_id AND team_id IN (:h_id, :a_id)");
+    $ttStmt->execute([':tour_id' => $tournId, ':h_id' => $homeId, ':a_id' => $awayId]);
+    $enrolledTeams = $ttStmt->fetchAll(PDO::FETCH_COLUMN);
+    if (count($enrolledTeams) < 2) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Both teams must be enrolled in this tournament before scheduling a fixture.'));
+        exit;
+    }
+
+    $payload = [
+        'round_name' => !empty($roundName) ? $roundName : 'Round 1',
+        'home_team_id' => $homeId,
+        'away_team_id' => $awayId,
+        'venue_id' => $venueId,
+        'scheduled_date' => $scheduledDate,
+        'scheduled_start_time' => $scheduledStartTime,
+        'group_name' => trim($_POST['group_name'] ?? ''),
+        'notes' => trim($_POST['notes'] ?? ''),
+    ];
+
+    try {
+        $tournService->createFixture($orgId, $tournId, $payload, $userId);
         header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Fixture and match scheduled successfully.'));
         exit;
     } catch (\Throwable $e) {
@@ -575,12 +1378,100 @@ if (preg_match('#^/tournaments/(\d+)/fixtures/create$#', $uri, $m)) {
 
 if (preg_match('#^/tournaments/(\d+)/matches/(\d+)/result$#', $uri, $m)) {
     $tournId = (int)$m[1];
-    $fixId = (int)$m[2];
+    $targetId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
 
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdateResult = $permissionService->hasPermission($userPayload, 'tournament.update', $orgId)
+                    || $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId);
+
+    if (!$canUpdateResult) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdateResult = in_array('tournament.update', $userPermissions, true)
+                        || in_array('tournament.manage', $userPermissions, true);
+    }
+
+    if (!$canUpdateResult) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to record match results.'));
+        exit;
+    }
+
+    // Tenant verification: tournament exists and belongs to current tenant
     $tournService = new \App\Services\Tournament\TournamentService();
+    $tournament = $tournService->getTournament($orgId, $tournId);
+    if (!$tournament) {
+        header('Location: /tournaments?error=' . urlencode('Tournament not found or access denied.'));
+        exit;
+    }
+
+    // Resolve fixture ID within tenant and tournament boundary (supports fixture ID or match ID)
+    $db = \App\Services\BaseService::getDatabaseConnection();
+    $fStmt = $db->prepare("SELECT id, tournament_id FROM fixtures WHERE id = :id AND organization_id = :org_id AND tournament_id = :tour_id AND deleted_at IS NULL LIMIT 1");
+    $fStmt->execute([':id' => $targetId, ':org_id' => $orgId, ':tour_id' => $tournId]);
+    $fixture = $fStmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$fixture) {
+        $mStmt = $db->prepare("
+            SELECT f.id as fixture_id, f.tournament_id
+            FROM matches m
+            JOIN fixtures f ON m.fixture_id = f.id
+            WHERE m.id = :id AND f.organization_id = :org_id AND f.tournament_id = :tour_id AND f.deleted_at IS NULL
+            LIMIT 1
+        ");
+        $mStmt->execute([':id' => $targetId, ':org_id' => $orgId, ':tour_id' => $tournId]);
+        $matchFixture = $mStmt->fetch(PDO::FETCH_ASSOC);
+        if ($matchFixture) {
+            $fixtureId = (int)$matchFixture['fixture_id'];
+        } else {
+            header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Match or fixture not found or access denied.'));
+            exit;
+        }
+    } else {
+        $fixtureId = (int)$fixture['id'];
+    }
+
+    // Validate score inputs: required, non-negative integers
+    if (!isset($_POST['home_score']) || !isset($_POST['away_score']) || $_POST['home_score'] === '' || $_POST['away_score'] === '') {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Both home and away scores are required.'));
+        exit;
+    }
+
+    $homeScoreRaw = trim((string)$_POST['home_score']);
+    $awayScoreRaw = trim((string)$_POST['away_score']);
+
+    if (filter_var($homeScoreRaw, FILTER_VALIDATE_INT) === false || (int)$homeScoreRaw < 0 ||
+        filter_var($awayScoreRaw, FILTER_VALIDATE_INT) === false || (int)$awayScoreRaw < 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Scores must be non-negative integers.'));
+        exit;
+    }
+
+    $payload = [
+        'home_score' => (int)$homeScoreRaw,
+        'away_score' => (int)$awayScoreRaw,
+    ];
+
     try {
-        $tournService->updateMatchResult($orgId, $fixId, $_POST, $userId);
-        header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Match result and standings updated successfully.'));
+        $ok = $tournService->updateMatchResult($orgId, $fixtureId, $payload, $userId);
+        if ($ok) {
+            header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Match result and standings updated successfully.'));
+        } else {
+            header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Failed to record match result.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unable to record score: ' . $e->getMessage()));
@@ -590,13 +1481,276 @@ if (preg_match('#^/tournaments/(\d+)/matches/(\d+)/result$#', $uri, $m)) {
 
 if (preg_match('#^/tournaments/(\d+)/delete$#', $uri, $m)) {
     $tournId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canDelete = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId);
+
+    if (!$canDelete) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canDelete = in_array('tournament.manage', $userPermissions, true);
+    }
+
+    if (!$canDelete) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to delete tournaments.'));
+        exit;
+    }
+
+    // Verify tournament exists and belongs to current organization (tenant isolation)
     $tournService = new \App\Services\Tournament\TournamentService();
+    $existing = $tournService->getTournament($orgId, $tournId);
+    if (!$existing) {
+        header('Location: /tournaments?error=' . urlencode('Tournament not found or access denied.'));
+        exit;
+    }
+
     try {
         $ok = $tournService->deleteTournament($orgId, $tournId, $userId);
-        header('Location: /tournaments?success=' . urlencode('Tournament removed successfully.'));
+        if ($ok) {
+            header('Location: /tournaments?success=' . urlencode('Tournament removed successfully.'));
+        } else {
+            header('Location: /tournaments?error=' . urlencode('Failed to remove tournament.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /tournaments?error=' . urlencode('Unable to delete tournament: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/tournaments/(\d+)/teams/add$#', $uri, $m)) {
+    $tournId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManage = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId);
+
+    if (!$canManage) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManage = in_array('tournament.manage', $userPermissions, true)
+                  || in_array('tournament.update', $userPermissions, true);
+    }
+
+    if (!$canManage) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to register tournament teams.'));
+        exit;
+    }
+
+    $teamId = (int)($_POST['team_id'] ?? 0);
+    if ($teamId <= 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Please select a valid team to register.'));
+        exit;
+    }
+
+    $tournService = new \App\Services\Tournament\TournamentService();
+    try {
+        $ok = $tournService->addTeam($orgId, $tournId, $teamId, $userId);
+        if ($ok) {
+            header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Team registered for tournament successfully.'));
+        } else {
+            header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Failed to register team for tournament.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unable to register team: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/tournaments/(\d+)/teams/(\d+)/remove$#', $uri, $m)) {
+    $tournId = (int)$m[1];
+    $teamId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManage = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId);
+
+    if (!$canManage) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManage = in_array('tournament.manage', $userPermissions, true)
+                  || in_array('tournament.update', $userPermissions, true);
+    }
+
+    if (!$canManage) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to manage tournament teams.'));
+        exit;
+    }
+
+    if ($teamId <= 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Invalid team specified.'));
+        exit;
+    }
+
+    $tournService = new \App\Services\Tournament\TournamentService();
+    try {
+        $ok = $tournService->removeTeam($orgId, $tournId, $teamId, $userId);
+        if ($ok) {
+            header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Team withdrawn from tournament successfully.'));
+        } else {
+            header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Failed to withdraw team from tournament.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unable to withdraw team: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/tournaments/(\d+)/venues/add$#', $uri, $m)) {
+    $tournId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManage = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId);
+
+    if (!$canManage) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManage = in_array('tournament.manage', $userPermissions, true)
+                  || in_array('tournament.update', $userPermissions, true);
+    }
+
+    if (!$canManage) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to assign tournament venues.'));
+        exit;
+    }
+
+    $venueId = (int)($_POST['venue_id'] ?? 0);
+    if ($venueId <= 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Please select a valid venue to assign.'));
+        exit;
+    }
+
+    $isPrimary = !empty($_POST['is_primary']);
+
+    $tournService = new \App\Services\Tournament\TournamentService();
+    try {
+        $ok = $tournService->addVenue($orgId, $tournId, $venueId, $isPrimary, $userId);
+        if ($ok) {
+            header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Venue assigned to tournament successfully.'));
+        } else {
+            header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Failed to assign venue to tournament.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unable to assign venue: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/tournaments/(\d+)/venues/(\d+)/remove$#', $uri, $m)) {
+    $tournId = (int)$m[1];
+    $venueId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization using existing PermissionService semantics
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManage = $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'tournament.update', $orgId);
+
+    if (!$canManage) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManage = in_array('tournament.manage', $userPermissions, true)
+                  || in_array('tournament.update', $userPermissions, true);
+    }
+
+    if (!$canManage) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unauthorized: You do not have permission to manage tournament venues.'));
+        exit;
+    }
+
+    if ($venueId <= 0) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Invalid venue specified.'));
+        exit;
+    }
+
+    $tournService = new \App\Services\Tournament\TournamentService();
+    try {
+        $ok = $tournService->removeVenue($orgId, $tournId, $venueId, $userId);
+        if ($ok) {
+            header('Location: /tournaments/' . $tournId . '?success=' . urlencode('Venue removed from tournament successfully.'));
+        } else {
+            header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Failed to remove venue from tournament.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /tournaments/' . $tournId . '?error=' . urlencode('Unable to remove venue: ' . $e->getMessage()));
         exit;
     }
 }
@@ -695,12 +1849,105 @@ if ($uri === '/venues/bookings/create') {
     }
 }
 
-if (preg_match('#^/venues/(\d+)/delete$#', $uri, $m)) {
+if (preg_match('#^/venues/(\d+)/status$#', $uri, $m)) {
     $venueId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $status = trim($_POST['status'] ?? '');
+    if (!in_array($status, ['active', 'inactive'], true)) {
+        header('Location: /venues?error=' . urlencode('Invalid status value.'));
+        exit;
+    }
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdate = $permissionService->hasPermission($userPayload, 'venue.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'venue.manage', $orgId);
+
+    if (!$canUpdate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('venue.update', $userPermissions, true)
+                  || in_array('venue.manage', $userPermissions, true);
+    }
+
+    if (!$canUpdate) {
+        header('Location: /venues?error=' . urlencode('Unauthorized: You do not have permission to update venue status.'));
+        exit;
+    }
+
     $venueService = new \App\Services\Venue\VenueService();
     try {
+        $ok = $venueService->updateStatus($orgId, $venueId, $status, $userId);
+        if ($ok) {
+            header('Location: /venues?success=' . urlencode('Venue status updated to ' . ucfirst($status) . '.'));
+        } else {
+            header('Location: /venues?error=' . urlencode('Venue not found or access denied.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /venues?error=' . urlencode('Unable to update venue status: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/venues/(\d+)/delete$#', $uri, $m)) {
+    $venueId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canDelete = $permissionService->hasPermission($userPayload, 'venue.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'venue.update', $orgId);
+
+    if (!$canDelete) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canDelete = in_array('venue.manage', $userPermissions, true)
+                  || in_array('venue.update', $userPermissions, true);
+    }
+
+    if (!$canDelete) {
+        header('Location: /venues?error=' . urlencode('Unauthorized: You do not have permission to delete venues.'));
+        exit;
+    }
+
+    $venueService = new \App\Services\Venue\VenueService();
+    $existing = $venueService->getVenue($orgId, $venueId);
+    if (!$existing) {
+        header('Location: /venues?error=' . urlencode('Venue not found or access denied.'));
+        exit;
+    }
+
+    try {
         $ok = $venueService->deleteVenue($orgId, $venueId, $userId);
-        header('Location: /venues?success=' . urlencode('Venue removed successfully.'));
+        if ($ok) {
+            header('Location: /venues?success=' . urlencode('Venue removed successfully.'));
+        } else {
+            header('Location: /venues?error=' . urlencode('Failed to remove venue.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /venues?error=' . urlencode('Unable to delete venue: ' . $e->getMessage()));

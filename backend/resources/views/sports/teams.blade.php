@@ -126,18 +126,26 @@ ob_start();
                                     <?php
                                         $tStatus = $team['status'] ?? 'active';
                                     ?>
-                                    <span class="badge <?= $tStatus === 'active' ? 'badge-success' : 'badge-secondary' ?>" style="border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize;">
-                                        <?= htmlspecialchars($tStatus, ENT_QUOTES, 'UTF-8') ?>
-                                    </span>
+                                    <form action="/teams/<?= (int)$team['id'] ?>/status" method="POST" class="d-inline m-0 p-0">
+                                        <input type="hidden" name="status" value="<?= $tStatus === 'active' ? 'inactive' : 'active' ?>">
+                                        <button type="submit" class="badge <?= $tStatus === 'active' ? 'badge-success' : 'badge-secondary' ?>" style="cursor: pointer; border: none; border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize; font-family: inherit;" title="Click to toggle status to <?= $tStatus === 'active' ? 'Inactive' : 'Active' ?>">
+                                            <?= htmlspecialchars($tStatus, ENT_QUOTES, 'UTF-8') ?>
+                                        </button>
+                                    </form>
                                 </td>
                                 <td class="py-3 px-3 text-end">
                                     <div class="btn-group btn-group-sm">
                                         <a href="/teams/<?= (int)$team['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Squad Details">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        <a href="/teams/<?= (int)$team['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0 6px 6px 0;" title="Edit Team">
+                                        <a href="/teams/<?= (int)$team['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0;" title="Edit Team">
                                             <i class="bi bi-pencil"></i>
                                         </a>
+                                        <form action="/teams/<?= (int)$team['id'] ?>/delete" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this team? This action marks the team as deleted.');">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" style="border-radius: 0 6px 6px 0; border-left: 0;" title="Delete Team">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>

@@ -174,6 +174,11 @@ ob_start();
                                     <a href="/coaches/<?= (int)$coach['coach_profile_id'] ?>/edit" class="btn btn-outline-secondary" title="Edit Coach">
                                         <i class="bi bi-pencil"></i>
                                     </a>
+                                    <form action="/coaches/<?= (int)$coach['coach_profile_id'] ?>/delete" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this coach profile? This action marks the record as deleted.');">
+                                        <button type="submit" class="btn btn-outline-danger" title="Delete Coach" style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: 0;">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>

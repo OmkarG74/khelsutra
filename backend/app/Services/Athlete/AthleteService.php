@@ -461,4 +461,35 @@ class AthleteService
         }
         return $deleted;
     }
+
+    /**
+     * Update athlete status between active and inactive non-destructively
+     */
+    public function updateStatus(int $organizationId, int $id, string $status, ?int $performedBy = null): bool
+    {
+        if (!in_array($status, ['active', 'inactive'], true)) {
+            throw new \InvalidArgumentException("Invalid athlete status: {$status}");
+        }
+
+        $existing = $this->repository->findById($organizationId, $id);
+        if (!$existing || !empty($existing['deleted_at'])) {
+            return false;
+        }
+
+        $updated = $this->repository->update($organizationId, $id, ['status' => $status]);
+        if ($updated) {
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'ATHLETE_UPDATE',
+                'Athletes',
+                'athletes',
+                $id,
+                ['status' => $existing['status']],
+                ['status' => $status],
+                "Changed athlete #{$id} ({$existing['first_name']} {$existing['last_name']}) status to {$status}"
+            );
+        }
+        return $updated;
+    }
 }

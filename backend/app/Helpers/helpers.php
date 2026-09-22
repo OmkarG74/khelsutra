@@ -15,3 +15,20 @@ if (!function_exists('current_user_id')) {
         return \App\Helpers\AuthContext::getUserId();
     }
 }
+
+if (!function_exists('format_coach_role')) {
+    function format_coach_role(?string $role): string
+    {
+        $role = trim((string)$role);
+        $map = [
+            'head_coach' => 'Head Coach',
+            'assistant_coach' => 'Assistant Coach',
+            'fitness_coach' => 'Fitness Coach',
+            'other' => 'Other',
+        ];
+        if (isset($map[$role])) {
+            return $map[$role];
+        }
+        return ucwords(str_replace('_', ' ', $role ?: 'assistant_coach'));
+    }
+}

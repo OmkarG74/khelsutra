@@ -142,9 +142,14 @@ ob_start();
                                         <a href="/tournaments/<?= (int)$tourn['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Tournament & Fixtures">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        <a href="/tournaments/<?= (int)$tourn['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0 6px 6px 0;" title="Edit Tournament">
+                                        <a href="/tournaments/<?= (int)$tourn['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0;" title="Edit Tournament">
                                             <i class="bi bi-pencil"></i>
                                         </a>
+                                        <form action="/tournaments/<?= (int)$tourn['id'] ?>/delete" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this tournament? This action marks the tournament as deleted.');">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" style="border-radius: 0 6px 6px 0; border-left: 0;" title="Delete Tournament">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
