@@ -39,6 +39,8 @@ if (!function_exists('base_path')) {
 }
 
 // Autoloader for App namespace
+require_once __DIR__ . "/database.php";
+
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
     $base_dir = dirname(__DIR__) . '/app/';
