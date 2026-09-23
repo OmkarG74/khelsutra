@@ -2001,3 +2001,15 @@ INSERT INTO permissions (name, module, action, description) VALUES
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- --------------------------------------------------------
+-- Demo Data for Web Frontend Login/FKs
+-- --------------------------------------------------------
+INSERT INTO `organizations` (`id`, `organization_code`, `name`, `status`, `created_at`, `updated_at`) VALUES
+(1, 'ORG-DEMO', 'Apex Sports Academy', 'active', '2026-09-20 00:00:00', '2026-09-20 00:00:00') ON DUPLICATE KEY UPDATE `id`=`id`;
+
+INSERT INTO `users` (`id`, `uuid`, `email`, `password`, `first_name`, `last_name`, `status`, `created_at`, `updated_at`) VALUES
+(5, '123e4567-e89b-12d3-a456-426614174000', 'admin@apexsports.com', 'password', 'Demo', 'Admin', 'active', '2026-09-20 00:00:00', '2026-09-20 00:00:00') ON DUPLICATE KEY UPDATE `id`=`id`;
+
+INSERT INTO `organization_users` (`id`, `organization_id`, `user_id`, `role_id`, `access_status`, `created_at`, `updated_at`) VALUES
+(1, 1, 5, 2, 'active', '2026-09-20 00:00:00', '2026-09-20 00:00:00') ON DUPLICATE KEY UPDATE `id`=`id`;
