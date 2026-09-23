@@ -1,6 +1,0 @@
-.git
-.github
-vendor
-node_modules
-docker_db_data
-*.env
