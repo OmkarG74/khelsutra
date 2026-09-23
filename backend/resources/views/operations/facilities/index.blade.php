@@ -10,12 +10,12 @@ $venueId = $data['venueId'] ?? 0;
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="/operations/venues" class="text-decoration-none text-muted mb-2 d-inline-block">
-            <i class="fas fa-arrow-left me-1"></i> Back to Venues
+            <i class="bi bi-arrow-left me-1"></i> Back to Venues
         </a>
     </div>
     <div class="d-flex gap-2">
         <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#newFacilityModal">
-            <i class="fas fa-plus me-1"></i> Add Facility
+            <i class="bi bi-plus-lg me-1"></i> Add Facility
         </button>
     </div>
 </div>

@@ -9,7 +9,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div class="d-flex gap-2">
         <div class="ks-search-container">
-            <i class="fas fa-search ks-search-icon"></i>
+            <i class="bi bi-search ks-search-icon"></i>
             <input type="text" class="ks-form-control ks-search-input" placeholder="Search venues by name or code..." style="width: 250px;">
         </div>
         <select class="ks-form-select" style="width: 150px;">
@@ -21,10 +21,10 @@ ob_start();
     </div>
     <div class="d-flex gap-2">
         <button class="ks-btn ks-btn-secondary">
-            <i class="fas fa-file-export me-1"></i> Export
+            <i class="bi bi-download me-1"></i> Export
         </button>
         <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#newVenueModal">
-            <i class="fas fa-plus me-1"></i> Add Venue
+            <i class="bi bi-plus-lg me-1"></i> Add Venue
         </button>
     </div>
 </div>
