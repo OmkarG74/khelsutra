@@ -16,7 +16,6 @@
 4. Configure `.env`:
    ```bash
    cp ../.env.example .env
-   php artisan key:generate
    ```
 5. Apply operations migrations:
    ```bash
@@ -46,7 +45,6 @@ If you prefer a Dockerized environment, ensure Docker is installed.
 3. Configure `.env`:
    ```bash
    cp .env.example backend/.env
-   make artisan cmd="key:generate"
    ```
 4. Run migrations:
    ```bash

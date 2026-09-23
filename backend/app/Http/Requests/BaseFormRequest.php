@@ -28,7 +28,7 @@ abstract class BaseFormRequest
         $translator = new Translator($loader, 'en');
         $factory = new Factory($translator);
         
-        $presenceVerifier = new DatabasePresenceVerifier(DB::getDatabaseManager());
+        $presenceVerifier = new DatabasePresenceVerifier(\Illuminate\Database\Eloquent\Model::getConnectionResolver());
         $factory->setPresenceVerifier($presenceVerifier);
 
         $validator = $factory->make($this->data, $this->rules());

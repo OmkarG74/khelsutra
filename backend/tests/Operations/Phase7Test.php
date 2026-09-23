@@ -13,7 +13,6 @@ class Phase7Test extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         DB::beginTransaction();
         
         DB::table('organizations')->insertOrIgnore([
@@ -32,6 +31,18 @@ class Phase7Test extends TestCase
 
     public function test_vehicle_and_trip_logic()
     {
+        DB::table('athletes')->insertOrIgnore([
+            'id' => 100,
+            'organization_id' => 1,
+            'athlete_code' => 'A-100',
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+            'gender' => 'male',
+            'date_of_birth' => '2000-01-01',
+            'blood_group' => 'O+',
+            'status' => 'active'
+        ]);
+
         $vehicleService = new VehicleService();
         $tripService = new TransportTripService();
 

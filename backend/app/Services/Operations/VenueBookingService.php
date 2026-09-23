@@ -58,6 +58,7 @@ class VenueBookingService
             $booking->status = 'cancelled';
             $booking->cancelled_at = date('Y-m-d H:i:s');
             $booking->cancelled_by = $userId;
+            $booking->cancellation_reason = $reason;
             $booking->save();
 
             return $booking;

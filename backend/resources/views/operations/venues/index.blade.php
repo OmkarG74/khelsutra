@@ -9,7 +9,7 @@ ob_start();
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div class="d-flex gap-2">
         <div class="ks-search-container">
-            <i class="fas fa-search ks-search-icon"></i>
+            <i class="bi bi-search ks-search-icon"></i>
             <input type="text" class="ks-form-control ks-search-input" placeholder="Search venues by name or code..." style="width: 250px;">
         </div>
         <select class="ks-form-select" style="width: 150px;">
@@ -21,10 +21,10 @@ ob_start();
     </div>
     <div class="d-flex gap-2">
         <button class="ks-btn ks-btn-secondary">
-            <i class="fas fa-file-export me-1"></i> Export
+            <i class="bi bi-download me-1"></i> Export
         </button>
         <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#newVenueModal">
-            <i class="fas fa-plus me-1"></i> Add Venue
+            <i class="bi bi-plus-lg me-1"></i> Add Venue
         </button>
     </div>
 </div>
@@ -120,17 +120,26 @@ function loadVenues() {
             const tbody = document.getElementById('venuesTableBody');
             tbody.innerHTML = '';
             if (res.data && res.data.data) {
+                const escapeHtml = (unsafe) => {
+                    if (unsafe == null) return '';
+                    return String(unsafe)
+                         .replace(/&/g, "&amp;")
+                         .replace(/</g, "&lt;")
+                         .replace(/>/g, "&gt;")
+                         .replace(/"/g, "&quot;")
+                         .replace(/'/g, "&#039;");
+                };
                 res.data.data.forEach((v, index) => {
                     tbody.innerHTML += `
                         <tr>
                             <td>${index + 1}</td>
-                            <td><div class="fw-semibold text-navy">${v.name}</div></td>
-                            <td><span class="fw-medium text-navy">${v.venue_code}</span></td>
-                            <td>${v.venue_type || '-'}</td>
-                            <td>${v.city || '-'}</td>
+                            <td><div class="fw-semibold text-navy">${escapeHtml(v.name)}</div></td>
+                            <td><span class="fw-medium text-navy">${escapeHtml(v.venue_code)}</span></td>
+                            <td>${escapeHtml(v.venue_type) || '-'}</td>
+                            <td>${escapeHtml(v.city) || '-'}</td>
                             <td>
                                 <span class="ks-badge ks-badge-${v.status === 'active' ? 'success' : 'warning'}">
-                                    ${v.status}
+                                    ${escapeHtml(v.status)}
                                 </span>
                             </td>
                             <td style="text-align: right;">

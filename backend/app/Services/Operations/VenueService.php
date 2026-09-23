@@ -26,7 +26,20 @@ class VenueService
             if (empty($data['country'])) {
                 $data['country'] = 'India';
             }
-            return Venue::create($data);
+            
+            $venue = Venue::create($data);
+
+            if (!empty($venue->latitude) && !empty($venue->longitude)) {
+                $trackingService = new VehicleTrackingService();
+                $trackingService->syncGeofence($orgId, [
+                    'name' => $venue->name,
+                    'latitude' => $venue->latitude,
+                    'longitude' => $venue->longitude,
+                    'radius_meters' => 100
+                ], $venue->id);
+            }
+
+            return $venue;
         });
     }
 
@@ -38,6 +51,17 @@ class VenueService
         return DB::transaction(function () use ($orgId, $venueId, $data) {
             $venue = Venue::where('organization_id', $orgId)->findOrFail($venueId);
             $venue->update($data);
+
+            if (!empty($venue->latitude) && !empty($venue->longitude)) {
+                $trackingService = new VehicleTrackingService();
+                $trackingService->syncGeofence($orgId, [
+                    'name' => $venue->name,
+                    'latitude' => $venue->latitude,
+                    'longitude' => $venue->longitude,
+                    'radius_meters' => 100
+                ], $venue->id);
+            }
+
             return $venue;
         });
     }
