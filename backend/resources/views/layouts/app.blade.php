@@ -57,6 +57,51 @@
     <!-- Bootstrap 5 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
+    <!-- KS Shared UI Utilities -->
+    <script>
+    // ── Escape HTML (shared across all views) ──────────────────────────────────
+    window.ksEscape = (v) => {
+        if (v == null) return '';
+        return String(v).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    };
+
+    // ── Toast notifications (replaces all alert() calls) ──────────────────────
+    window.ksToast = (msg, type = 'success') => {
+        let tc = document.getElementById('ks-toast-container');
+        if (!tc) {
+            tc = document.createElement('div');
+            tc.id = 'ks-toast-container';
+            tc.style.cssText = 'position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:8px;';
+            document.body.appendChild(tc);
+        }
+        const id = 'toast-' + Date.now();
+        const colors = { success: '#166534', danger: '#991B1B', warning: '#92400E', info: '#1E40AF' };
+        const icons  = { success: 'bi-check-circle-fill', danger: 'bi-x-circle-fill', warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill' };
+        const t = document.createElement('div');
+        t.id = id;
+        t.style.cssText = `background:#fff;border:1px solid #E2E8F0;border-radius:10px;padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,.12);display:flex;align-items:center;gap:10px;min-width:280px;max-width:380px;font-size:13.5px;font-family:Inter,sans-serif;`;
+        t.innerHTML = `<i class="bi ${icons[type]}" style="color:${colors[type]};font-size:16px;flex-shrink:0;"></i><span style="color:#1E293B;">${ksEscape(msg)}</span><button onclick="this.closest('[id^=toast-]').remove()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#94A3B8;font-size:18px;line-height:1;">&times;</button>`;
+        tc.appendChild(t);
+        setTimeout(() => t && t.remove(), 4500);
+    };
+
+    // ── Side Drawer ──────────────────────────────────────────────────────────
+    window.ksDrawerOpen = (id) => {
+        const d = document.getElementById(id);
+        const ov = document.getElementById(id + '-overlay');
+        if (d) { d.style.transform = 'translateX(0)'; d.style.visibility = 'visible'; }
+        if (ov) { ov.style.opacity = '1'; ov.style.visibility = 'visible'; }
+        document.body.style.overflow = 'hidden';
+    };
+    window.ksDrawerClose = (id) => {
+        const d = document.getElementById(id);
+        const ov = document.getElementById(id + '-overlay');
+        if (d) { d.style.transform = 'translateX(100%)'; d.style.visibility = 'hidden'; }
+        if (ov) { ov.style.opacity = '0'; ov.style.visibility = 'hidden'; }
+        document.body.style.overflow = '';
+    };
+    </script>
+
     <!-- Master Layout Mobile & Interactive Script -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
