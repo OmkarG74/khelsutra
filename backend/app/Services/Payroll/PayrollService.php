@@ -347,6 +347,20 @@ class PayrollService extends BaseService
         $stmt->execute([':org_id' => $orgId]);
         $res = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
+        // When there are no payroll employee records, fall back to active employees in the same organization
+        $empCount = (int)($res['employee_count'] ?? 0);
+        if ($empCount === 0) {
+            $stmtEmp = $this->pdo->prepare("
+                SELECT COUNT(*) 
+                FROM employees 
+                WHERE organization_id = :org_id 
+                  AND employment_status = 'active' 
+                  AND deleted_at IS NULL
+            ");
+            $stmtEmp->execute([':org_id' => $orgId]);
+            $res['employee_count'] = (int)$stmtEmp->fetchColumn();
+        }
+
         // Latest period name
         $stmtPeriod = $this->pdo->prepare("SELECT period_name FROM payroll_periods WHERE organization_id = :org_id ORDER BY id DESC LIMIT 1");
         $stmtPeriod->execute([':org_id' => $orgId]);

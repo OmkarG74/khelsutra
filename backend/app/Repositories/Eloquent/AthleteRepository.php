@@ -313,7 +313,19 @@ class AthleteRepository implements AthleteRepositoryInterface
     public function delete(int $organizationId, int $id): bool
     {
         if (!$this->pdo) return false;
-        $stmt = $this->pdo->prepare("UPDATE athletes SET deleted_at = NOW() WHERE organization_id = :org_id AND id = :id");
-        return $stmt->execute([':org_id' => $organizationId, ':id' => $id]);
+
+        $stmt = $this->pdo->prepare("UPDATE athletes SET deleted_at = NOW() WHERE organization_id = :org_id AND id = :id AND deleted_at IS NULL");
+        $deleted = $stmt->execute([':org_id' => $organizationId, ':id' => $id]);
+
+        if ($deleted && $stmt->rowCount() > 0) {
+            // Soft-delete associated child records
+            $stmtGuardians = $this->pdo->prepare("UPDATE athlete_guardians SET deleted_at = NOW() WHERE organization_id = :org_id AND athlete_id = :id AND deleted_at IS NULL");
+            $stmtGuardians->execute([':org_id' => $organizationId, ':id' => $id]);
+
+            $stmtDocs = $this->pdo->prepare("UPDATE athlete_documents SET deleted_at = NOW() WHERE organization_id = :org_id AND athlete_id = :id AND deleted_at IS NULL");
+            $stmtDocs->execute([':org_id' => $organizationId, ':id' => $id]);
+        }
+
+        return $deleted;
     }
 }

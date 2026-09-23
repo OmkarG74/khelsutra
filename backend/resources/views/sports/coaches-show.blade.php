@@ -158,7 +158,7 @@ ob_start();
                                                 </a>
                                             </td>
                                             <td class="text-muted small"><?= htmlspecialchars($tm['sport_name'] ?? 'General', ENT_QUOTES, 'UTF-8') ?></td>
-                                            <td class="text-dark small"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $tm['coach_role'] ?? 'head_coach')), ENT_QUOTES, 'UTF-8') ?></td>
+                                            <td class="text-dark small"><?= htmlspecialchars(format_coach_role($tm['coach_role'] ?? 'head_coach'), ENT_QUOTES, 'UTF-8') ?></td>
                                             <td>
                                                 <?php if (!empty($tm['is_primary'])): ?>
                                                     <span class="badge bg-success-subtle text-success">Head / Primary</span>

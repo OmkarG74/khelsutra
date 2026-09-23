@@ -133,9 +133,13 @@ ob_start();
                                 <div class="small text-muted"><?= htmlspecialchars($ath['email'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
                             </td>
                             <td>
-                                <span class="ks-badge ks-badge-<?= ($ath['status'] ?? 'active') === 'active' ? 'confirmed' : 'pending' ?> text-capitalize">
-                                    <?= htmlspecialchars($ath['status'] ?? 'active', ENT_QUOTES, 'UTF-8') ?>
-                                </span>
+                                <?php $aStatus = $ath['status'] ?? 'active'; ?>
+                                <form action="/athletes/<?= (int)$ath['id'] ?>/status" method="POST" class="d-inline m-0 p-0">
+                                    <input type="hidden" name="status" value="<?= $aStatus === 'active' ? 'inactive' : 'active' ?>">
+                                    <button type="submit" class="ks-badge ks-badge-<?= $aStatus === 'active' ? 'confirmed' : 'pending' ?> text-capitalize" style="cursor: pointer; border: 1px solid <?= $aStatus === 'active' ? '#BBF7D0' : '#FED7AA' ?>; background-color: <?= $aStatus === 'active' ? '#DCFCE7' : '#FFEDD5' ?>; color: <?= $aStatus === 'active' ? '#166534' : '#9A3412' ?>; padding: 0 10px; font-family: inherit;" title="Click to toggle status to <?= $aStatus === 'active' ? 'Inactive' : 'Active' ?>">
+                                        <?= htmlspecialchars($aStatus, ENT_QUOTES, 'UTF-8') ?>
+                                    </button>
+                                </form>
                             </td>
                             <td style="text-align: right;">
                                 <div class="d-flex align-items-center justify-content-end gap-1">
@@ -145,6 +149,11 @@ ob_start();
                                     <a href="/athletes/<?= (int)$ath['id'] ?>/edit" class="btn btn-sm btn-outline-primary" title="Edit Athlete" style="padding: 4px 8px; font-size: 12px;">
                                         <i class="bi bi-pencil"></i> Edit
                                     </a>
+                                    <form action="/athletes/<?= (int)$ath['id'] ?>/delete" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this athlete? This action marks the athlete as deleted.');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Athlete" style="padding: 4px 8px; font-size: 12px;">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </form>
                                 </div>
                             </td>
                         </tr>

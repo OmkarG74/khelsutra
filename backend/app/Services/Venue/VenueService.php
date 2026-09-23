@@ -344,6 +344,12 @@ class VenueService extends BaseService
             }
         }
 
+        // Check for conflicting fixtures at this venue/facility
+        $fixtureConflict = $this->checkSchedulingConflict($organizationId, $venueId, $bookingDate, $startTime, $endTime, $facilityId);
+        if ($fixtureConflict && str_contains($fixtureConflict, 'fixture')) {
+            throw new Exception($fixtureConflict);
+        }
+
         $ref = $data['booking_reference'] ?? ('BKG-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)));
 
         $sql = "
@@ -419,5 +425,173 @@ class VenueService extends BaseService
         );
 
         return true;
+    }
+
+    /**
+     * Update venue status between active and inactive non-destructively
+     */
+    public function updateStatus(int $organizationId, int $id, string $status, ?int $performedBy = null): bool
+    {
+        if (!$this->pdo) return false;
+        if (!in_array($status, ['active', 'inactive'], true)) {
+            throw new \InvalidArgumentException("Invalid venue status: {$status}");
+        }
+
+        $existing = $this->getVenue($organizationId, $id);
+        if (!$existing || !empty($existing['deleted_at'])) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare("
+            UPDATE venues 
+            SET status = :status, updated_at = NOW() 
+            WHERE id = :id AND organization_id = :org_id AND deleted_at IS NULL
+        ");
+        $ok = $stmt->execute([
+            ':status' => $status,
+            ':id' => $id,
+            ':org_id' => $organizationId,
+        ]);
+
+        if ($ok) {
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'VENUE_UPDATE',
+                'Venues',
+                'venues',
+                $id,
+                ['status' => $existing['status']],
+                ['status' => $status],
+                "Changed venue #{$id} ({$existing['name']}) status to {$status}"
+            );
+        }
+
+        return $ok;
+    }
+
+    /**
+     * Check scheduling conflict against both venue bookings and scheduled fixtures.
+     * Respects existing model: venue, facility, booking date, start time, end time,
+     * status rules, and soft delete. Server-side validation only.
+     */
+    public function checkSchedulingConflict(
+        int $organizationId,
+        int $venueId,
+        string $date,
+        string $startTime,
+        ?string $endTime = null,
+        ?int $facilityId = null,
+        ?int $excludeFixtureId = null,
+        ?int $excludeBookingId = null
+    ): ?string {
+        if (!$this->pdo) return null;
+
+        if ($endTime !== null && $endTime !== '' && $endTime <= $startTime) {
+            return "End time ({$endTime}) must be strictly after start time ({$startTime}).";
+        }
+
+        // 1. Check against active/approved venue bookings
+        $bSql = "
+            SELECT id, booking_reference, start_time, end_time, facility_id
+            FROM venue_bookings
+            WHERE organization_id = :org_id
+              AND venue_id = :v_id
+              AND booking_date = :b_date
+              AND status IN ('pending', 'approved')
+              AND deleted_at IS NULL
+        ";
+        $bParams = [
+            ':org_id' => $organizationId,
+            ':v_id' => $venueId,
+            ':b_date' => $date
+        ];
+
+        if ($facilityId !== null && $facilityId > 0) {
+            $bSql .= " AND (facility_id = :fac_id OR facility_id IS NULL)";
+            $bParams[':fac_id'] = $facilityId;
+        }
+
+        if ($excludeBookingId !== null && $excludeBookingId > 0) {
+            $bSql .= " AND id != :ex_b_id";
+            $bParams[':ex_b_id'] = $excludeBookingId;
+        }
+
+        if ($endTime !== null && $endTime !== '') {
+            $bSql .= " AND (start_time < :end_time AND end_time > :start_time)";
+            $bParams[':start_time'] = $startTime;
+            $bParams[':end_time'] = $endTime;
+        } else {
+            $bSql .= " AND (start_time <= :start_time AND end_time > :start_time)";
+            $bParams[':start_time'] = $startTime;
+        }
+
+        $bSql .= " LIMIT 1";
+        $bStmt = $this->pdo->prepare($bSql);
+        $bStmt->execute($bParams);
+        $bookingConflict = $bStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($bookingConflict) {
+            return "Time slot conflict: Venue is already booked ({$bookingConflict['booking_reference']}) from {$bookingConflict['start_time']} to {$bookingConflict['end_time']} on {$date}.";
+        }
+
+        // 2. Check against scheduled fixtures
+        $fSql = "
+            SELECT f.id, f.fixture_reference, f.scheduled_start_time, f.scheduled_end_time, f.facility_id
+            FROM fixtures f
+            JOIN tournaments t ON f.tournament_id = t.id
+            WHERE f.organization_id = :org_id
+              AND f.venue_id = :v_id
+              AND f.scheduled_date = :s_date
+              AND f.status NOT IN ('cancelled')
+              AND f.deleted_at IS NULL
+              AND t.deleted_at IS NULL
+              AND t.status NOT IN ('cancelled')
+        ";
+        $fParams = [
+            ':org_id' => $organizationId,
+            ':v_id' => $venueId,
+            ':s_date' => $date
+        ];
+
+        if ($facilityId !== null && $facilityId > 0) {
+            $fSql .= " AND (f.facility_id = :fac_id OR f.facility_id IS NULL)";
+            $fParams[':fac_id'] = $facilityId;
+        }
+
+        if ($excludeFixtureId !== null && $excludeFixtureId > 0) {
+            $fSql .= " AND f.id != :ex_f_id";
+            $fParams[':ex_f_id'] = $excludeFixtureId;
+        }
+
+        if ($endTime !== null && $endTime !== '') {
+            $fSql .= " AND (
+                (scheduled_end_time IS NOT NULL AND scheduled_start_time < :end_time AND scheduled_end_time > :start_time)
+                OR (scheduled_end_time IS NULL AND scheduled_start_time >= :start_time AND scheduled_start_time < :end_time)
+            )";
+            $fParams[':start_time'] = $startTime;
+            $fParams[':end_time'] = $endTime;
+        } else {
+            $fSql .= " AND (
+                (scheduled_end_time IS NOT NULL AND scheduled_start_time <= :start_time AND scheduled_end_time > :start_time)
+                OR (scheduled_end_time IS NULL AND scheduled_start_time = :start_time)
+            )";
+            $fParams[':start_time'] = $startTime;
+        }
+
+        $fSql .= " LIMIT 1";
+        $fStmt = $this->pdo->prepare($fSql);
+        $fStmt->execute($fParams);
+        $fixtureConflict = $fStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($fixtureConflict) {
+            $timeInfo = $fixtureConflict['scheduled_start_time'];
+            if (!empty($fixtureConflict['scheduled_end_time'])) {
+                $timeInfo .= ' - ' . $fixtureConflict['scheduled_end_time'];
+            }
+            return "Time slot conflict: Venue already has a scheduled fixture ({$fixtureConflict['fixture_reference']}) at {$timeInfo} on {$date}.";
+        }
+
+        return null;
     }
 }

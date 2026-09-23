@@ -4,6 +4,35 @@ $orgId = current_organization_id();
 $teamService = new \App\Services\Team\TeamService();
 $team = $teamService->getTeam($orgId, $teamId);
 
+$db = \App\Services\BaseService::getDatabaseConnection();
+// Available athletes eligible to be added to this team (active, not deleted, not currently active in this team)
+$eligibleAthletesStmt = $db->prepare("
+    SELECT a.id, a.athlete_code, a.first_name, a.last_name
+    FROM athletes a
+    WHERE a.organization_id = :org_id 
+      AND a.status = 'active' 
+      AND a.deleted_at IS NULL
+      AND a.id NOT IN (
+          SELECT tm.athlete_id 
+          FROM team_members tm 
+          WHERE tm.team_id = :team_id 
+            AND tm.organization_id = :org_id2 
+            AND tm.is_current = 1
+      )
+    ORDER BY a.first_name ASC, a.last_name ASC
+");
+$eligibleAthletesStmt->execute([':org_id' => $orgId, ':team_id' => $teamId, ':org_id2' => $orgId]);
+$eligibleAthletes = $eligibleAthletesStmt ? $eligibleAthletesStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
+// Eligible coaches via service (no raw database queries in Blade)
+$eligibleCoaches = $team ? $teamService->getEligibleCoaches($orgId, $teamId) : [];
+
+// RBAC check for coach management visibility
+$permissionService = new \App\Services\Rbac\PermissionService();
+$currentUserId = current_user_id() ?? 0;
+$userPermissions = $currentUserId > 0 ? $permissionService->getUserPermissions($currentUserId, $orgId) : [];
+$canManageCoaches = in_array('team.coaches.manage', $userPermissions, true) || in_array('team.manage', $userPermissions, true);
+
 $pageTitle = $team ? htmlspecialchars($team['name'] . ' — Team Details') : 'Team Details';
 $activePage = 'teams';
 
@@ -29,6 +58,19 @@ ob_start();
                 <i class="bi bi-arrow-left me-1"></i> Back to Teams
             </a>
         </div>
+
+        <?php if (!empty($_GET['success'])): ?>
+            <div class="alert alert-success mb-4 py-2 px-3 small d-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button);">
+                <i class="bi bi-check-circle-fill"></i>
+                <div><?= htmlspecialchars($_GET['success'], ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+        <?php endif; ?>
+        <?php if (!empty($_GET['error'])): ?>
+            <div class="alert alert-danger mb-4 py-2 px-3 small d-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button);">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div><?= htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+        <?php endif; ?>
 
         <!-- Page Header -->
         <div class="d-flex align-items-center justify-content-between mb-4">
@@ -75,6 +117,9 @@ ob_start();
                                         <th>Role</th>
                                         <th>Specialization</th>
                                         <th>Contact</th>
+                                        <?php if ($canManageCoaches): ?>
+                                            <th class="text-end">Action</th>
+                                        <?php endif; ?>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -89,11 +134,18 @@ ob_start();
                                                 <?php if (!empty($cch['is_primary'])): ?>
                                                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Head Coach</span>
                                                 <?php else: ?>
-                                                    <span class="text-muted small"><?= htmlspecialchars(ucfirst(str_replace('_', ' ', $cch['coach_role'] ?? 'assistant')), ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <span class="text-muted small"><?= htmlspecialchars(format_coach_role($cch['coach_role'] ?? 'assistant_coach'), ENT_QUOTES, 'UTF-8') ?></span>
                                                 <?php endif; ?>
                                             </td>
                                             <td class="text-muted small"><?= htmlspecialchars($cch['specialization'] ?? 'General', ENT_QUOTES, 'UTF-8') ?></td>
                                             <td class="text-muted small"><?= htmlspecialchars($cch['phone'] ?: ($cch['email'] ?: '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                                            <?php if ($canManageCoaches): ?>
+                                                <td class="text-end">
+                                                    <form action="/teams/<?= (int)$team['id'] ?>/coaches/<?= (int)$cch['coach_id'] ?>/remove" method="POST" class="d-inline m-0" onsubmit="return confirm('Remove this coach from the active coaching staff?');">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Remove</button>
+                                                    </form>
+                                                </td>
+                                            <?php endif; ?>
                                         </tr>
                                     <?php endforeach; ?>
                                 </tbody>
@@ -101,6 +153,46 @@ ob_start();
                         </div>
                     <?php else: ?>
                         <p class="text-muted small mb-0">No coaches currently assigned to this squad.</p>
+                    <?php endif; ?>
+
+                    <!-- Assign Coach to Staff -->
+                    <?php if ($canManageCoaches && !empty($eligibleCoaches)): ?>
+                        <div class="mt-3 pt-3 border-top">
+                            <form action="/teams/<?= (int)$team['id'] ?>/coaches/assign" method="POST" class="row g-2 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-semibold text-muted mb-1" for="coach_id">Assign Coach to Staff</label>
+                                    <select name="coach_id" id="coach_id" class="form-select form-select-sm" required>
+                                        <option value="">-- Select Eligible Coach --</option>
+                                        <?php foreach ($eligibleCoaches as $ec): ?>
+                                            <option value="<?= (int)$ec['coach_id'] ?>">
+                                                <?= htmlspecialchars($ec['first_name'] . ' ' . $ec['last_name'] . ' (' . ($ec['specialization'] ?: 'General') . ')', ENT_QUOTES, 'UTF-8') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold text-muted mb-1" for="coach_role">Role</label>
+                                    <select name="coach_role" id="coach_role" class="form-select form-select-sm">
+                                        <option value="head_coach">Head Coach</option>
+                                        <option value="assistant_coach">Assistant Coach</option>
+                                        <option value="fitness_coach">Fitness Coach</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="hidden" name="is_primary" value="0">
+                                    <div class="form-check form-switch mb-1">
+                                        <input class="form-check-input" type="checkbox" name="is_primary" id="is_primary" value="1" checked>
+                                        <label class="form-check-label small text-muted" for="is_primary">Primary</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-100" style="background: var(--ks-blue); border-color: var(--ks-blue);">
+                                        <i class="bi bi-plus-lg me-1"></i> Assign
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     <?php endif; ?>
                 </div>
 
@@ -142,7 +234,12 @@ ob_start();
                                                 </span>
                                             </td>
                                             <td class="text-end">
-                                                <a href="/athletes/<?= (int)$ath['athlete_id'] ?>" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 11px;">View</a>
+                                                <div class="d-inline-flex justify-content-end align-items-center gap-1">
+                                                    <a href="/athletes/<?= (int)$ath['athlete_id'] ?>" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 11px;">View</a>
+                                                    <form action="/teams/<?= (int)$team['id'] ?>/roster/<?= (int)$ath['athlete_id'] ?>/remove" method="POST" class="d-inline m-0" onsubmit="return confirm('Remove this athlete from the active squad?');">
+                                                        <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 11px;">Remove</button>
+                                                    </form>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -151,6 +248,43 @@ ob_start();
                         </div>
                     <?php else: ?>
                         <p class="text-muted small mb-0">No active athletes in this squad roster.</p>
+                    <?php endif; ?>
+
+                    <!-- Minimal Roster Extension: Add Athlete to Squad -->
+                    <?php if (!empty($eligibleAthletes)): ?>
+                        <div class="mt-3 pt-3 border-top">
+                            <form action="/teams/<?= (int)$team['id'] ?>/roster/add" method="POST" class="row g-2 align-items-end">
+                                <div class="col-md-5">
+                                    <label class="form-label small fw-semibold text-muted mb-1" for="athlete_id">Add Athlete to Squad</label>
+                                    <select name="athlete_id" id="athlete_id" class="form-select form-select-sm" required>
+                                        <option value="">-- Select Eligible Athlete --</option>
+                                        <?php foreach ($eligibleAthletes as $ea): ?>
+                                            <option value="<?= (int)$ea['id'] ?>">
+                                                <?= htmlspecialchars($ea['first_name'] . ' ' . $ea['last_name'] . ' (' . $ea['athlete_code'] . ')', ENT_QUOTES, 'UTF-8') ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small fw-semibold text-muted mb-1" for="jersey_number">Jersey #</label>
+                                    <input type="text" name="jersey_number" id="jersey_number" class="form-control form-control-sm" placeholder="e.g. 10" maxlength="10">
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small fw-semibold text-muted mb-1" for="member_role">Role / Pos</label>
+                                    <select name="member_role" id="member_role" class="form-select form-select-sm">
+                                        <option value="player">Player</option>
+                                        <option value="captain">Captain</option>
+                                        <option value="vice_captain">Vice Captain</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <button type="submit" class="btn btn-sm btn-primary w-100" style="background: var(--ks-blue); border-color: var(--ks-blue);">
+                                        <i class="bi bi-plus-lg me-1"></i> Add
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     <?php endif; ?>
                 </div>
 

@@ -129,11 +129,12 @@ class TournamentService extends BaseService
                 tv.*,
                 v.name as venue_name,
                 v.city,
-                v.venue_code
+                v.venue_code,
+                v.status as venue_status
             FROM tournament_venues tv
-            JOIN venues v ON tv.venue_id = v.id
+            JOIN venues v ON tv.venue_id = v.id AND v.deleted_at IS NULL
             WHERE tv.tournament_id = :tour_id
-            ORDER BY tv.is_primary DESC
+            ORDER BY tv.is_primary DESC, v.name ASC
         ");
         $tvStmt->execute([':tour_id' => $id]);
         $tournament['venues'] = $tvStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -342,6 +343,87 @@ class TournamentService extends BaseService
     {
         if (!$this->pdo) return [];
 
+        // 1. Verify tournament exists, belongs to tenant, and lifecycle allows scheduling
+        $t = $this->getTournament($organizationId, $tournamentId);
+        if (!$t) {
+            throw new \InvalidArgumentException("Tournament not found or access denied.");
+        }
+        if (in_array($t['status'] ?? '', ['completed', 'cancelled'], true)) {
+            throw new \InvalidArgumentException("Cannot schedule fixtures for a completed or cancelled tournament.");
+        }
+
+        // 2. Validate teams
+        $homeId = (int)($data['home_team_id'] ?? 0);
+        $awayId = (int)($data['away_team_id'] ?? 0);
+        if ($homeId <= 0 || $awayId <= 0) {
+            throw new \InvalidArgumentException("Please select both home and away teams.");
+        }
+        if ($homeId === $awayId) {
+            throw new \InvalidArgumentException("Home and away teams must be distinct.");
+        }
+
+        // 3. Verify duplicate pairings
+        $formatName = $t['format_name'] ?? '';
+        $roundName = trim($data['round_name'] ?? 'Round 1');
+        if (in_array($formatName, ['League', 'Round Robin'], true)) {
+            // Single round-robin: teams play each other once across the entire tournament
+            $dupStmt = $this->pdo->prepare("
+                SELECT id, fixture_reference FROM fixtures
+                WHERE tournament_id = :t_id
+                  AND deleted_at IS NULL
+                  AND (
+                    (home_team_id = :h_id AND away_team_id = :a_id) OR
+                    (home_team_id = :a_id AND away_team_id = :h_id)
+                  )
+                LIMIT 1
+            ");
+            $dupStmt->execute([':t_id' => $tournamentId, ':h_id' => $homeId, ':a_id' => $awayId]);
+            $dup = $dupStmt->fetch(PDO::FETCH_ASSOC);
+            if ($dup) {
+                throw new \InvalidArgumentException("A fixture between these teams already exists in this tournament ({$dup['fixture_reference']}).");
+            }
+        } else {
+            // For other formats (e.g. Knockout): prevent duplicate pairing in the same round
+            $dupStmt = $this->pdo->prepare("
+                SELECT id, fixture_reference FROM fixtures
+                WHERE tournament_id = :t_id
+                  AND round_name = :round
+                  AND deleted_at IS NULL
+                  AND (
+                    (home_team_id = :h_id AND away_team_id = :a_id) OR
+                    (home_team_id = :a_id AND away_team_id = :h_id)
+                  )
+                LIMIT 1
+            ");
+            $dupStmt->execute([':t_id' => $tournamentId, ':round' => $roundName, ':h_id' => $homeId, ':a_id' => $awayId]);
+            $dup = $dupStmt->fetch(PDO::FETCH_ASSOC);
+            if ($dup) {
+                throw new \InvalidArgumentException("A fixture between these teams already exists in {$roundName} ({$dup['fixture_reference']}).");
+            }
+        }
+
+        // 4. Server-side venue conflict detection
+        $venueId = !empty($data['venue_id']) ? (int)$data['venue_id'] : null;
+        if ($venueId) {
+            $venueService = new \App\Services\Venue\VenueService($this->pdo, $this->auditLog);
+            $sDate = $data['scheduled_date'] ?? date('Y-m-d');
+            $sTime = $data['scheduled_start_time'] ?? '15:00:00';
+            $eTime = !empty($data['scheduled_end_time']) ? $data['scheduled_end_time'] : null;
+            $facId = !empty($data['facility_id']) ? (int)$data['facility_id'] : null;
+
+            $conflict = $venueService->checkSchedulingConflict(
+                $organizationId,
+                $venueId,
+                $sDate,
+                $sTime,
+                $eTime,
+                $facId
+            );
+            if ($conflict) {
+                throw new \InvalidArgumentException($conflict);
+            }
+        }
+
         $this->pdo->beginTransaction();
         try {
             $fixRef = $data['fixture_reference'] ?? ('FIX-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)));
@@ -365,15 +447,15 @@ class TournamentService extends BaseService
                 ':org_id' => $organizationId,
                 ':tour_id' => $tournamentId,
                 ':fix_ref' => $fixRef,
-                ':round' => $data['round_name'] ?? 'Round 1',
+                ':round' => $roundName,
                 ':grp' => $data['group_name'] ?? null,
-                ':home_id' => (int)$data['home_team_id'],
-                ':away_id' => (int)$data['away_team_id'],
-                ':venue_id' => !empty($data['venue_id']) ? (int)$data['venue_id'] : null,
+                ':home_id' => $homeId,
+                ':away_id' => $awayId,
+                ':venue_id' => $venueId,
                 ':fac_id' => !empty($data['facility_id']) ? (int)$data['facility_id'] : null,
                 ':sdate' => $data['scheduled_date'] ?? date('Y-m-d'),
                 ':stime' => $data['scheduled_start_time'] ?? '15:00:00',
-                ':etime' => $data['scheduled_end_time'] ?? '17:00:00',
+                ':etime' => !empty($data['scheduled_end_time']) ? $data['scheduled_end_time'] : null,
                 ':notes' => $data['notes'] ?? null,
             ]);
 
@@ -585,6 +667,20 @@ class TournamentService extends BaseService
         $stmt = $this->pdo->prepare("UPDATE tournaments SET deleted_at = NOW() WHERE id = :id AND organization_id = :org_id");
         $stmt->execute([':id' => $id, ':org_id' => $organizationId]);
 
+        // Cascade soft deletion to fixtures and matches
+        $this->pdo->prepare("
+            UPDATE matches m
+            JOIN fixtures f ON m.fixture_id = f.id
+            SET m.deleted_at = NOW()
+            WHERE f.tournament_id = :id AND m.deleted_at IS NULL
+        ")->execute([':id' => $id]);
+
+        $this->pdo->prepare("
+            UPDATE fixtures
+            SET deleted_at = NOW()
+            WHERE tournament_id = :id AND deleted_at IS NULL
+        ")->execute([':id' => $id]);
+
         $this->auditLog->log(
             $organizationId,
             $performedBy,
@@ -603,23 +699,611 @@ class TournamentService extends BaseService
     public function addTeam(int $organizationId, int $tournamentId, int $teamId, ?int $performedBy = null): bool
     {
         if (!$this->pdo) return false;
+
+        // 1. Verify tournament exists, belongs to organization, and is not soft-deleted
         $t = $this->getTournament($organizationId, $tournamentId);
-        if (!$t) return false;
+        if (!$t) {
+            throw new \InvalidArgumentException("Tournament not found or access denied.");
+        }
+        if (in_array($t['status'] ?? '', ['completed', 'cancelled'], true)) {
+            throw new \InvalidArgumentException("Cannot register teams for a completed or cancelled tournament.");
+        }
 
+        // 2. Verify team exists, belongs to organization, is active, and is not deleted
+        $tmStmt = $this->pdo->prepare("
+            SELECT id, name, team_code, status, organization_id, deleted_at 
+            FROM teams 
+            WHERE id = :tm_id AND organization_id = :org_id AND deleted_at IS NULL 
+            LIMIT 1
+        ");
+        $tmStmt->execute([':tm_id' => $teamId, ':org_id' => $organizationId]);
+        $team = $tmStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$team) {
+            throw new \InvalidArgumentException("Team not found or does not belong to your organization.");
+        }
+        if ($team['status'] !== 'active') {
+            throw new \InvalidArgumentException("Only active teams can be registered into a tournament.");
+        }
+
+        // 3. Check existing tournament participation & status
+        $checkStmt = $this->pdo->prepare("
+            SELECT id, status 
+            FROM tournament_teams 
+            WHERE tournament_id = :t_id AND team_id = :tm_id
+            LIMIT 1
+        ");
+        $checkStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+        $existingReg = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existingReg) {
+            $curStatus = $existingReg['status'];
+            // Terminal outcomes must NEVER be overwritten
+            if (in_array($curStatus, ['eliminated', 'qualified', 'winner', 'runner_up'], true)) {
+                throw new \InvalidArgumentException("Cannot re-register team with terminal tournament status '{$curStatus}'.");
+            }
+            // If already approved/registered, safely idempotent
+            if (in_array($curStatus, ['approved', 'registered'], true)) {
+                return true;
+            }
+            // If withdrawn, reactivate to approved
+            if ($curStatus === 'withdrawn') {
+                $upStmt = $this->pdo->prepare("
+                    UPDATE tournament_teams 
+                    SET status = 'approved', registered_at = NOW() 
+                    WHERE id = :id
+                ");
+                $upStmt->execute([':id' => (int)$existingReg['id']]);
+
+                $this->auditLog->log(
+                    $organizationId,
+                    $performedBy,
+                    'TOURNAMENT_TEAM_ADD',
+                    'Tournaments',
+                    'tournament_teams',
+                    $tournamentId,
+                    ['status' => 'withdrawn'],
+                    ['status' => 'approved', 'tournament_id' => $tournamentId, 'team_id' => $teamId],
+                    "Re-registered withdrawn team #{$teamId} ({$team['name']}) into tournament #{$tournamentId} ({$t['name']})"
+                );
+
+                return true;
+            }
+        }
+
+        // 4. Fresh registration: insert into tournament_teams and tournament_standings
+        $this->pdo->beginTransaction();
+        try {
+            $ttStmt = $this->pdo->prepare("
+                INSERT INTO tournament_teams (tournament_id, team_id, status, registered_at) 
+                VALUES (:t_id, :tm_id, 'approved', NOW())
+            ");
+            $ttStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+
+            $stdStmt = $this->pdo->prepare("
+                INSERT INTO tournament_standings (tournament_id, team_id, played, won, drawn, lost, points, scored, conceded, difference, rank_position, updated_at)
+                VALUES (:t_id, :tm_id, 0, 0, 0, 0, 0, 0, 0, 0, 1, NOW())
+                ON DUPLICATE KEY UPDATE updated_at = NOW()
+            ");
+            $stdStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+
+            $this->pdo->commit();
+
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'TOURNAMENT_TEAM_ADD',
+                'Tournaments',
+                'tournament_teams',
+                $tournamentId,
+                null,
+                ['tournament_id' => $tournamentId, 'team_id' => $teamId, 'status' => 'approved'],
+                "Registered team #{$teamId} ({$team['name']}) into tournament #{$tournamentId} ({$t['name']})"
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function removeTeam(int $organizationId, int $tournamentId, int $teamId, ?int $performedBy = null): bool
+    {
+        if (!$this->pdo) return false;
+
+        // 1. Verify tournament exists and belongs to current organization
+        $t = $this->getTournament($organizationId, $tournamentId);
+        if (!$t) {
+            throw new \InvalidArgumentException("Tournament not found or access denied.");
+        }
+
+        // 2. Verify team exists and belongs to current organization
+        $tmStmt = $this->pdo->prepare("
+            SELECT id, name, team_code, organization_id 
+            FROM teams 
+            WHERE id = :tm_id AND organization_id = :org_id 
+            LIMIT 1
+        ");
+        $tmStmt->execute([':tm_id' => $teamId, ':org_id' => $organizationId]);
+        $team = $tmStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$team) {
+            throw new \InvalidArgumentException("Team not found or does not belong to your organization.");
+        }
+
+        // 3. Verify team is currently registered with active status in this tournament
+        $checkStmt = $this->pdo->prepare("
+            SELECT id, status 
+            FROM tournament_teams 
+            WHERE tournament_id = :t_id AND team_id = :tm_id
+            LIMIT 1
+        ");
+        $checkStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+        $membership = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$membership || $membership['status'] === 'withdrawn') {
+            throw new \InvalidArgumentException("Team is not an active participant in this tournament.");
+        }
+        if (in_array($membership['status'], ['eliminated', 'winner', 'runner_up'], true)) {
+            throw new \InvalidArgumentException("Cannot withdraw team with tournament status '{$membership['status']}'.");
+        }
+
+        // 4. Fixture protection strictly scoped to THIS tournament
+        $fixStmt = $this->pdo->prepare("
+            SELECT COUNT(*) 
+            FROM fixtures 
+            WHERE tournament_id = :t_id 
+              AND (home_team_id = :tm_id OR away_team_id = :tm_id) 
+              AND deleted_at IS NULL
+        ");
+        $fixStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+        if ((int)$fixStmt->fetchColumn() > 0) {
+            throw new \InvalidArgumentException("Cannot withdraw team: this team is already scheduled in fixtures for this tournament.");
+        }
+
+        // 5. Update tournament_teams status to 'withdrawn' (preserves historical record)
+        $this->pdo->beginTransaction();
+        try {
+            $upStmt = $this->pdo->prepare("
+                UPDATE tournament_teams 
+                SET status = 'withdrawn' 
+                WHERE id = :id
+            ");
+            $upStmt->execute([':id' => (int)$membership['id']]);
+
+            // Note: Per user correction #2, tournament_standings records are NOT deleted or cleared.
+
+            $this->pdo->commit();
+
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'TOURNAMENT_TEAM_REMOVE',
+                'Tournaments',
+                'tournament_teams',
+                $tournamentId,
+                ['tournament_id' => $tournamentId, 'team_id' => $teamId, 'status' => $membership['status']],
+                ['tournament_id' => $tournamentId, 'team_id' => $teamId, 'status' => 'withdrawn'],
+                "Withdrew team #{$teamId} ({$team['name']}) from tournament #{$tournamentId} ({$t['name']})"
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function addVenue(int $organizationId, int $tournamentId, int $venueId, bool $isPrimary = false, ?int $performedBy = null): bool
+    {
+        if (!$this->pdo) return false;
+
+        // 1. Verify tournament exists, belongs to organization, and is not soft-deleted
+        $t = $this->getTournament($organizationId, $tournamentId);
+        if (!$t) {
+            throw new \InvalidArgumentException("Tournament not found or access denied.");
+        }
+        if (in_array($t['status'] ?? '', ['completed', 'cancelled'], true)) {
+            throw new \InvalidArgumentException("Cannot assign venues to a completed or cancelled tournament.");
+        }
+
+        // 2. Verify venue exists, belongs to organization, is active, and is not soft-deleted
+        $vStmt = $this->pdo->prepare("
+            SELECT id, name, venue_code, status, organization_id, deleted_at
+            FROM venues
+            WHERE id = :v_id AND organization_id = :org_id AND deleted_at IS NULL
+            LIMIT 1
+        ");
+        $vStmt->execute([':v_id' => $venueId, ':org_id' => $organizationId]);
+        $venue = $vStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$venue) {
+            throw new \InvalidArgumentException("Venue not found or does not belong to your organization.");
+        }
+        if ($venue['status'] !== 'active') {
+            throw new \InvalidArgumentException("Only active venues can be assigned to a tournament.");
+        }
+
+        // 3. Check existing assignment (idempotent duplicate prevention)
+        $checkStmt = $this->pdo->prepare("
+            SELECT id, is_primary
+            FROM tournament_venues
+            WHERE tournament_id = :t_id AND venue_id = :v_id
+            LIMIT 1
+        ");
+        $checkStmt->execute([':t_id' => $tournamentId, ':v_id' => $venueId]);
+        $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($existing) {
+            if ($isPrimary && empty($existing['is_primary'])) {
+                $upStmt = $this->pdo->prepare("UPDATE tournament_venues SET is_primary = 1 WHERE id = :id");
+                $upStmt->execute([':id' => (int)$existing['id']]);
+            }
+            return true;
+        }
+
+        // 4. Assign venue to tournament
+        $this->pdo->beginTransaction();
+        try {
+            if ($isPrimary) {
+                $clrStmt = $this->pdo->prepare("UPDATE tournament_venues SET is_primary = 0 WHERE tournament_id = :t_id");
+                $clrStmt->execute([':t_id' => $tournamentId]);
+            }
+
+            $insStmt = $this->pdo->prepare("
+                INSERT INTO tournament_venues (tournament_id, venue_id, is_primary, created_at)
+                VALUES (:t_id, :v_id, :is_primary, NOW())
+            ");
+            $insStmt->execute([
+                ':t_id' => $tournamentId,
+                ':v_id' => $venueId,
+                ':is_primary' => $isPrimary ? 1 : 0
+            ]);
+
+            $this->pdo->commit();
+
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'TOURNAMENT_VENUE_ADD',
+                'Tournaments',
+                'tournament_venues',
+                $tournamentId,
+                null,
+                ['tournament_id' => $tournamentId, 'venue_id' => $venueId, 'is_primary' => $isPrimary ? 1 : 0],
+                "Assigned venue #{$venueId} ({$venue['name']}) to tournament #{$tournamentId} ({$t['name']})"
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function removeVenue(int $organizationId, int $tournamentId, int $venueId, ?int $performedBy = null): bool
+    {
+        if (!$this->pdo) return false;
+
+        // 1. Verify tournament exists and belongs to current organization
+        $t = $this->getTournament($organizationId, $tournamentId);
+        if (!$t) {
+            throw new \InvalidArgumentException("Tournament not found or access denied.");
+        }
+
+        // 2. Verify venue belongs to current organization
+        $vStmt = $this->pdo->prepare("
+            SELECT id, name, venue_code, organization_id
+            FROM venues
+            WHERE id = :v_id AND organization_id = :org_id
+            LIMIT 1
+        ");
+        $vStmt->execute([':v_id' => $venueId, ':org_id' => $organizationId]);
+        $venue = $vStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$venue) {
+            throw new \InvalidArgumentException("Venue not found or does not belong to your organization.");
+        }
+
+        // 3. Verify venue is assigned to this tournament
+        $checkStmt = $this->pdo->prepare("
+            SELECT id, is_primary
+            FROM tournament_venues
+            WHERE tournament_id = :t_id AND venue_id = :v_id
+            LIMIT 1
+        ");
+        $checkStmt->execute([':t_id' => $tournamentId, ':v_id' => $venueId]);
+        $assignment = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$assignment) {
+            throw new \InvalidArgumentException("Venue is not currently assigned to this tournament.");
+        }
+
+        // 4. Fixture protection strictly scoped to THIS tournament
+        $fixStmt = $this->pdo->prepare("
+            SELECT COUNT(*)
+            FROM fixtures
+            WHERE tournament_id = :t_id
+              AND venue_id = :v_id
+              AND deleted_at IS NULL
+        ");
+        $fixStmt->execute([':t_id' => $tournamentId, ':v_id' => $venueId]);
+        if ((int)$fixStmt->fetchColumn() > 0) {
+            throw new \InvalidArgumentException("Cannot remove venue: fixtures in this tournament are scheduled at this venue.");
+        }
+
+        // 5. Remove tournament_venues row
+        $this->pdo->beginTransaction();
+        try {
+            $delStmt = $this->pdo->prepare("
+                DELETE FROM tournament_venues
+                WHERE tournament_id = :t_id AND venue_id = :v_id
+            ");
+            $delStmt->execute([':t_id' => $tournamentId, ':v_id' => $venueId]);
+
+            $this->pdo->commit();
+
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'TOURNAMENT_VENUE_REMOVE',
+                'Tournaments',
+                'tournament_venues',
+                $tournamentId,
+                ['tournament_id' => $tournamentId, 'venue_id' => $venueId],
+                null,
+                "Removed venue #{$venueId} ({$venue['name']}) from tournament #{$tournamentId} ({$t['name']})"
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function getEligibleVenues(int $organizationId, int $tournamentId): array
+    {
+        if (!$this->pdo) return [];
+
+        $stmt = $this->pdo->prepare("
+            SELECT v.id, v.name, v.venue_code, v.city, v.venue_type
+            FROM venues v
+            WHERE v.organization_id = :org_id
+              AND v.status = 'active'
+              AND v.deleted_at IS NULL
+              AND v.id NOT IN (
+                  SELECT tv.venue_id
+                  FROM tournament_venues tv
+                  WHERE tv.tournament_id = :t_id
+              )
+            ORDER BY v.name ASC
+        ");
+        $stmt->execute([
+            ':org_id' => $organizationId,
+            ':t_id' => $tournamentId
+        ]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Generate fixtures for a tournament based on its format and enrolled teams.
+     * Supports single round-robin (League / Round Robin) and first-round Knockout.
+     * Transaction-safe, deterministic, tenant-isolated, and fully audit-logged.
+     */
+    public function generateFixtures(int $organizationId, int $tournamentId, ?int $performedBy = null): array
+    {
+        if (!$this->pdo) return ['count' => 0, 'fixtures' => []];
+
+        // 1. Verify tournament exists and belongs to current tenant
+        $t = $this->getTournament($organizationId, $tournamentId);
+        if (!$t) {
+            throw new \InvalidArgumentException("Tournament not found or access denied.");
+        }
+
+        // 2. Lifecycle check: cannot generate for completed or cancelled tournaments
+        if (in_array($t['status'] ?? '', ['completed', 'cancelled'], true)) {
+            throw new \InvalidArgumentException("Cannot generate fixtures for a completed or cancelled tournament.");
+        }
+
+        // 3. Supported format check
+        $formatName = $t['format_name'] ?? '';
+        if ($formatName === 'Group + Knockout') {
+            throw new \InvalidArgumentException("Fixture generation is not supported for Group + Knockout format.");
+        }
+        if (!in_array($formatName, ['League', 'Round Robin', 'Knockout'], true)) {
+            throw new \InvalidArgumentException("Fixture generation is not supported for format: " . ($formatName ?: 'Unknown') . ".");
+        }
+
+        // 4. Duplicate generation check: reject if fixtures already exist
+        $fixCheck = $this->pdo->prepare("SELECT COUNT(*) FROM fixtures WHERE tournament_id = :t_id AND deleted_at IS NULL");
+        $fixCheck->execute([':t_id' => $tournamentId]);
+        if ((int)$fixCheck->fetchColumn() > 0) {
+            throw new \InvalidArgumentException("Fixtures already exist for this tournament.");
+        }
+
+        // 5. Retrieve active, non-withdrawn, non-deleted participating teams
         $ttStmt = $this->pdo->prepare("
-            INSERT INTO tournament_teams (tournament_id, team_id, status, registered_at) 
-            VALUES (:t_id, :tm_id, 'approved', NOW())
-            ON DUPLICATE KEY UPDATE status = 'approved'
+            SELECT tt.team_id, t.name as team_name
+            FROM tournament_teams tt
+            JOIN teams t ON tt.team_id = t.id
+            WHERE tt.tournament_id = :t_id
+              AND tt.status != 'withdrawn'
+              AND t.organization_id = :org_id
+              AND t.status = 'active'
+              AND t.deleted_at IS NULL
+            ORDER BY tt.id ASC
         ");
-        $ttStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+        $ttStmt->execute([':t_id' => $tournamentId, ':org_id' => $organizationId]);
+        $teams = $ttStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $teamCount = count($teams);
 
-        $stdStmt = $this->pdo->prepare("
-            INSERT INTO tournament_standings (tournament_id, team_id, played, won, drawn, lost, points, scored, conceded, difference, rank_position, updated_at)
-            VALUES (:t_id, :tm_id, 0, 0, 0, 0, 0, 0, 0, 0, 1, NOW())
-            ON DUPLICATE KEY UPDATE updated_at = NOW()
-        ");
-        $stdStmt->execute([':t_id' => $tournamentId, ':tm_id' => $teamId]);
+        if ($teamCount < 2) {
+            throw new \InvalidArgumentException("At least 2 participating teams are required to generate fixtures.");
+        }
 
-        return true;
+        // 6. Generate match pairings by format
+        $rounds = [];
+        if (in_array($formatName, ['League', 'Round Robin'], true)) {
+            $rounds = $this->generateRoundRobinSchedule(array_column($teams, 'team_id'));
+        } elseif ($formatName === 'Knockout') {
+            // Odd-team knockout without established seeding is safely rejected
+            if ($teamCount % 2 !== 0) {
+                throw new \InvalidArgumentException("Knockout fixture generation requires an even number of participating teams.");
+            }
+
+            $roundLabel = ($teamCount === 2) ? 'Final' : (($teamCount === 4) ? 'Semi Final' : (($teamCount === 8) ? 'Quarter Final' : 'Round 1'));
+            $knockoutMatches = [];
+            for ($i = 0; $i < $teamCount; $i += 2) {
+                $knockoutMatches[] = [
+                    'home' => (int)$teams[$i]['team_id'],
+                    'away' => (int)$teams[$i + 1]['team_id']
+                ];
+            }
+            $rounds[$roundLabel] = $knockoutMatches;
+        }
+
+        // 7. Atomic batch creation of fixtures and matches
+        $scheduledDate = $t['start_date'] ?: date('Y-m-d');
+        $this->pdo->beginTransaction();
+        $generatedFixtures = [];
+
+        try {
+            $seq = 1;
+            foreach ($rounds as $roundName => $matches) {
+                foreach ($matches as $m) {
+                    $fixRef = 'FIX-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)) . '-' . sprintf('%03d', $seq);
+                    $matchRef = 'MCH-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)) . '-' . sprintf('%03d', $seq);
+
+                    $fSql = "
+                        INSERT INTO fixtures (
+                            organization_id, tournament_id, fixture_reference, round_name,
+                            group_name, home_team_id, away_team_id, venue_id, facility_id,
+                            scheduled_date, scheduled_start_time, scheduled_end_time, status,
+                            notes, created_at, updated_at
+                        ) VALUES (
+                            :org_id, :t_id, :fix_ref, :round,
+                            NULL, :home_id, :away_id, NULL, NULL,
+                            :sdate, '15:00:00', NULL, 'scheduled',
+                            'Auto-generated fixture', NOW(), NOW()
+                        )
+                    ";
+                    $fStmt = $this->pdo->prepare($fSql);
+                    $fStmt->execute([
+                        ':org_id' => $organizationId,
+                        ':t_id' => $tournamentId,
+                        ':fix_ref' => $fixRef,
+                        ':round' => (string)$roundName,
+                        ':home_id' => (int)$m['home'],
+                        ':away_id' => (int)$m['away'],
+                        ':sdate' => $scheduledDate
+                    ]);
+
+                    $fixtureId = (int)$this->pdo->lastInsertId();
+
+                    $mSql = "
+                        INSERT INTO matches (
+                            organization_id, fixture_id, match_reference, status, created_at, updated_at
+                        ) VALUES (
+                            :org_id, :fix_id, :m_ref, 'scheduled', NOW(), NOW()
+                        )
+                    ";
+                    $mStmt = $this->pdo->prepare($mSql);
+                    $mStmt->execute([
+                        ':org_id' => $organizationId,
+                        ':fix_id' => $fixtureId,
+                        ':m_ref' => $matchRef
+                    ]);
+
+                    $generatedFixtures[] = [
+                        'id' => $fixtureId,
+                        'fixture_reference' => $fixRef,
+                        'round_name' => (string)$roundName,
+                        'home_team_id' => (int)$m['home'],
+                        'away_team_id' => (int)$m['away']
+                    ];
+                    $seq++;
+                }
+            }
+
+            $this->pdo->commit();
+
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'FIXTURE_GENERATE',
+                'Tournaments',
+                'fixtures',
+                $tournamentId,
+                null,
+                [
+                    'tournament_id' => $tournamentId,
+                    'format' => $formatName,
+                    'generated_count' => count($generatedFixtures),
+                    'team_count' => $teamCount
+                ],
+                "Generated " . count($generatedFixtures) . " fixtures for tournament #{$tournamentId} ({$t['name']}) [{$formatName}]"
+            );
+
+            return [
+                'count' => count($generatedFixtures),
+                'fixtures' => $generatedFixtures
+            ];
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    /**
+     * Standard round-robin scheduling algorithm (Berger rotation).
+     * Generates N(N-1)/2 distinct pairings across N-1 (even) or N (odd) rounds.
+     * Odd team counts use an internal algorithmic bye without database dummy records.
+     */
+    protected function generateRoundRobinSchedule(array $teamIds): array
+    {
+        $n = count($teamIds);
+        if ($n < 2) return [];
+
+        $teams = array_values($teamIds);
+        if ($n % 2 !== 0) {
+            $teams[] = null; // internal algorithmic bye
+            $n++;
+        }
+
+        $numRounds = $n - 1;
+        $half = $n / 2;
+        $rounds = [];
+
+        for ($r = 0; $r < $numRounds; $r++) {
+            $roundMatches = [];
+            for ($i = 0; $i < $half; $i++) {
+                $t1 = $teams[$i];
+                $t2 = $teams[$n - 1 - $i];
+
+                if ($t1 !== null && $t2 !== null) {
+                    // Alternate home and away across rounds
+                    if (($r + $i) % 2 === 0) {
+                        $roundMatches[] = ['home' => (int)$t1, 'away' => (int)$t2];
+                    } else {
+                        $roundMatches[] = ['home' => (int)$t2, 'away' => (int)$t1];
+                    }
+                }
+            }
+            $roundNum = $r + 1;
+            $rounds["Round {$roundNum}"] = $roundMatches;
+
+            // Rotate array keeping position 0 fixed
+            $last = array_pop($teams);
+            array_splice($teams, 1, 0, [$last]);
+        }
+
+        return $rounds;
     }
 }

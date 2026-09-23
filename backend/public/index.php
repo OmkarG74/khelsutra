@@ -1,5 +1,19 @@
 <?php
 
+// Allow PHP built-in server to serve existing static assets directly
+if (php_sapi_name() === 'cli-server') {
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $staticFile = realpath(__DIR__ . $requestPath);
+
+    if (
+        $staticFile !== false &&
+        str_starts_with($staticFile, realpath(__DIR__)) &&
+        is_file($staticFile)
+    ) {
+        return false;
+    }
+}
+
 define('LARAVEL_START', microtime(true));
 
 // Autoloader

@@ -116,24 +116,33 @@ ob_start();
                                 </td>
                                 <td class="py-3 px-3">
                                     <?php
-                                        $badge = match($venue['status'] ?? 'active') {
+                                        $vStatus = $venue['status'] ?? 'active';
+                                        $badge = match($vStatus) {
                                             'active' => 'badge-success',
                                             'under_maintenance' => 'badge-warning',
                                             default => 'badge-secondary'
                                         };
                                     ?>
-                                    <span class="badge <?= $badge ?>" style="border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize;">
-                                        <?= htmlspecialchars(str_replace('_', ' ', $venue['status'] ?? 'active'), ENT_QUOTES, 'UTF-8') ?>
-                                    </span>
+                                    <form action="/venues/<?= (int)$venue['id'] ?>/status" method="POST" class="d-inline m-0 p-0">
+                                        <input type="hidden" name="status" value="<?= $vStatus === 'active' ? 'inactive' : 'active' ?>">
+                                        <button type="submit" class="badge <?= $badge ?>" style="cursor: pointer; border: none; border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize; font-family: inherit;" title="Click to toggle status to <?= $vStatus === 'active' ? 'Inactive' : 'Active' ?>">
+                                            <?= htmlspecialchars(str_replace('_', ' ', $vStatus), ENT_QUOTES, 'UTF-8') ?>
+                                        </button>
+                                    </form>
                                 </td>
                                 <td class="py-3 px-3 text-end">
                                     <div class="btn-group btn-group-sm">
                                         <a href="/venues/<?= (int)$venue['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Facilities & Bookings">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        <a href="/venues/<?= (int)$venue['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0 6px 6px 0;" title="Edit Venue">
+                                        <a href="/venues/<?= (int)$venue['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0;" title="Edit Venue">
                                             <i class="bi bi-pencil"></i>
                                         </a>
+                                        <form action="/venues/<?= (int)$venue['id'] ?>/delete" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this venue? This action marks the venue as deleted.');">
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" style="border-radius: 0 6px 6px 0; border-left: 0;" title="Delete Venue">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>

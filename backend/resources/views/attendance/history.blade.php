@@ -3,7 +3,7 @@ $activePage = 'training';
 $title = 'Attendance History — KhelSutra Platform';
 
 $attService = new \App\Services\Attendance\AttendanceService();
-$orgId = $_SESSION['current_organization_id'] ?? 1;
+$orgId = current_organization_id();
 
 $trainingRecords = $attService->listTrainingAttendance($orgId);
 $matchRecords = $attService->listMatchAttendance($orgId);
