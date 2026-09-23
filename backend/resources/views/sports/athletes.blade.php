@@ -1,354 +1,182 @@
 <?php
 $activePage = 'athletes';
-$title = 'Athletes Management — KhelSutra';
+$title = 'Athletes — KhelSutra';
+
+$orgId = current_organization_id();
+$search = trim($_GET['search'] ?? '');
+$sportId = !empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null;
+$status = !empty($_GET['status']) ? trim($_GET['status']) : null;
+$page = max(1, (int)($_GET['page'] ?? 1));
+
+$athleteService = new \App\Services\Athlete\AthleteService();
+$result = $athleteService->listAthletes($orgId, $page, 15, $search, $sportId, $status);
+$athletes = $result['data'] ?? [];
+$totalAthletes = $result['total'] ?? 0;
+$totalPages = $result['total_pages'] ?? 1;
+
+// Fetch sports for filter dropdown
+$pdo = \App\Services\BaseService::getDatabaseConnection();
+$sportsList = $pdo->query("SELECT id, name FROM sports WHERE status = 'active' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 ob_start();
 ?>
 
-<!-- Page Header (Section 16) -->
+<!-- Page Header (Clean Page Title + Action, No Subtitle) -->
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">Athletes</h1>
-        <p class="ks-page-subtitle">Manage athlete profiles, documents, teams, medical clearances, and performance.</p>
     </div>
     <div class="ks-header-actions">
-        <button class="ks-btn ks-btn-secondary" onclick="alert('Exporting Athlete Directory...');">
+        <a href="/reports" class="ks-btn ks-btn-secondary">
             <i class="bi bi-download"></i>
             <span>Export Report</span>
-        </button>
-        <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#newAthleteModal">
+        </a>
+        <a href="/athletes/create" class="ks-btn ks-btn-primary" id="btnAddAthlete">
             <i class="bi bi-plus-lg"></i>
             <span>+ Add Athlete</span>
-        </button>
+        </a>
     </div>
 </div>
 
-<!-- KPI Stat Overview Row -->
-<div class="row g-3 mb-4">
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-blue">
-                    <i class="bi bi-people-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Total Athletes</div>
-                    <div class="ks-kpi-value">142</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive">
-                    <i class="bi bi-arrow-up-short fs-5 align-middle"></i> +12 this month
-                </span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 22C18 20 28 26 44 14C60 2 72 16 88 4" stroke="#16A34A" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-green">
-                    <i class="bi bi-check-circle-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Active Registrations</div>
-                    <div class="ks-kpi-value">128</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">90.1% active participation</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 18C20 18 30 24 50 16C70 8 78 4 88 12" stroke="#16A34A" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-amber">
-                    <i class="bi bi-heart-pulse-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Medical Pending</div>
-                    <div class="ks-kpi-value">9</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text text-warning">Awaiting doctor review</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 12C22 18 42 6 62 20C74 24 82 14 88 8" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-purple">
-                    <i class="bi bi-shield-shaded fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Academy Teams</div>
-                    <div class="ks-kpi-value">8</div>
-                </div>
-            </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">U-14, U-16, U-18 & Senior</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 20C16 16 34 8 52 14C70 20 78 12 88 6" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Table Card & Filter Bar -->
+<!-- Table Card & Live Filter Bar -->
 <div class="ks-table-card">
-    <div class="ks-table-header">
+    <div class="ks-table-header flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-person-lines-fill" style="color: var(--ks-primary); font-size: 18px;"></i>
-            <span class="ks-card-title mb-0">Registered Athletes Roster</span>
+            <span class="ks-card-title mb-0">Registered Athletes (<?= (int)$totalAthletes ?>)</span>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <div class="position-relative" style="width: 260px;">
+        
+        <form action="/athletes" method="GET" class="d-flex align-items-center flex-wrap gap-2 m-0">
+            <div class="position-relative" style="width: 240px;">
                 <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
-                <input type="text" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Search by name, ID...">
+                <input type="text" name="search" value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Search by name, ID...">
             </div>
-            <select class="ks-form-select" style="width: 140px; height: 38px; font-size: 13px;">
+            
+            <select name="sport_id" class="ks-form-select" style="width: 140px; height: 38px; font-size: 13px;" onchange="this.form.submit()">
                 <option value="">All Sports</option>
-                <option value="football">Football</option>
-                <option value="cricket">Cricket</option>
-                <option value="badminton">Badminton</option>
-                <option value="athletics">Athletics</option>
+                <?php foreach ($sportsList as $sp): ?>
+                    <option value="<?= (int)$sp['id'] ?>" <?= $sportId == $sp['id'] ? 'selected' : '' ?>><?= htmlspecialchars($sp['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
             </select>
-            <select class="ks-form-select" style="width: 130px; height: 38px; font-size: 13px;">
+            
+            <select name="status" class="ks-form-select" style="width: 130px; height: 38px; font-size: 13px;" onchange="this.form.submit()">
                 <option value="">All Status</option>
-                <option value="active">Confirmed</option>
-                <option value="pending">Pending</option>
-                <option value="inactive">Inactive</option>
+                <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
+                <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                <option value="injured" <?= $status === 'injured' ? 'selected' : '' ?>>Injured</option>
+                <option value="suspended" <?= $status === 'suspended' ? 'selected' : '' ?>>Suspended</option>
             </select>
-        </div>
+
+            <?php if (!empty($search) || !empty($sportId) || !empty($status)): ?>
+                <a href="/athletes" class="btn btn-sm btn-outline-secondary" style="height: 38px; display: flex; align-items: center;">Clear</a>
+            <?php endif; ?>
+        </form>
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-athletes">
             <thead>
                 <tr>
                     <th style="width: 50px;">#</th>
                     <th>Athlete Name</th>
                     <th>Reg ID</th>
-                    <th>Sport & Category</th>
+                    <th>Sport</th>
                     <th>Assigned Team</th>
-                    <th>Attendance</th>
+                    <th>Contact</th>
                     <th>Status</th>
-                    <th style="text-align: right;">Action</th>
+                    <th style="text-align: right;">Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td>1</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="ks-user-avatar" style="width: 34px; height: 34px; font-size: 12px; background: #E8F2FF; color: var(--ks-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                                AS
-                            </div>
-                            <div>
-                                <div class="fw-semibold text-navy">Aarav Sharma</div>
-                                <div class="small text-muted">aarav.sharma@example.com</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">ATH-2026-001</span></td>
-                    <td>
-                        <span class="ks-badge ks-badge-blue">Football • Striker</span>
-                    </td>
-                    <td>Titans U-18</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
-                                <div class="progress-bar bg-success" style="width: 94%;"></div>
-                            </div>
-                            <span class="small fw-semibold">94%</span>
-                        </div>
-                    </td>
-                    <td><span class="ks-badge ks-badge-confirmed">Confirmed</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">
-                            View Profile
-                        </button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>2</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="ks-user-avatar" style="width: 34px; height: 34px; font-size: 12px; background: #DCFCE7; color: var(--ks-success); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                                RV
-                            </div>
-                            <div>
-                                <div class="fw-semibold text-navy">Rohan Verma</div>
-                                <div class="small text-muted">rohan.v@example.com</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">ATH-2026-004</span></td>
-                    <td>
-                        <span class="ks-badge ks-badge-cyan">Cricket • All-Rounder</span>
-                    </td>
-                    <td>Strikers U-14</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
-                                <div class="progress-bar bg-success" style="width: 88%;"></div>
-                            </div>
-                            <span class="small fw-semibold">88%</span>
-                        </div>
-                    </td>
-                    <td><span class="ks-badge ks-badge-confirmed">Confirmed</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">
-                            View Profile
-                        </button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>3</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="ks-user-avatar" style="width: 34px; height: 34px; font-size: 12px; background: #FEF3C7; color: #B45309; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                                SN
-                            </div>
-                            <div>
-                                <div class="fw-semibold text-navy">Sneha Nair</div>
-                                <div class="small text-muted">sneha.nair@example.com</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">ATH-2026-012</span></td>
-                    <td>
-                        <span class="ks-badge ks-badge-purple">Badminton • Singles</span>
-                    </td>
-                    <td>Apex Senior</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
-                                <div class="progress-bar bg-warning" style="width: 72%;"></div>
-                            </div>
-                            <span class="small fw-semibold">72%</span>
-                        </div>
-                    </td>
-                    <td><span class="ks-badge ks-badge-pending">Medical Pending</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">
-                            View Profile
-                        </button>
-                    </td>
-                </tr>
-                <tr>
-                    <td>4</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="ks-user-avatar" style="width: 34px; height: 34px; font-size: 12px; background: #F3E8FF; color: var(--ks-purple); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
-                                VK
-                            </div>
-                            <div>
-                                <div class="fw-semibold text-navy">Vikram Kulkarni</div>
-                                <div class="small text-muted">vikram.k@example.com</div>
-                            </div>
-                        </div>
-                    </td>
-                    <td><span class="fw-medium text-navy">ATH-2026-018</span></td>
-                    <td>
-                        <span class="ks-badge ks-badge-blue">Athletics • 400m Sprint</span>
-                    </td>
-                    <td>Phoenix Track Squad</td>
-                    <td>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="progress flex-grow-1" style="height: 6px; width: 60px;">
-                                <div class="progress-bar bg-success" style="width: 96%;"></div>
-                            </div>
-                            <span class="small fw-semibold">96%</span>
-                        </div>
-                    </td>
-                    <td><span class="ks-badge ks-badge-confirmed">Confirmed</span></td>
-                    <td style="text-align: right;">
-                        <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">
-                            View Profile
-                        </button>
-                    </td>
-                </tr>
+                <?php if (empty($athletes)): ?>
+                    <tr>
+                        <td colspan="8" class="text-center py-5 text-muted">
+                            <i class="bi bi-people d-block fs-1 mb-2" style="color: var(--ks-text-muted);"></i>
+                            <div class="fw-semibold text-navy fs-5">No athletes found</div>
+                            <div class="small mt-1 mb-3">No registered athletes matched the filter criteria in this academy.</div>
+                            <a href="/athletes/create" class="ks-btn ks-btn-primary d-inline-flex">
+                                <i class="bi bi-plus-lg"></i>
+                                <span>+ Add Athlete</span>
+                            </a>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php $idx = ($page - 1) * 15 + 1; foreach ($athletes as $ath): ?>
+                        <tr>
+                            <td><?= $idx++ ?></td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="ks-user-avatar" style="width: 36px; height: 36px; font-size: 12px; background: #E8F2FF; color: var(--ks-primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+                                        <?= strtoupper(substr($ath['first_name'] ?? 'A', 0, 1) . substr($ath['last_name'] ?? 'A', 0, 1)) ?>
+                                    </div>
+                                    <div>
+                                        <div class="fw-semibold text-navy">
+                                            <a href="/athletes/<?= (int)$ath['id'] ?>" class="text-navy text-decoration-none hover-primary">
+                                                <?= htmlspecialchars(($ath['first_name'] ?? '') . ' ' . ($ath['last_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                        </div>
+                                        <div class="small text-muted"><?= htmlspecialchars($ath['gender'] ?? 'Not specified', ENT_QUOTES, 'UTF-8') ?> • DOB: <?= !empty($ath['date_of_birth']) ? date('d M Y', strtotime($ath['date_of_birth'])) : '—' ?></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="fw-medium text-navy"><?= htmlspecialchars($ath['athlete_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                            </td>
+                            <td>
+                                <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($ath['sport_name'] ?? 'Football', ENT_QUOTES, 'UTF-8') ?></span>
+                            </td>
+                            <td>
+                                <?= htmlspecialchars($ath['team_name'] ?? 'Unassigned', ENT_QUOTES, 'UTF-8') ?>
+                            </td>
+                            <td>
+                                <div><?= htmlspecialchars($ath['phone'] ?? 'N/A', ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="small text-muted"><?= htmlspecialchars($ath['email'] ?? '', ENT_QUOTES, 'UTF-8') ?></div>
+                            </td>
+                            <td>
+                                <?php $aStatus = $ath['status'] ?? 'active'; ?>
+                                <form action="/athletes/<?= (int)$ath['id'] ?>/status" method="POST" class="d-inline m-0 p-0">
+                                    <input type="hidden" name="status" value="<?= $aStatus === 'active' ? 'inactive' : 'active' ?>">
+                                    <button type="submit" class="ks-badge ks-badge-<?= $aStatus === 'active' ? 'confirmed' : 'pending' ?> text-capitalize" style="cursor: pointer; border: 1px solid <?= $aStatus === 'active' ? '#BBF7D0' : '#FED7AA' ?>; background-color: <?= $aStatus === 'active' ? '#DCFCE7' : '#FFEDD5' ?>; color: <?= $aStatus === 'active' ? '#166534' : '#9A3412' ?>; padding: 0 10px; font-family: inherit;" title="Click to toggle status to <?= $aStatus === 'active' ? 'Inactive' : 'Active' ?>">
+                                        <?= htmlspecialchars($aStatus, ENT_QUOTES, 'UTF-8') ?>
+                                    </button>
+                                </form>
+                            </td>
+                            <td style="text-align: right;">
+                                <div class="d-flex align-items-center justify-content-end gap-1">
+                                    <a href="/athletes/<?= (int)$ath['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Profile" style="padding: 4px 8px; font-size: 12px;">
+                                        <i class="bi bi-eye"></i> View
+                                    </a>
+                                    <a href="/athletes/<?= (int)$ath['id'] ?>/edit" class="btn btn-sm btn-outline-primary" title="Edit Athlete" style="padding: 4px 8px; font-size: 12px;">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </a>
+                                    <form action="/athletes/<?= (int)$ath['id'] ?>/delete" method="POST" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this athlete? This action marks the athlete as deleted.');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Athlete" style="padding: 4px 8px; font-size: 12px;">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
 
-    <!-- Table Pagination Footer -->
-    <div class="p-3 border-top d-flex justify-content-between align-items-center" style="border-color: var(--ks-border-light) !important;">
-        <div class="small text-muted">Showing 1 to 4 of 142 registered athletes</div>
-        <div class="d-flex gap-1">
-            <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;" disabled>Previous</button>
-            <button class="ks-btn ks-btn-primary" style="height: 32px; padding: 0 12px; font-size: 12px;">1</button>
-            <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">2</button>
-            <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">3</button>
-            <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 12px; font-size: 12px;">Next</button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal for New Athlete (Section 26) -->
-<div class="modal fade" id="newAthleteModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius: var(--ks-radius-modal); border: 1px solid var(--ks-border); box-shadow: var(--ks-shadow-modal);">
-            <div class="modal-header border-0 pb-0">
-                <div>
-                    <h5 class="modal-title fw-bold text-navy" style="font-size: 18px;">Register New Athlete</h5>
-                    <p class="small text-muted mb-0">Add candidate profile to academy roster</p>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body py-3">
-                <form id="athleteForm">
-                    <div class="mb-3">
-                        <label class="ks-form-label">Full Name *</label>
-                        <input type="text" class="ks-form-control" placeholder="e.g. Rahul Patil" required>
-                    </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="ks-form-label">Date of Birth</label>
-                            <input type="date" class="ks-form-control">
-                        </div>
-                        <div class="col-6">
-                            <label class="ks-form-label">Gender</label>
-                            <select class="ks-form-select">
-                                <option>Male</option>
-                                <option>Female</option>
-                                <option>Other</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="ks-form-label">Primary Sport *</label>
-                        <select class="ks-form-select" required>
-                            <option value="1">Football</option>
-                            <option value="2">Cricket</option>
-                            <option value="3">Badminton</option>
-                            <option value="4">Athletics</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="ks-form-label">Contact Email / Guardian</label>
-                        <input type="email" class="ks-form-control" placeholder="parent@example.com">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer border-0 pt-0">
-                <button type="button" class="ks-btn ks-btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="ks-btn ks-btn-primary" onclick="alert('Athlete registration submitted.');" data-bs-dismiss="modal">Save Athlete</button>
+    <!-- Pagination -->
+    <?php if ($totalPages > 1): ?>
+        <div class="p-3 border-top d-flex align-items-center justify-content-between">
+            <div class="small text-muted">Showing page <?= $page ?> of <?= $totalPages ?> (Total: <?= (int)$totalAthletes ?>)</div>
+            <div class="btn-group btn-group-sm">
+                <?php if ($page > 1): ?>
+                    <a href="/athletes?page=<?= $page - 1 ?>&search=<?= urlencode($search) ?>&sport_id=<?= $sportId ?>&status=<?= urlencode((string)$status) ?>" class="btn btn-outline-secondary">Previous</a>
+                <?php endif; ?>
+                <?php if ($page < $totalPages): ?>
+                    <a href="/athletes?page=<?= $page + 1 ?>&search=<?= urlencode($search) ?>&sport_id=<?= $sportId ?>&status=<?= urlencode((string)$status) ?>" class="btn btn-outline-secondary">Next</a>
+                <?php endif; ?>
             </div>
         </div>
-    </div>
+    <?php endif; ?>
 </div>
 
 <?php

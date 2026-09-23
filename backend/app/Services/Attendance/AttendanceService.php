@@ -59,27 +59,77 @@ class AttendanceService extends BaseService
         $cout = $data['check_out_time'] ?? null;
         $remarks = $data['remarks'] ?? null;
 
-        $stmt->execute([
+        // Determine active subject column and value
+        $subjectCol = $athleteId !== null ? 'athlete_id' : ($coachId !== null ? 'coach_id' : 'employee_id');
+        $subjectVal = $athleteId ?? $coachId ?? $employeeId;
+
+        // Query for existing attendance record
+        $checkStmt = $this->pdo->prepare("
+            SELECT id FROM training_attendance 
+            WHERE organization_id = :org_id 
+              AND training_session_id = :session_id 
+              AND {$subjectCol} = :subject_val 
+            LIMIT 1
+        ");
+        $checkStmt->execute([
             ':org_id' => $orgId,
             ':session_id' => $sessionId,
-            ':ath_id' => $athleteId,
-            ':coach_id' => $coachId,
-            ':emp_id' => $employeeId,
-            ':status' => $status,
-            ':cin' => $cin,
-            ':cout' => $cout,
-            ':remarks' => $remarks,
-            ':by' => $performedBy,
-            ':status2' => $status,
-            ':cin2' => $cin,
-            ':cout2' => $cout,
-            ':remarks2' => $remarks,
-            ':by2' => $performedBy,
+            ':subject_val' => $subjectVal,
         ]);
+        $existingId = $checkStmt->fetchColumn();
+
+        if ($existingId) {
+            $recordId = (int)$existingId;
+            $stmt = $this->pdo->prepare("
+                UPDATE training_attendance SET
+                    attendance_status = :status,
+                    check_in_time = :cin,
+                    check_out_time = :cout,
+                    remarks = :remarks,
+                    recorded_by = :by,
+                    updated_at = NOW()
+                WHERE id = :id AND organization_id = :org_id
+            ");
+            $stmt->execute([
+                ':status' => $status,
+                ':cin' => $cin,
+                ':cout' => $cout,
+                ':remarks' => $remarks,
+                ':by' => $performedBy,
+                ':id' => $recordId,
+                ':org_id' => $orgId,
+            ]);
+        } else {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO training_attendance (
+                    organization_id, training_session_id, athlete_id, coach_id, employee_id,
+                    attendance_status, check_in_time, check_out_time, remarks, recorded_by,
+                    created_at, updated_at
+                ) VALUES (
+                    :org_id, :session_id, :ath_id, :coach_id, :emp_id,
+                    :status, :cin, :cout, :remarks, :by,
+                    NOW(), NOW()
+                )
+            ");
+            $stmt->execute([
+                ':org_id' => $orgId,
+                ':session_id' => $sessionId,
+                ':ath_id' => $athleteId,
+                ':coach_id' => $coachId,
+                ':emp_id' => $employeeId,
+                ':status' => $status,
+                ':cin' => $cin,
+                ':cout' => $cout,
+                ':remarks' => $remarks,
+                ':by' => $performedBy,
+            ]);
+            $recordId = (int)$this->pdo->lastInsertId();
+        }
 
         $this->auditLog->log($orgId, $performedBy, 'ATTENDANCE_RECORD', 'Attendance', 'training_attendance', $sessionId, null, $data, "Recorded training attendance ({$status}) for session #{$sessionId}");
 
         return [
+            'id' => $recordId,
             'training_session_id' => $sessionId,
             'athlete_id' => $athleteId,
             'coach_id' => $coachId,
@@ -110,42 +160,73 @@ class AttendanceService extends BaseService
             throw new \InvalidArgumentException("Invalid attendance status: {$status}");
         }
 
-        $stmt = $this->pdo->prepare("
-            INSERT INTO match_attendance (
-                organization_id, match_id, athlete_id, coach_id, employee_id,
-                attendance_status, remarks, recorded_by,
-                created_at, updated_at
-            ) VALUES (
-                :org_id, :match_id, :ath_id, :coach_id, :emp_id,
-                :status, :remarks, :by,
-                NOW(), NOW()
-            )
-            ON DUPLICATE KEY UPDATE
-                attendance_status = :status2,
-                remarks = :remarks2,
-                recorded_by = :by2,
-                updated_at = NOW()
-        ");
-
         $remarks = $data['remarks'] ?? null;
 
-        $stmt->execute([
+        // Determine active subject column and value
+        $subjectCol = $athleteId !== null ? 'athlete_id' : ($coachId !== null ? 'coach_id' : 'employee_id');
+        $subjectVal = $athleteId ?? $coachId ?? $employeeId;
+
+        // Query for existing attendance record
+        $checkStmt = $this->pdo->prepare("
+            SELECT id FROM match_attendance 
+            WHERE organization_id = :org_id 
+              AND match_id = :match_id 
+              AND {$subjectCol} = :subject_val 
+            LIMIT 1
+        ");
+        $checkStmt->execute([
             ':org_id' => $orgId,
             ':match_id' => $matchId,
-            ':ath_id' => $athleteId,
-            ':coach_id' => $coachId,
-            ':emp_id' => $employeeId,
-            ':status' => $status,
-            ':remarks' => $remarks,
-            ':by' => $performedBy,
-            ':status2' => $status,
-            ':remarks2' => $remarks,
-            ':by2' => $performedBy,
+            ':subject_val' => $subjectVal,
         ]);
+        $existingId = $checkStmt->fetchColumn();
+
+        if ($existingId) {
+            $recordId = (int)$existingId;
+            $stmt = $this->pdo->prepare("
+                UPDATE match_attendance SET
+                    attendance_status = :status,
+                    remarks = :remarks,
+                    recorded_by = :by,
+                    updated_at = NOW()
+                WHERE id = :id AND organization_id = :org_id
+            ");
+            $stmt->execute([
+                ':status' => $status,
+                ':remarks' => $remarks,
+                ':by' => $performedBy,
+                ':id' => $recordId,
+                ':org_id' => $orgId,
+            ]);
+        } else {
+            $stmt = $this->pdo->prepare("
+                INSERT INTO match_attendance (
+                    organization_id, match_id, athlete_id, coach_id, employee_id,
+                    attendance_status, remarks, recorded_by,
+                    created_at, updated_at
+                ) VALUES (
+                    :org_id, :match_id, :ath_id, :coach_id, :emp_id,
+                    :status, :remarks, :by,
+                    NOW(), NOW()
+                )
+            ");
+            $stmt->execute([
+                ':org_id' => $orgId,
+                ':match_id' => $matchId,
+                ':ath_id' => $athleteId,
+                ':coach_id' => $coachId,
+                ':emp_id' => $employeeId,
+                ':status' => $status,
+                ':remarks' => $remarks,
+                ':by' => $performedBy,
+            ]);
+            $recordId = (int)$this->pdo->lastInsertId();
+        }
 
         $this->auditLog->log($orgId, $performedBy, 'ATTENDANCE_RECORD', 'Attendance', 'match_attendance', $matchId, null, $data, "Recorded match attendance ({$status}) for match #{$matchId}");
 
         return [
+            'id' => $recordId,
             'match_id' => $matchId,
             'athlete_id' => $athleteId,
             'coach_id' => $coachId,
@@ -190,7 +271,7 @@ class AttendanceService extends BaseService
     {
         $sessionId = (int)($data['training_session_id'] ?? 1);
         $res = $this->recordTrainingAttendance($orgId, $sessionId, $data, $performedBy);
-        if ($res) {
+        if ($res && empty($res['id'])) {
             $res['id'] = $this->pdo->lastInsertId() ?: 1;
         }
         return $res;
@@ -200,7 +281,7 @@ class AttendanceService extends BaseService
     {
         $matchId = (int)($data['match_id'] ?? 1);
         $res = $this->recordMatchAttendance($orgId, $matchId, $data, $performedBy);
-        if ($res) {
+        if ($res && empty($res['id'])) {
             $res['id'] = $this->pdo->lastInsertId() ?: 1;
         }
         return $res;

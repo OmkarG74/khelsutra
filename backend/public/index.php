@@ -1,5 +1,19 @@
 <?php
 
+// Allow PHP built-in server to serve existing static assets directly
+if (php_sapi_name() === 'cli-server') {
+    $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+    $staticFile = realpath(__DIR__ . $requestPath);
+
+    if (
+        $staticFile !== false &&
+        str_starts_with($staticFile, realpath(__DIR__)) &&
+        is_file($staticFile)
+    ) {
+        return false;
+    }
+}
+
 define('LARAVEL_START', microtime(true));
 
 // Autoloader
@@ -18,6 +32,7 @@ spl_autoload_register(function ($class) {
 });
 
 require_once __DIR__ . '/../app/Helpers/ApiResponse.php';
+require_once __DIR__ . '/../app/Helpers/AuthContext.php';
 
 // Helper env function
 if (!function_exists('env')) {
@@ -82,7 +97,41 @@ if ($uri === '/logout') {
     exit;
 }
 
-// 2. API Route Handler
+// 2. Web Form Actions Dispatcher (POST Submissions)
+require __DIR__ . '/../routes/web_actions.php';
+
+// Secure Document View / Download Handler
+if (preg_match('#^/athletes/(\d+)/documents/(\d+)/(view|download)$#', $uri, $m)) {
+    $athId = (int)$m[1];
+    $docId = (int)$m[2];
+    $action = $m[3]; // 'view' or 'download'
+    $orgId = current_organization_id();
+    $docService = new \App\Services\Athlete\AthleteDocumentService();
+    $doc = $docService->getDocument($orgId, $athId, $docId);
+    if (!$doc) {
+        http_response_code(404);
+        echo "Document not found or access denied.";
+        exit;
+    }
+    $fullPath = $docService->getFullFilePath($doc['file_path']);
+    if (!$fullPath || !file_exists($fullPath)) {
+        http_response_code(404);
+        echo "Document file missing on server.";
+        exit;
+    }
+    $finfo = new \finfo(FILEINFO_MIME_TYPE);
+    $mime = $finfo->file($fullPath) ?: 'application/octet-stream';
+    $ext = pathinfo($fullPath, PATHINFO_EXTENSION);
+    $fileName = preg_replace('/[^a-zA-Z0-9_\-.]/', '_', $doc['document_name']) . '.' . $ext;
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . filesize($fullPath));
+    $disposition = ($action === 'download') ? 'attachment' : 'inline';
+    header('Content-Disposition: ' . $disposition . '; filename="' . $fileName . '"');
+    readfile($fullPath);
+    exit;
+}
+
+// 3. API Route Handler
 if (str_starts_with($uri, '/api/')) {
     header('Access-Control-Allow-Origin: *');
     header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Organization-ID');

@@ -38,6 +38,9 @@ if (!function_exists('base_path')) {
     }
 }
 
+require_once dirname(__DIR__) . '/app/Helpers/ApiResponse.php';
+require_once dirname(__DIR__) . '/app/Helpers/AuthContext.php';
+
 // Autoloader for App namespace
 require_once __DIR__ . "/database.php";
 

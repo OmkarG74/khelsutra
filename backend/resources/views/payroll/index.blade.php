@@ -14,10 +14,7 @@ ob_start();
 
 <!-- Page Header (Section 36 & 52) -->
 <div class="ks-page-header">
-    <div>
-        <h1 class="ks-page-title">Payroll Management</h1>
-        <p class="ks-page-subtitle">Salary disbursements, decimal-safe compensation calculations, and audit-compliant payroll cycles.</p>
-    </div>
+    <h1 class="ks-page-title">Payroll</h1>
     <div class="ks-header-actions">
         <a href="/payroll/periods" class="ks-btn ks-btn-secondary">
             <i class="bi bi-calendar-range"></i>
@@ -108,14 +105,14 @@ ob_start();
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table">
+        <table class="ks-table ks-table-payroll">
             <thead>
                 <tr>
                     <th>Employee</th>
                     <th>Period</th>
-                    <th>Gross</th>
-                    <th>Deductions</th>
-                    <th>Net Salary</th>
+                    <th class="text-end ks-col-money">Gross</th>
+                    <th class="text-end ks-col-money">Deductions</th>
+                    <th class="text-end ks-col-money">Net Salary</th>
                     <th>Payment Status</th>
                     <th>Payment Date</th>
                     <th style="text-align: right;">Actions</th>
@@ -138,13 +135,13 @@ ob_start();
                             <td>
                                 <span class="badge bg-light text-dark fw-bold"><?= htmlspecialchars($p['period_name'] ?? 'Period') ?></span>
                             </td>
-                            <td>
+                            <td class="text-end ks-col-money">
                                 <span class="fw-bold text-navy">₹<?= number_format((float)$p['gross_salary'], 2) ?></span>
                             </td>
-                            <td>
+                            <td class="text-end ks-col-money">
                                 <span class="small text-danger">₹<?= number_format((float)$p['tax'] + (float)$p['deductions'] + (float)$p['other_deductions'], 2) ?></span>
                             </td>
-                            <td>
+                            <td class="text-end ks-col-money">
                                 <span class="fw-bold text-success">₹<?= number_format((float)$p['net_salary'], 2) ?></span>
                             </td>
                             <td>

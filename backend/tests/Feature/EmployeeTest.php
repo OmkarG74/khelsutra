@@ -43,9 +43,36 @@ class EmployeeTest
     public function testEmployeeCoachRelationship(): bool
     {
         $service = new EmployeeService();
-        // Employee 1 is seeded as coach Vikram Singh
-        $emp = $service->getEmployeeDetails(1, 1);
+        $pdo = $service->getPdo();
 
+        // 1. Query Organization 1 for an employee that actually has a valid coach profile
+        $coachEmpId = null;
+        if ($pdo) {
+            $stmt = $pdo->prepare("SELECT employee_id FROM coach_profiles WHERE organization_id = 1 AND deleted_at IS NULL LIMIT 1");
+            $stmt->execute();
+            $coachEmpId = $stmt->fetchColumn();
+        }
+
+        // 2 & 3. If no suitable coach exists in an isolated test environment, create the required coach fixture
+        if (!$coachEmpId) {
+            require_once dirname(__DIR__, 2) . '/app/Services/Coach/CoachService.php';
+            $coachService = new \App\Services\Coach\CoachService($pdo);
+            $created = $coachService->createCoach(1, [
+                'first_name' => 'Vikram',
+                'last_name' => 'Singh',
+                'designation' => 'Head Coach',
+                'specialization' => 'Cricket Batting',
+                'experience_years' => 10,
+            ]);
+            $coachEmpId = $created['employee_id'] ?? null;
+        }
+
+        if (!$coachEmpId) return false;
+
+        // 4. Call EmployeeService::getEmployeeDetails($coachEmpId, 1)
+        $emp = $service->getEmployeeDetails((int)$coachEmpId, 1);
+
+        // 5. Verify that the returned employee contains the expected coach_profile data
         return (!empty($emp['coach_profile']) && !empty($emp['coach_profile']['coach_code']));
     }
 }
