@@ -1,11 +1,9 @@
 <?php
 
 namespace App\Models;
-
 use Illuminate\Database\Eloquent\Model;
 use App\Traits\Auditable;
 use App\Traits\BelongsToOrganization;
-use App\Traits\Auditable;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class VenueBooking extends Model
