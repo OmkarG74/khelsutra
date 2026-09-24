@@ -51,7 +51,7 @@ ob_start();
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-        </select>
+        </select></div>
         <div><button class="ks-btn ks-btn-secondary w-100" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button></div>
         <div class="ms-auto">
             <button class="ks-btn ks-btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> Add Accommodation</button>
