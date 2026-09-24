@@ -481,6 +481,11 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
         return $controller->store($orgId, $requestData);
     }
+    if ($uri === '/api/v1/trips/auto-plan' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());
+        return $controller->autoPlan($orgId, $requestData);
+    }
     if (preg_match('#^/api/v1/trips/(\d+)$#', $uri, $matches) && ($method === 'PUT' || $method === 'PATCH')) {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_transport')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\TransportTripController(new \App\Services\Operations\TransportTripService());

@@ -809,6 +809,49 @@ async function loadRouteHistory(tripId) {
         container.innerHTML = '<div class="alert alert-danger py-2 small">Error loading route data.</div>';
     }
 }
+
+async function autoPlanTrip() {
+    const origin = document.getElementById('planOrigin').value;
+    const dest = document.getElementById('planDest').value;
+    const date = document.getElementById('planDate').value;
+    const eventId = document.getElementById('planEvent').value;
+    
+    if (!origin || !dest || !date) {
+        ksToast('Please fill origin, destination, and date first', 'error');
+        return;
+    }
+    
+    const res = await fetch('/api/v1/trips/auto-plan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({
+            origin: origin,
+            destination: dest,
+            trip_date: date,
+            event_id: eventId,
+            seat_buffer: 0
+        })
+    });
+    
+    const json = await res.json();
+    if(json.success && json.data.plans) {
+        const plan = json.data.plans[0];
+        if (plan) {
+            document.getElementById('autoPlanResult').innerHTML = `
+                <strong>Auto-plan success:</strong> Assigning ${plan.vehicles.length} vehicle(s). Excess seats: ${plan.excess_seats}.
+                <input type="hidden" id="planAutoId" value="${plan.plan_id}">
+            `;
+            ksToast('Auto-plan applied', 'success');
+        } else if (json.data.shortfall) {
+            document.getElementById('autoPlanResult').innerHTML = `
+                <strong class="text-danger">Shortfall:</strong> Need ${json.data.shortfall} more seats.
+            `;
+        }
+    } else {
+        ksToast('Auto-plan failed: ' + (json.message || ''), 'error');
+    }
+}
+
 </script>
 <?php
 $slot = ob_get_clean();
