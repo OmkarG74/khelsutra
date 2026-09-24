@@ -462,6 +462,45 @@ async function submitActionReason() {
         ksToast('Network error', 'error');
     }
 }
+
+    const eventInput = document.getElementById('createEventId');
+    const tournamentInput = document.getElementById('createTournamentId');
+    const venueInput = document.getElementById('createVenue');
+    
+    async function filterVenuesByContext() {
+        let sportId = null;
+        
+        // This is a mockup of checking the context for a sport.
+        // We'd actually fetch the tournament/event to get the sport_id.
+        // For now, if a user picks an event/tournament, we pass it as context.
+        
+        const eventId = eventInput ? eventInput.value : null;
+        const tournamentId = tournamentInput ? tournamentInput.value : null;
+        
+        let url = '/api/v1/venues';
+        const params = [];
+        if (eventId) params.push('context_type=event&context_id=' + eventId);
+        else if (tournamentId) params.push('context_type=tournament&context_id=' + tournamentId);
+        
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+            
+            try {
+                const res = await fetch(url);
+                const json = await res.json();
+                if(json.success) {
+                    const venues = json.data.data || json.data;
+                    venueInput.innerHTML = '<option value="">Select Venue...</option>' + venues.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+                }
+            } catch(e) {
+                console.error('Error fetching filtered venues');
+            }
+        }
+    }
+    
+    if (eventInput) eventInput.addEventListener('change', filterVenuesByContext);
+    if (tournamentInput) tournamentInput.addEventListener('change', filterVenuesByContext);
+
 </script>
 
 <?php
