@@ -15,9 +15,26 @@ class TransportAssignmentService
         $seatBuffer = $params['seat_buffer'] ?? 0;
         $tripDate = $params['trip_date'];
         
-        $N = $travellers + $seatBuffer;
+                $N = $travellers + $seatBuffer;
         
-        if ($N <= 0) {
+        // --- PHASE 5: CARGO/EQUIPMENT LOAD LOGIC ---
+        $totalCargoWeight = 0;
+        $totalCargoVolume = 0;
+        if (isset($params['sport_equipment_profile_ids']) && is_array($params['sport_equipment_profile_ids'])) {
+            // Assume model SportEquipmentProfile exists
+            if (class_exists(\App\Models\SportEquipmentProfile::class)) {
+                $profiles = \App\Models\SportEquipmentProfile::whereIn('id', $params['sport_equipment_profile_ids'])->get();
+                foreach ($profiles as $profile) {
+                    $totalCargoWeight += $profile->weight ?? 0;
+                    $totalCargoVolume += $profile->volume ?? 0;
+                }
+            }
+        }
+        // -------------------------------------------
+        
+        if ($N <= 0 && $totalCargoWeight <= 0 && $totalCargoVolume <= 0) {
+        
+        if ($N <= 0 && $totalCargoWeight <= 0 && $totalCargoVolume <= 0) {
             throw new Exception("Number of passengers must be greater than zero.", 400);
         }
 
@@ -79,16 +96,22 @@ class TransportAssignmentService
         $assigned = [];
         $remaining = $N;
         
-        // DP approach for exact match or smallest excess is better, 
+                // DP approach for exact match or smallest excess is better, 
         // but greedy is simpler: take largest vehicle until remaining is small enough to fit a single smaller vehicle
+        $remainingWeight = $totalCargoWeight;
+        $remainingVolume = $totalCargoVolume;
+        
         foreach ($vehicles as $vehicle) {
-            if ($remaining <= 0) break;
+            if ($remaining <= 0 && $remainingWeight <= 0 && $remainingVolume <= 0) break;
             
             // If remaining can fit in one of the smaller available vehicles perfectly, pick that one
             // We find the smallest vehicle that can fit remaining
             $bestSmall = null;
             foreach (array_reverse($vehicles) as $v) {
-                if (!in_array($v, $assigned) && $v['capacity'] >= $remaining) {
+                $vWeightCap = $v['cargo_capacity_weight'] ?? 0;
+                $vVolumeCap = $v['cargo_capacity_volume'] ?? 0;
+                
+                if (!in_array($v, $assigned) && $v['capacity'] >= $remaining && $vWeightCap >= $remainingWeight && $vVolumeCap >= $remainingVolume) {
                     $bestSmall = $v;
                     break;
                 }
@@ -96,6 +119,8 @@ class TransportAssignmentService
             if ($bestSmall) {
                 $assigned[] = $bestSmall;
                 $remaining -= $bestSmall['capacity'];
+                $remainingWeight -= ($bestSmall['cargo_capacity_weight'] ?? 0);
+                $remainingVolume -= ($bestSmall['cargo_capacity_volume'] ?? 0);
                 break;
             }
             
@@ -103,16 +128,21 @@ class TransportAssignmentService
             if (!in_array($vehicle, $assigned)) {
                 $assigned[] = $vehicle;
                 $remaining -= $vehicle['capacity'];
+                $remainingWeight -= ($vehicle['cargo_capacity_weight'] ?? 0);
+                $remainingVolume -= ($vehicle['cargo_capacity_volume'] ?? 0);
             }
         }
         
-        if ($remaining > 0) {
+        if ($remaining > 0 || $remainingWeight > 0 || $remainingVolume > 0) {
             return [
                 'success' => false,
-                'shortfall' => $remaining,
+                'shortfall' => max(0, $remaining),
+                'shortfall_weight' => max(0, $remainingWeight),
+                'shortfall_volume' => max(0, $remainingVolume),
                 'assigned_vehicles' => $assigned,
-                'message' => 'Not enough total capacity.'
+                'message' => 'Not enough total capacity (seats or cargo).'
             ];
+        }
         }
 
         return [
