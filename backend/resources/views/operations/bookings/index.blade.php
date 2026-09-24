@@ -1,3 +1,21 @@
+
+<!-- Alternatives Modal -->
+<div class="modal fade" id="alternativesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">Booking Conflict</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>The requested slot is already booked. Here are some alternative suggestions:</p>
+                <div id="alternativesList" class="list-group">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php
 ob_start();
 ?>
