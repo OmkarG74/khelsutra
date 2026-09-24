@@ -51,7 +51,7 @@ ob_start();
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-        </select></div>
+        </select>
         <div><button class="ks-btn ks-btn-secondary w-100" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button></div>
         <div class="ms-auto">
             <button class="ks-btn ks-btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> Add Accommodation</button>
@@ -110,7 +110,7 @@ ob_start();
                                         <option value="hostel">Hostel</option>
                                         <option value="apartment">Apartment</option>
                                         <option value="guesthouse">Guesthouse</option>
-                                    </select></div>
+                                    </select>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Total Rooms</label>
@@ -121,7 +121,7 @@ ob_start();
                                     <select class="ks-form-select" id="accStatus">
                                         <option value="active">Active</option>
                                         <option value="inactive">Inactive</option>
-                                    </select></div>
+                                    </select>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label">Notes</label>
@@ -222,7 +222,7 @@ ob_start();
                             <option value="occupied">Occupied</option>
                             <option value="maintenance">Maintenance</option>
                             <option value="inactive">Inactive</option>
-                        </select></div>
+                        </select>
                     </div>
                     <div class="col-md-2">
                         <button type="button" class="btn btn-primary btn-sm w-100" onclick="addRoom()">Add</button>
