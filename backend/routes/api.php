@@ -508,6 +508,12 @@ return function ($uri, $method, $requestData = []) {
         $controller = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
         return $controller->store($orgId, $requestData);
     }
+
+    if (preg_match('#^/api/v1/accommodations/(\d+)/rooms$#', $uri, $matches) && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_accommodation')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
+        return $controller->getRooms($orgId, (int)$matches[1]);
+    }
     if (preg_match('#^/api/v1/accommodations/(\d+)/rooms$#', $uri, $matches) && $method === 'POST') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_accommodation')) return ApiResponse::error('Forbidden', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Operations\AccommodationController(new \App\Services\Operations\AccommodationService());
