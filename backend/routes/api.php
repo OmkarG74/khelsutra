@@ -535,6 +535,12 @@ return function ($uri, $method, $requestData = []) {
         return $controller->store($orgId, $requestData);
     }
 
+    if ($uri === '/api/v1/scheduling/clashes' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venue')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\SchedulingController();
+        return $controller->getClashes($request); // Assuming it takes request
+    }
+
     // 13. Fallback for other unassigned modules
     $skeletonGroups = [
         'sports', 'coaches', 'performance', 'medical', 'fixtures', 'matches',
