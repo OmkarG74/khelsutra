@@ -76,7 +76,8 @@ return function ($uri, $method, $requestData = []) {
     }
 
     $orgId = $isSuperAdmin ? ($requestedOrgId ?: 1) : $userOrgId;
-    $performedBy = (int)$currentUser['id'];
+    $performedBy = (int)($currentUser['id'] ?? 1);
+    $userId = $performedBy;
 
     // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
     if (str_starts_with($uri, '/api/v1/organizations')) {
@@ -524,12 +525,306 @@ return function ($uri, $method, $requestData = []) {
         return $controller->store($orgId, $requestData);
     }
 
-    // 13. Fallback for other unassigned modules
+    // ==========================================
+    // Member 5: Inventory Categories
+    // ==========================================
+    if ($uri === '/api/v1/inventory/categories') {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryCategoryController();
+        if ($method === 'GET') return $controller->index($orgId);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/inventory/categories/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryCategoryController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+    }
+    if (preg_match('#^/api/v1/inventory/categories/(\d+)/status$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryCategoryController();
+        $targetId = (int)$m[1];
+        if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
+            return $controller->setStatus($orgId, $targetId, $requestData, $performedBy);
+        }
+    }
+
+    // ==========================================
+    // Member 5: Inventory Management
+    // ==========================================
+    if ($uri === '/api/v1/inventory/items' || $uri === '/api/v1/inventory') {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
+        if ($method === 'GET') return $controller->index($orgId, $requestData);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/inventory/categories' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
+        return $controller->categories($orgId);
+    }
+    if ($uri === '/api/v1/inventory/low-stock' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
+        return $controller->lowStock($orgId);
+    }
+    if (preg_match('#^/api/v1/inventory/(?:items/)?(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+    }
+    if (preg_match('#^/api/v1/inventory/(?:items/)?(\d+)/transactions$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
+        $targetId = (int)$m[1];
+        if ($method === 'POST') return $controller->recordTransaction($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') return $controller->transactions($orgId, $targetId, $requestData);
+    }
+
+    // ==========================================
+    // Member 5: Equipment Management
+    // ==========================================
+    if ($uri === '/api/v1/equipment') {
+        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
+        if ($method === 'GET') return $controller->index($orgId);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/equipment/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+    }
+    if (preg_match('#^/api/v1/equipment/(\d+)/assign$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
+        $targetId = (int)$m[1];
+        if ($method === 'POST') return $controller->assign($orgId, $targetId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/equipment/(\d+)/return$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
+        $targetId = (int)$m[1];
+        if ($method === 'POST') return $controller->returnItem($orgId, $targetId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/equipment/(\d+)/assignments$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->assignments($orgId, $targetId);
+    }
+
+    // ==========================================
+    // Member 5: Vendor & Vendor Invoice Management
+    // ==========================================
+    if ($uri === '/api/v1/vendors') {
+        $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
+        if ($method === 'GET') return $controller->index($orgId);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/vendors/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->show($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+    }
+    if (preg_match('#^/api/v1/vendors/(\d+)/status$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
+        $targetId = (int)$m[1];
+        if ($method === 'POST') return $controller->setStatus($orgId, $targetId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/vendors/(\d+)/invoices$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->invoices($orgId, $targetId);
+        if ($method === 'POST') return $controller->storeInvoice($orgId, $targetId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/vendor-invoices/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showInvoice($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'POST') return $controller->updateInvoice($orgId, $targetId, $requestData, $performedBy);
+    }
+
+    // ==========================================
+    // Member 5: Purchase Requests, Purchase Orders & Goods Receipts
+    // ==========================================
+    if ($uri === '/api/v1/purchases/requests') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        if ($method === 'GET') return $controller->requests($orgId, $requestData);
+        if ($method === 'POST') return $controller->storeRequest($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/purchases/requests/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showRequest($orgId, $targetId);
+    }
+    if (preg_match('#^/api/v1/purchases/requests/(\d+)/submit$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        return $controller->submitRequest($orgId, (int)$m[1], $performedBy);
+    }
+    if (preg_match('#^/api/v1/purchases/requests/(\d+)/approve$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        return $controller->approveRequest($orgId, (int)$m[1], $performedBy);
+    }
+    if (preg_match('#^/api/v1/purchases/requests/(\d+)/reject$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        return $controller->rejectRequest($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/purchases/requests/(\d+)/cancel$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        return $controller->cancelRequest($orgId, (int)$m[1], $performedBy);
+    }
+
+    if ($uri === '/api/v1/purchases/orders') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        if ($method === 'GET') return $controller->orders($orgId, $requestData);
+        if ($method === 'POST') return $controller->storeOrder($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/purchases/orders/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showOrder($orgId, $targetId);
+    }
+    if (preg_match('#^/api/v1/purchases/orders/(\d+)/status$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        return $controller->updateOrderStatus($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/purchases/orders/(\d+)/receive$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        return $controller->receiveGoods($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+
+    if ($uri === '/api/v1/purchases/receipts') {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        if ($method === 'GET') return $controller->receipts($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/purchases/receipts/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
+        if ($method === 'GET') return $controller->showReceipt($orgId, (int)$m[1]);
+    }
+
+    // ==========================================
+    // Member 5: Financial Management
+    // ==========================================
+    if ($uri === '/api/v1/finance/summary' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        return $controller->summary($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/finance/category-summary' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        return $controller->categorySummary($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/finance/categories') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        if ($method === 'GET') return $controller->indexCategories($orgId, $requestData);
+        if ($method === 'POST') return $controller->storeCategory($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/finance/categories/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showCategory($orgId, $targetId);
+    }
+    if ($uri === '/api/v1/finance/income') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        if ($method === 'GET') return $controller->indexIncome($orgId, $requestData);
+        if ($method === 'POST') return $controller->storeIncome($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/finance/income/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showIncome($orgId, $targetId);
+    }
+    if ($uri === '/api/v1/finance/expenses') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        if ($method === 'GET') return $controller->indexExpenses($orgId, $requestData);
+        if ($method === 'POST') return $controller->storeExpense($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/finance/expenses/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showExpense($orgId, $targetId);
+    }
+    if (preg_match('#^/api/v1/finance/expenses/(\d+)/approve$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        return $controller->approveExpense($orgId, (int)$m[1], $performedBy);
+    }
+    if (preg_match('#^/api/v1/finance/expenses/(\d+)/reject$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        return $controller->rejectExpense($orgId, (int)$m[1], $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/finance/budgets') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        if ($method === 'GET') return $controller->indexBudgets($orgId, $requestData);
+        if ($method === 'POST') return $controller->storeBudget($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/finance/budgets/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        $targetId = (int)$m[1];
+        if ($method === 'GET') return $controller->showBudget($orgId, $targetId);
+        if ($method === 'PUT' || $method === 'POST') return $controller->updateBudget($orgId, $targetId, $requestData, $performedBy);
+    }
+    if ($uri === '/api/v1/finance/payments') {
+        $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
+        if ($method === 'GET') return $controller->indexPayments($orgId, $requestData);
+        if ($method === 'POST') return $controller->storePayment($orgId, $requestData, $performedBy);
+    }
+
+    // ==========================================
+    // Member 5: Notification Service
+    // ==========================================
+    if ($uri === '/api/v1/notifications') {
+        $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
+        if ($method === 'GET') return $controller->index($orgId, $userId, $requestData);
+        if ($method === 'POST') return $controller->store($orgId, $requestData, $userId);
+    }
+    if ($uri === '/api/v1/notifications/unread-count' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
+        return $controller->unreadCount($orgId, $userId);
+    }
+    if (preg_match('#^/api/v1/notifications/(\d+)/read$#', $uri, $m) && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
+        return $controller->markAsRead($orgId, (int)$m[1], $userId);
+    }
+    if ($uri === '/api/v1/notifications/read-all' && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
+        return $controller->markAllAsRead($orgId, $userId);
+    }
+    if (preg_match('#^/api/v1/notifications/(\d+)$#', $uri, $m) && $method === 'DELETE') {
+        $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
+        return $controller->destroy($orgId, (int)$m[1], $userId);
+    }
+
+    // ==========================================
+    // Reports & Analytics APIs
+    // ==========================================
+    if ($uri === '/api/v1/reports/operational' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
+        return $controller->operational($orgId);
+    }
+    if ($uri === '/api/v1/reports/inventory' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
+        return $controller->inventory($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/reports/purchases' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
+        return $controller->purchases($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/reports/vendors' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
+        return $controller->vendors($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/reports/equipment' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
+        return $controller->equipment($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/reports/finance' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
+        return $controller->finance($orgId, $requestData);
+    }
+
+    // 14. Fallback for other unassigned modules (Preserving all other members' skeleton groups)
     $skeletonGroups = [
         'sports', 'coaches', 'performance', 'medical', 'fixtures', 'matches',
-        'bookings', 'maintenance', 'housekeeping', 'inventory', 'equipment',
-        'vendors', 'purchases', 'events', 'school-activities', 'transport',
-        'accommodation', 'finance', 'reports', 'notifications'
+        'bookings', 'maintenance', 'housekeeping',
+        'events', 'school-activities', 'transport',
+        'accommodation'
     ];
 
     foreach ($skeletonGroups as $group) {
