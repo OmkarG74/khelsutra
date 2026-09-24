@@ -3,7 +3,7 @@ ob_start();
 ?>
 <div class="ks-page-header mb-4">
     <div class="ks-header-left">
-        <h2 class="ks-page-title"><i class="bi bi-buildings" style="color:var(--ks-primary); margin-right:8px;"></i> Accommodation Management</h2>
+        <h2 class="ks-page-title">Accommodation Management</h2>
         <p class="ks-page-subtitle">Manage lodging facilities and room allocations for athletes and staff</p>
     </div>
 </div>
@@ -46,13 +46,13 @@ ob_start();
 
 <div class="ks-filter-bar mb-3">
     <div class="ks-filter-grid">
-        <input type="text" class="ks-form-control" id="filterSearch" placeholder="Search accommodation..." oninput="loadData()">
-        <select class="ks-form-select" id="filterStatus" onchange="loadData()">
+        <div><input type="text" class="ks-form-control" id="filterSearch" placeholder="Search accommodation..." oninput="loadData()"></div>
+        <div><select class="ks-form-select" id="filterStatus" onchange="loadData()">
             <option value="">All Status</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
-        </select>
-        <button class="ks-btn ks-btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+        </select></div>
+        <div><button class="ks-btn ks-btn-secondary w-100" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button></div>
         <div class="ms-auto">
             <button class="ks-btn ks-btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> Add Accommodation</button>
         </div>
@@ -110,7 +110,7 @@ ob_start();
                                         <option value="hostel">Hostel</option>
                                         <option value="apartment">Apartment</option>
                                         <option value="guesthouse">Guesthouse</option>
-                                    </select>
+                                    </select></div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">Total Rooms</label>
@@ -121,7 +121,7 @@ ob_start();
                                     <select class="ks-form-select" id="accStatus">
                                         <option value="active">Active</option>
                                         <option value="inactive">Inactive</option>
-                                    </select>
+                                    </select></div>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label">Notes</label>
@@ -222,7 +222,7 @@ ob_start();
                             <option value="occupied">Occupied</option>
                             <option value="maintenance">Maintenance</option>
                             <option value="inactive">Inactive</option>
-                        </select>
+                        </select></div>
                     </div>
                     <div class="col-md-2">
                         <button type="button" class="btn btn-primary btn-sm w-100" onclick="addRoom()">Add</button>

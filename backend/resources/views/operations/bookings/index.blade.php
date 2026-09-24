@@ -75,7 +75,7 @@ ob_start();
             <input type="date" class="form-control border-start-0" id="filterDate" onchange="loadBookings()">
         </div>
         
-        <div class="btn-group" role="group" id="statusFilterGroup">
+        <div class="btn-group" role="group" id="statusFilterGroup" style="flex: 0 0 auto !important; width: auto !important;">
             <input type="radio" class="btn-check" name="statusFilter" id="statusAll" value="" autocomplete="off" checked onchange="loadBookings()">
             <label class="btn btn-outline-secondary status-filter-btn" for="statusAll">All</label>
 
@@ -92,7 +92,7 @@ ob_start();
             <label class="btn btn-outline-secondary status-filter-btn" for="statusCancelled">Cancelled</label>
         </div>
 
-        <button class="ks-btn ks-btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+        <div style="flex: 0 0 auto !important; width: auto !important;"><button class="ks-btn ks-btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button></div>
         
         <div class="ms-auto">
             <button class="ks-btn ks-btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> New Booking</button>
@@ -304,17 +304,17 @@ function renderTable(data) {
         let actions = '';
         if (item.status === 'pending') {
             actions = `
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-success" title="Approve" onclick="updateStatus(${item.id}, 'approved')"><i class="bi bi-check"></i></button>
-                    <button class="btn btn-danger" title="Reject" onclick="openReasonModal(${item.id}, 'rejected')"><i class="bi bi-x"></i></button>
-                    <button class="btn btn-warning" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-success btn-sm px-2" title="Approve" onclick="updateStatus(${item.id}, 'approved')"><i class="bi bi-check"></i></button>
+                    <button class="btn btn-danger btn-sm px-2" title="Reject" onclick="openReasonModal(${item.id}, 'rejected')"><i class="bi bi-x"></i></button>
+                    <button class="btn btn-warning btn-sm px-2" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
                 </div>
             `;
         } else if (item.status === 'approved') {
             actions = `
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-primary" title="Complete" onclick="updateStatus(${item.id}, 'completed')"><i class="bi bi-check-all"></i></button>
-                    <button class="btn btn-warning" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-primary btn-sm px-2" title="Complete" onclick="updateStatus(${item.id}, 'completed')"><i class="bi bi-check-all"></i></button>
+                    <button class="btn btn-warning btn-sm px-2" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
                 </div>
             `;
         } else {
@@ -419,7 +419,7 @@ function openReasonModal(id, actionType) {
     document.getElementById('actionBookingId').value = id;
     document.getElementById('actionType').value = actionType;
     document.getElementById('actionReasonTitle').innerText = actionType === 'cancelled' ? 'Cancel Booking' : 'Reject Booking';
-    document.getElementById('actionReasonBtn').className = actionType === 'cancelled' ? 'btn btn-warning' : 'btn btn-danger';
+    document.getElementById('actionReasonBtn').className = actionType === 'cancelled' ? 'btn btn-warning text-dark' : 'btn btn-danger';
     
     const modal = new bootstrap.Modal(document.getElementById('actionReasonModal'));
     modal.show();

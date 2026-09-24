@@ -4,8 +4,8 @@ ob_start();
 <div class="ks-page-header mb-4">
     <div class="d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="ks-header-title">Transport & Logistics</h2>
-            <p class="ks-header-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
+            <h2 class="ks-page-title mb-1">Transport <h2 class="ks-header-title">Transport & Logistics</h2> Logistics</h2>
+            <p class="ks-page-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
         </div>
     </div>
 </div>
@@ -84,7 +84,7 @@ ob_start();
             <div class="ks-card-header">
                 <div class="ks-header-left">
                     <i class="bi bi-map" style="color:var(--ks-primary);font-size:18px;"></i>
-                    <h3 class="ks-header-title">Trip Schedule</h3>
+                    <h3 class="ks-header-title mb-0">Trip Schedule</h3>
                     <span class="ks-badge ks-badge-scheduled ms-2" id="trip-count">0</span>
                 </div>
             </div>
@@ -380,9 +380,9 @@ async function loadVehicles() {
                             ${expiryBadges.join('')}
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-2">
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill"></i> Track</button>
-                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus"></i> Plan Trip</button>
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash"></i> Delete</button>
+                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill me-1"></i> Track</button>
+                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus me-1"></i> Plan Trip</button>
+                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash me-1"></i> Delete</button>
                         </div>
                     </div>
                 `;
