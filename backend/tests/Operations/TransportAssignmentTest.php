@@ -38,7 +38,7 @@ class TransportAssignmentTest extends TestCase
             'organization_id' => 1,
             'name' => 'Bus 1',
             'vehicle_number' => 'V-100',
-            'capacity' => 20,
+            'capacity' => 20, 'vehicle_type' => 'Bus',
             'status' => 'available'
         ]);
 
@@ -61,7 +61,7 @@ class TransportAssignmentTest extends TestCase
             'organization_id' => 1,
             'name' => 'Bus 1',
             'vehicle_number' => 'V-101',
-            'capacity' => 20,
+            'capacity' => 20, 'vehicle_type' => 'Bus',
             'status' => 'available'
         ]);
         
@@ -78,14 +78,14 @@ class TransportAssignmentTest extends TestCase
             'organization_id' => 1,
             'name' => 'Van 1',
             'vehicle_number' => 'V-102',
-            'capacity' => 10,
+            'capacity' => 10, 'vehicle_type' => 'Van',
             'status' => 'available'
         ]);
         Vehicle::create([
             'organization_id' => 1,
             'name' => 'Van 2',
             'vehicle_number' => 'V-103',
-            'capacity' => 10,
+            'capacity' => 10, 'vehicle_type' => 'Van',
             'status' => 'available'
         ]);
 
@@ -106,7 +106,7 @@ class TransportAssignmentTest extends TestCase
             'organization_id' => 1,
             'name' => 'Van 1',
             'vehicle_number' => 'V-104',
-            'capacity' => 10,
+            'capacity' => 10, 'vehicle_type' => 'Van',
             'status' => 'available'
         ]);
 
@@ -128,7 +128,7 @@ class TransportAssignmentTest extends TestCase
             'organization_id' => 1,
             'name' => 'Bus 1',
             'vehicle_number' => 'V-105',
-            'capacity' => 30,
+            'capacity' => 30, 'vehicle_type' => 'Bus',
             'status' => 'available'
         ]);
         

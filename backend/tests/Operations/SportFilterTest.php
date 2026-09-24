@@ -17,7 +17,7 @@ class SportFilterTest extends TestCase
     {
         parent::setUp();
         DB::table('tournaments')->truncate();
-        DB::table('venues')->truncate();
+        DB::statement("SET FOREIGN_KEY_CHECKS=0;"); DB::table('venues')->truncate(); DB::statement("SET FOREIGN_KEY_CHECKS=1;");
         DB::table('venue_facilities')->truncate();
         DB::table('venue_sports')->truncate();
         DB::table('facility_sports')->truncate();
@@ -34,7 +34,7 @@ class SportFilterTest extends TestCase
         $tournamentId = DB::table('tournaments')->insertGetId([
             'organization_id' => 1,
             'sport_id' => $sportId,
-            'name' => 'Badminton Cup',
+            'tournament_reference' => 'T-123', 'name' => 'Badminton Cup',
             'start_date' => '2026-10-01',
             'end_date' => '2026-10-10'
         ]);
@@ -92,7 +92,7 @@ class SportFilterTest extends TestCase
         $tournamentId = DB::table('tournaments')->insertGetId([
             'organization_id' => 1,
             'sport_id' => $badmintonId,
-            'name' => 'Badminton Cup',
+            'tournament_reference' => 'T-123', 'name' => 'Badminton Cup',
             'start_date' => '2026-10-01',
             'end_date' => '2026-10-10'
         ]);
