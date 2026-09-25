@@ -5,27 +5,37 @@ $pageSubheader = "Manage physical locations, stadiums, and training grounds.";
 ob_start();
 ?>
 
-<!-- Action Bar -->
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div class="d-flex gap-2">
-        <div class="ks-search-container">
-            <i class="bi bi-search ks-search-icon"></i>
-            <input type="text" class="ks-form-control ks-search-input" placeholder="Search venues by name or code..." style="width: 250px;">
-        </div>
-        <select class="ks-form-select" style="width: 150px;">
-            <option>All Statuses</option>
-            <option>Active</option>
-            <option>Under Maintenance</option>
-            <option>Inactive</option>
-        </select>
+
+<div class="ks-page-header mb-4">
+    <div>
+        <h2 class="ks-page-title mb-1"><?= htmlspecialchars($pageHeader ?? 'Venues & Infrastructure') ?></h2>
+        <p class="ks-page-subtitle"><?= htmlspecialchars($pageSubheader ?? 'Manage physical locations, stadiums, and training grounds.') ?></p>
     </div>
-    <div class="d-flex gap-2">
-        <button class="ks-btn ks-btn-secondary">
-            <i class="bi bi-download me-1"></i> Export
-        </button>
-        <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#newVenueModal">
-            <i class="bi bi-plus-lg me-1"></i> Add Venue
-        </button>
+</div>
+
+<div class="ks-filter-bar mb-4">
+    <div class="ks-filter-grid">
+        <div>
+            <div class="ks-search-container">
+                <i class="bi bi-search ks-search-icon" style="position: absolute; left: 12px; top: 11px; color: var(--ks-text-muted);"></i>
+                <input type="text" class="ks-form-control ks-search-input" id="filterSearch" placeholder="Search venues by name or code..." style="padding-left: 35px;" oninput="loadVenues()">
+            </div>
+        </div>
+        <div>
+            <select class="ks-form-select" id="filterStatus" onchange="loadVenues()">
+                <option value="">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="under_maintenance">Under Maintenance</option>
+                <option value="inactive">Inactive</option>
+            </select>
+        </div>
+        <div style="flex: 0 0 auto !important; width: auto !important;">
+            <button class="ks-btn ks-btn-secondary w-100" onclick="document.getElementById('filterSearch').value=''; document.getElementById('filterStatus').value=''; loadVenues();"><i class="bi bi-x-circle"></i> Clear</button>
+        </div>
+        <div class="ms-auto d-flex gap-2">
+            <button class="ks-btn ks-btn-secondary"><i class="bi bi-download me-1"></i> Export</button>
+            <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#newVenueModal"><i class="bi bi-plus-lg me-1"></i> Add Venue</button>
+        </div>
     </div>
 </div>
 
@@ -143,8 +153,14 @@ function loadVenues() {
                                 </span>
                             </td>
                             <td style="text-align: right;">
-                                <a href="/operations/venues/${v.id}/facilities" class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">Facilities</a>
-                                <button onclick="deleteVenue(${v.id})" class="ks-btn ks-btn-secondary text-danger" style="height: 32px; padding: 0 10px; font-size: 12px;">Del</button>
+                                <div class="d-flex gap-1 justify-content-end">
+                                    <a href="/operations/venues/${v.id}/facilities" class="ks-btn ks-btn-sm ks-btn-secondary" title="Manage Facilities">
+                                        <i class="bi bi-grid"></i>
+                                    </a>
+                                    <button onclick="deleteVenue(${v.id})" class="ks-btn ks-btn-sm ks-btn-secondary text-danger" title="Delete Venue">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;

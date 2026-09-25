@@ -14,7 +14,25 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <!-- KhelSutra Master Design System Stylesheet with Cache Busting -->
     <link rel="stylesheet" href="/assets/css/khelsutra-design-system.css?v=<?= @filemtime(dirname(__DIR__, 3) . '/public/assets/css/khelsutra-design-system.css') ?: time() ?>">
+
+    <!-- Idempotency Token for Operations Module -->
+    <meta name="idempotency-token" content="<?= bin2hex(random_bytes(16)) ?>">
+    <script>
+        const originalFetch = window.fetch;
+        window.fetch = async function() {
+            let [resource, config] = arguments;
+            if(config && config.method && config.method.toUpperCase() === 'POST' && resource.includes('/api/v1/')) {
+                config.headers = config.headers || {};
+                if(!config.headers['Idempotency-Key']) {
+                    const token = document.querySelector('meta[name="idempotency-token"]')?.content;
+                    if(token) config.headers['Idempotency-Key'] = token;
+                }
+            }
+            return originalFetch(resource, config);
+        };
+    </script>
 </head>
+
 <body>
     <div class="ks-app-layout">
         <!-- Sidebar Component -->

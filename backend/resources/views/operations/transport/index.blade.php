@@ -4,8 +4,8 @@ ob_start();
 <div class="ks-page-header mb-4">
     <div class="d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="ks-header-title">Transport & Logistics</h2>
-            <p class="ks-header-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
+            <h2 class="ks-page-title mb-1">Transport <h2 class="ks-header-title">Transport & Logistics</h2> Logistics</h2>
+            <p class="ks-page-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
         </div>
     </div>
 </div>
@@ -84,7 +84,7 @@ ob_start();
             <div class="ks-card-header">
                 <div class="ks-header-left">
                     <i class="bi bi-map" style="color:var(--ks-primary);font-size:18px;"></i>
-                    <h3 class="ks-header-title">Trip Schedule</h3>
+                    <h3 class="ks-header-title mb-0">Trip Schedule</h3>
                     <span class="ks-badge ks-badge-scheduled ms-2" id="trip-count">0</span>
                 </div>
             </div>
@@ -380,9 +380,9 @@ async function loadVehicles() {
                             ${expiryBadges.join('')}
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-2">
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill"></i> Track</button>
-                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus"></i> Plan Trip</button>
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash"></i> Delete</button>
+                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill me-1"></i> Track</button>
+                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus me-1"></i> Plan Trip</button>
+                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash me-1"></i> Delete</button>
                         </div>
                     </div>
                 `;
@@ -809,6 +809,49 @@ async function loadRouteHistory(tripId) {
         container.innerHTML = '<div class="alert alert-danger py-2 small">Error loading route data.</div>';
     }
 }
+
+async function autoPlanTrip() {
+    const origin = document.getElementById('planOrigin').value;
+    const dest = document.getElementById('planDest').value;
+    const date = document.getElementById('planDate').value;
+    const eventId = document.getElementById('planEvent').value;
+    
+    if (!origin || !dest || !date) {
+        ksToast('Please fill origin, destination, and date first', 'error');
+        return;
+    }
+    
+    const res = await fetch('/api/v1/trips/auto-plan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({
+            origin: origin,
+            destination: dest,
+            trip_date: date,
+            event_id: eventId,
+            seat_buffer: 0
+        })
+    });
+    
+    const json = await res.json();
+    if(json.success && json.data.plans) {
+        const plan = json.data.plans[0];
+        if (plan) {
+            document.getElementById('autoPlanResult').innerHTML = `
+                <strong>Auto-plan success:</strong> Assigning ${plan.vehicles.length} vehicle(s). Excess seats: ${plan.excess_seats}.
+                <input type="hidden" id="planAutoId" value="${plan.plan_id}">
+            `;
+            ksToast('Auto-plan applied', 'success');
+        } else if (json.data.shortfall) {
+            document.getElementById('autoPlanResult').innerHTML = `
+                <strong class="text-danger">Shortfall:</strong> Need ${json.data.shortfall} more seats.
+            `;
+        }
+    } else {
+        ksToast('Auto-plan failed: ' + (json.message || ''), 'error');
+    }
+}
+
 </script>
 <?php
 $slot = ob_get_clean();

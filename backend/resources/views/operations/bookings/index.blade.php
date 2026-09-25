@@ -1,3 +1,21 @@
+
+<!-- Alternatives Modal -->
+<div class="modal fade" id="alternativesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">Booking Conflict</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>The requested slot is already booked. Here are some alternative suggestions:</p>
+                <div id="alternativesList" class="list-group">
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php
 ob_start();
 ?>
@@ -75,7 +93,7 @@ ob_start();
             <input type="date" class="form-control border-start-0" id="filterDate" onchange="loadBookings()">
         </div>
         
-        <div class="btn-group" role="group" id="statusFilterGroup">
+        <div class="btn-group" role="group" id="statusFilterGroup" style="flex: 0 0 auto !important; width: auto !important;">
             <input type="radio" class="btn-check" name="statusFilter" id="statusAll" value="" autocomplete="off" checked onchange="loadBookings()">
             <label class="btn btn-outline-secondary status-filter-btn" for="statusAll">All</label>
 
@@ -92,7 +110,7 @@ ob_start();
             <label class="btn btn-outline-secondary status-filter-btn" for="statusCancelled">Cancelled</label>
         </div>
 
-        <button class="ks-btn ks-btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+        <div style="flex: 0 0 auto !important; width: auto !important;"><button class="ks-btn ks-btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button></div>
         
         <div class="ms-auto">
             <button class="ks-btn ks-btn-primary" onclick="openCreateModal()"><i class="bi bi-plus-lg"></i> New Booking</button>
@@ -304,17 +322,17 @@ function renderTable(data) {
         let actions = '';
         if (item.status === 'pending') {
             actions = `
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-success" title="Approve" onclick="updateStatus(${item.id}, 'approved')"><i class="bi bi-check"></i></button>
-                    <button class="btn btn-danger" title="Reject" onclick="openReasonModal(${item.id}, 'rejected')"><i class="bi bi-x"></i></button>
-                    <button class="btn btn-warning" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-success btn-sm px-2" title="Approve" onclick="updateStatus(${item.id}, 'approved')"><i class="bi bi-check"></i></button>
+                    <button class="btn btn-danger btn-sm px-2" title="Reject" onclick="openReasonModal(${item.id}, 'rejected')"><i class="bi bi-x"></i></button>
+                    <button class="btn btn-warning btn-sm px-2" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
                 </div>
             `;
         } else if (item.status === 'approved') {
             actions = `
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-primary" title="Complete" onclick="updateStatus(${item.id}, 'completed')"><i class="bi bi-check-all"></i></button>
-                    <button class="btn btn-warning" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-primary btn-sm px-2" title="Complete" onclick="updateStatus(${item.id}, 'completed')"><i class="bi bi-check-all"></i></button>
+                    <button class="btn btn-warning btn-sm px-2" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
                 </div>
             `;
         } else {
@@ -419,7 +437,7 @@ function openReasonModal(id, actionType) {
     document.getElementById('actionBookingId').value = id;
     document.getElementById('actionType').value = actionType;
     document.getElementById('actionReasonTitle').innerText = actionType === 'cancelled' ? 'Cancel Booking' : 'Reject Booking';
-    document.getElementById('actionReasonBtn').className = actionType === 'cancelled' ? 'btn btn-warning' : 'btn btn-danger';
+    document.getElementById('actionReasonBtn').className = actionType === 'cancelled' ? 'btn btn-warning text-dark' : 'btn btn-danger';
     
     const modal = new bootstrap.Modal(document.getElementById('actionReasonModal'));
     modal.show();
@@ -462,6 +480,45 @@ async function submitActionReason() {
         ksToast('Network error', 'error');
     }
 }
+
+    const eventInput = document.getElementById('createEventId');
+    const tournamentInput = document.getElementById('createTournamentId');
+    const venueInput = document.getElementById('createVenue');
+    
+    async function filterVenuesByContext() {
+        let sportId = null;
+        
+        // This is a mockup of checking the context for a sport.
+        // We'd actually fetch the tournament/event to get the sport_id.
+        // For now, if a user picks an event/tournament, we pass it as context.
+        
+        const eventId = eventInput ? eventInput.value : null;
+        const tournamentId = tournamentInput ? tournamentInput.value : null;
+        
+        let url = '/api/v1/venues';
+        const params = [];
+        if (eventId) params.push('context_type=event&context_id=' + eventId);
+        else if (tournamentId) params.push('context_type=tournament&context_id=' + tournamentId);
+        
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+            
+            try {
+                const res = await fetch(url);
+                const json = await res.json();
+                if(json.success) {
+                    const venues = json.data.data || json.data;
+                    venueInput.innerHTML = '<option value="">Select Venue...</option>' + venues.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+                }
+            } catch(e) {
+                console.error('Error fetching filtered venues');
+            }
+        }
+    }
+    
+    if (eventInput) eventInput.addEventListener('change', filterVenuesByContext);
+    if (tournamentInput) tournamentInput.addEventListener('change', filterVenuesByContext);
+
 </script>
 
 <?php

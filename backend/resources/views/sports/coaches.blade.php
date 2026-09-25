@@ -30,7 +30,7 @@ ob_start();
     <div class="ks-header-actions">
         <a href="/coaches/create" class="ks-btn ks-btn-primary">
             <i class="bi bi-plus-lg"></i>
-            <span>+ Add Coach</span>
+            <span>Add Coach</span>
         </a>
     </div>
 </div>
