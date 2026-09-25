@@ -1,5 +1,8 @@
 <?php
+$activePage = 'transport';
+$title = 'Transport Management — KhelSutra';
 ob_start();
+?>
 ?>
 <div class="ks-page-header mb-4">
     <div class="d-flex justify-content-between align-items-center">

@@ -1,4 +1,9 @@
 <?php
+$activePage = 'operations_venues';
+$title = 'Operations Venues Management — KhelSutra';
+ob_start();
+?>
+<?php
 $title = "Facilities";
 $pageHeader = "Venue Facilities";
 $pageSubheader = "Manage specific areas within a venue.";
