@@ -1,4 +1,8 @@
-<?php ob_start(); ?>
+<?php
+$activePage = 'events';
+$title = 'Events Management — KhelSutra';
+ob_start();
+?>
 <div class="ks-page-header">
     <div class="ks-header-text">
         <h2 class="ks-page-title">Events Management</h2>

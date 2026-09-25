@@ -1,4 +1,8 @@
-<?php ob_start(); ?>
+<?php
+$activePage = 'maintenance';
+$title = 'Maintenance Management — KhelSutra';
+ob_start();
+?>
 
 <div class="ks-page-header">
     <div class="ks-header-left">

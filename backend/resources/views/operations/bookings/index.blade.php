@@ -1,3 +1,8 @@
+<?php
+$activePage = 'bookings';
+$title = 'Bookings Management — KhelSutra';
+ob_start();
+?>
 
 <!-- Alternatives Modal -->
 <div class="modal fade" id="alternativesModal" tabindex="-1">
