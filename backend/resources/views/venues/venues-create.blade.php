@@ -3,6 +3,11 @@ $pageTitle = 'Add Venue — KhelSutra';
 $activePage = 'venues';
 $orgId = current_organization_id();
 
+// Fetch sports
+$db = \App\Services\BaseService::getDatabaseConnection();
+$sportsStmt = $db->query("SELECT id, name FROM sports WHERE status = 'active' ORDER BY name ASC");
+$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+
 ob_start();
 ?>
 
@@ -118,21 +123,30 @@ ob_start();
             </div>
 
             <div id="facilitiesContainer">
-                <div class="row g-3 facility-row mb-3 pb-3 border-bottom">
-                    <div class="col-md-5">
+                <div class="row g-3 facility-row mb-3 pb-3 border-bottom align-items-start">
+                    <div class="col-md-3">
                         <label class="form-label small fw-semibold text-dark">Facility Name</label>
                         <input type="text" name="facility_name[]" class="form-control" placeholder="e.g. Main Turf Pitch 1" style="font-size: 13px; border-radius: var(--ks-radius-button);">
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold text-dark">Facility Type</label>
-                        <input type="text" name="facility_type[]" class="form-control" placeholder="e.g. Grass Turf, Wooden Court" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <input type="text" name="facility_type[]" class="form-control" placeholder="e.g. Grass Turf" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-semibold text-dark">Capacity</label>
+                        <input type="number" name="facility_capacity[]" class="form-control" placeholder="50" style="font-size: 13px; border-radius: var(--ks-radius-button);">
                     </div>
                     <div class="col-md-3">
-                        <label class="form-label small fw-semibold text-dark">Slot Capacity</label>
-                        <input type="number" name="facility_capacity[]" class="form-control" placeholder="e.g. 50" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <label class="form-label small fw-semibold text-dark">Supported Sports</label>
+                        <select name="facility_sports_0[]" class="form-select sport-select" multiple style="font-size: 13px; border-radius: var(--ks-radius-button); min-height: 60px;">
+                            <?php foreach ($sports as $sport): ?>
+                                <option value="<?= $sport['id'] ?>"><?= htmlspecialchars($sport['name']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-text" style="font-size: 10px; margin-top: 2px;">Hold Ctrl/Cmd to select multiple</div>
                     </div>
-                    <div class="col-md-1 d-flex align-items-end justify-content-end">
-                        <button type="button" class="btn btn-outline-danger btn-sm remove-facility-btn" style="border-radius: var(--ks-radius-button); height: 38px; width: 38px;" disabled>
+                    <div class="col-md-1 d-flex align-items-end justify-content-end" style="height: 60px;">
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-facility-btn mb-4" style="border-radius: var(--ks-radius-button); height: 38px; width: 38px;" disabled>
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>

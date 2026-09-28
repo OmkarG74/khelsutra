@@ -192,6 +192,24 @@ class VenueService extends BaseService
                         ':type' => $type,
                         ':cap' => $cap
                     ]);
+                    
+                    $facilityId = (int)$this->pdo->lastInsertId();
+                    
+                    // Add sports for this facility
+                    $sportsKey = "facility_sports_{$index}";
+                    if (isset($data[$sportsKey]) && is_array($data[$sportsKey])) {
+                        $sportSql = "INSERT INTO facility_sports (organization_id, facility_id, sport_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())";
+                        $spStmt = $this->pdo->prepare($sportSql);
+                        foreach ($data[$sportsKey] as $spId) {
+                            $spId = (int)$spId;
+                            if ($spId > 0) {
+                                // Ignore duplicate key errors if a sport is selected twice
+                                try {
+                                    $spStmt->execute([$organizationId, $facilityId, $spId]);
+                                } catch (\Exception $e) {}
+                            }
+                        }
+                    }
                 }
             }
 
