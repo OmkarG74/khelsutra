@@ -336,6 +336,49 @@ class VenueService extends BaseService
         return ['id' => $facId, 'name' => $data['name'] ?? ''];
     }
 
+    public function createBookingsBatch(int $organizationId, array $data, ?int $performedBy = null): array
+    {
+        if (!$this->pdo) return [];
+
+        $facilityIds = $data['facility_id'] ?? [];
+        $bookingDates = $data['booking_date'] ?? [];
+        $startTimes = $data['start_time'] ?? [];
+        $endTimes = $data['end_time'] ?? [];
+        $notes = $data['notes'] ?? [];
+
+        if (!is_array($facilityIds)) {
+            $facilityIds = [$facilityIds];
+            $bookingDates = [$bookingDates];
+            $startTimes = [$startTimes];
+            $endTimes = [$endTimes];
+            $notes = [$notes];
+        }
+
+        $createdBookings = [];
+        $this->pdo->beginTransaction();
+        try {
+            foreach ($facilityIds as $index => $facId) {
+                if (empty($facId)) continue;
+                $slotData = $data;
+                $slotData['facility_id'] = $facId;
+                $slotData['booking_date'] = is_array($bookingDates) ? ($bookingDates[$index] ?? date('Y-m-d')) : $bookingDates;
+                $slotData['start_time'] = is_array($startTimes) ? ($startTimes[$index] ?? '08:00:00') : $startTimes;
+                $slotData['end_time'] = is_array($endTimes) ? ($endTimes[$index] ?? '10:00:00') : $endTimes;
+                $slotData['notes'] = is_array($notes) ? ($notes[$index] ?? null) : $notes;
+                
+                // createBooking does not have its own beginTransaction, so it's safe to call here.
+                // However, createBooking does an audit log which might assume autocommit if not careful, 
+                // but since it's just an INSERT, it's fine within this transaction.
+                $createdBookings[] = $this->createBooking($organizationId, $slotData, $performedBy);
+            }
+            $this->pdo->commit();
+            return $createdBookings;
+        } catch (\Exception $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function createBooking(int $organizationId, array $data, ?int $performedBy = null): array
     {
         if (!$this->pdo) return [];
