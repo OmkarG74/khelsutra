@@ -404,18 +404,62 @@ return function ($uri, $method, $requestData = []) {
     }
     if ($uri === '/api/v1/housekeeping' && $method === 'GET') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
-        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingTaskController();
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/housekeeping' && $method === 'POST') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
-        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
-        return $controller->store($orgId, $requestData);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingTaskController();
+        return $controller->store($orgId, $requestData, $performedBy);
     }
-    if (preg_match('#^/api/v1/housekeeping/(\d+)$#', $uri, $matches) && ($method === 'PUT' || $method === 'PATCH')) {
+    if (preg_match('#^/api/v1/housekeeping/(\d+)$#', $uri, $matches)) {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
-        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingController();
-        return $controller->update($orgId, (int)$matches[1], $requestData);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingTaskController();
+        if ($method === 'GET') return $controller->show($orgId, (int)$matches[1]);
+        if ($method === 'DELETE') return $controller->destroy($orgId, (int)$matches[1], $performedBy);
+    }
+    if (preg_match('#^/api/v1/housekeeping/(\d+)/assign$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingTaskController();
+        return $controller->assign($orgId, (int)$matches[1], $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/housekeeping/(\d+)/(start|complete|verify|reopen|cancel|close)$#', $uri, $matches) && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingTaskController();
+        $action = $matches[2];
+        $statusMap = [
+            'start' => 'in_progress',
+            'complete' => 'completed',
+            'verify' => 'verified',
+            'reopen' => 'reopened',
+            'cancel' => 'cancelled',
+            'close' => 'closed'
+        ];
+        return $controller->updateStatus($orgId, (int)$matches[1], $statusMap[$action], $requestData, $performedBy);
+    }
+
+    // Member 4: Operations Housekeeping Schedules
+    if ($uri === '/api/v1/housekeeping/schedules' && $method === 'GET') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingScheduleController();
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/housekeeping/schedules' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingScheduleController();
+        return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/housekeeping/schedules/(\d+)$#', $uri, $matches)) {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingScheduleController();
+        if ($method === 'GET') return $controller->show($orgId, (int)$matches[1]);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, (int)$matches[1], $requestData, $performedBy);
+        if ($method === 'DELETE') return $controller->destroy($orgId, (int)$matches[1], $performedBy);
+    }
+    if ($uri === '/api/v1/housekeeping/schedules/generate' && $method === 'POST') {
+        if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_housekeeping')) return ApiResponse::error('Forbidden', null, 403);
+        $controller = new \App\Http\Controllers\Api\V1\Operations\HousekeepingScheduleController();
+        return $controller->generateTasks($orgId, $requestData, $performedBy);
     }
 
     // Member 4: Operations Events & School Activities
