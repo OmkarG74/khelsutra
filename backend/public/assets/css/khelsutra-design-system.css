@@ -1882,3 +1882,32 @@ select.ks-form-select option {
     .ks-promo-banner { flex-direction: column; align-items: flex-start; gap: 16px; }
     .ks-promo-quote { text-align: left; max-width: 100%; }
 }
+
+/* Custom Nav Tabs */
+.ks-nav-tabs {
+    border-bottom: 2px solid var(--ks-border);
+}
+.ks-nav-tabs .nav-item {
+    margin-bottom: -2px;
+}
+.ks-nav-tabs .nav-link {
+    color: var(--ks-muted);
+    font-weight: 500;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 12px 20px;
+    transition: all 0.2s ease;
+    background: transparent;
+}
+.ks-nav-tabs .nav-link:hover {
+    color: var(--ks-text);
+    border-color: transparent;
+    isolation: isolate;
+}
+.ks-nav-tabs .nav-link.active {
+    color: var(--ks-primary);
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid var(--ks-primary);
+    font-weight: 600;
+}

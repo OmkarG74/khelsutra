@@ -134,6 +134,7 @@ try {
                     <a href="/notifications" class="text-decoration-none small text-primary fw-semibold">View All Notifications</a>
                 </li>
             </ul>
+
         </div>
 
         <script>
@@ -216,3 +217,53 @@ try {
         </div>
     </div>
 </header>
+
+<script>
+let notifTimer;
+function ksPollNotifications() {
+    fetch('/api/v1/notifications')
+    .then(r => r.json())
+    .then(d => {
+        if(!d.success) return;
+        let unread = d.data.filter(x => !x.is_read);
+        let list = document.getElementById('ksNotifList');
+        document.getElementById('ksNotifBadge').style.display = unread.length > 0 ? 'flex' : 'none';
+        document.getElementById('ksNotifBadge').innerText = unread.length;
+        document.getElementById('ksNotifHeaderBadge').innerText = unread.length + ' New';
+        
+        if (d.data.length === 0) {
+            list.innerHTML = '<li class="p-3 text-center text-muted small">No notifications</li>';
+            return;
+        }
+        
+        list.innerHTML = d.data.slice(0, 5).map(n => `
+            <li>
+                <a class="dropdown-item py-2 d-flex gap-2 ${n.is_read ? 'opacity-75' : 'bg-light'}" href="#" onclick="ksMarkRead(${n.id})">
+                    <i class="bi ${n.is_read ? 'bi-bell' : 'bi-bell-fill'} text-primary mt-1"></i>
+                    <div>
+                        <div class="fw-semibold">${n.title}</div>
+                        <div class="text-muted small">${n.message}</div>
+                    </div>
+                </a>
+            </li>
+        `).join('');
+    }).catch(e => console.error(e));
+}
+
+function ksMarkRead(id) {
+    fetch('/api/v1/notifications/' + id + '/read', {
+        method: 'PATCH',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}
+    }).then(() => ksPollNotifications());
+}
+
+function ksMarkAllRead() {
+    // Demo implementation
+    ksPollNotifications(); 
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    ksPollNotifications();
+    notifTimer = setInterval(ksPollNotifications, 30000); // 30s polling
+});
+</script>

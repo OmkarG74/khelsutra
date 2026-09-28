@@ -1,11 +1,14 @@
 <?php
+$activePage = 'transport';
+$title = 'Transport Management — KhelSutra';
 ob_start();
+?>
 ?>
 <div class="ks-page-header mb-4">
     <div class="d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="ks-header-title">Transport & Logistics</h2>
-            <p class="ks-header-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
+            <h2 class="ks-page-title mb-1">Transport <h2 class="ks-header-title">Transport & Logistics</h2> Logistics</h2>
+            <p class="ks-page-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
         </div>
     </div>
 </div>
@@ -84,7 +87,7 @@ ob_start();
             <div class="ks-card-header">
                 <div class="ks-header-left">
                     <i class="bi bi-map" style="color:var(--ks-primary);font-size:18px;"></i>
-                    <h3 class="ks-header-title">Trip Schedule</h3>
+                    <h3 class="ks-header-title mb-0">Trip Schedule</h3>
                     <span class="ks-badge ks-badge-scheduled ms-2" id="trip-count">0</span>
                 </div>
             </div>
@@ -133,7 +136,9 @@ ob_start();
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Driver Employee ID</label>
-                            <input type="number" class="ks-form-control" id="v_driver">
+                            <select class="ks-form-control" id="v_driver">
+<option value="">Select Employee...</option>
+</select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Insurance Expiry Date</label>
@@ -211,11 +216,15 @@ ob_start();
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Driver Employee ID</label>
-                            <input type="number" class="ks-form-control" id="pt_driver">
+                            <select class="ks-form-control" id="pt_driver">
+<option value="">Select Employee...</option>
+</select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Event ID</label>
-                            <input type="number" class="ks-form-control" id="pt_event_id">
+                            <select class="ks-form-control" id="pt_event_id">
+<option value="">Select Event...</option>
+</select>
                         </div>
                         <div class="col-12">
                             <label class="form-label">Notes</label>
@@ -380,9 +389,9 @@ async function loadVehicles() {
                             ${expiryBadges.join('')}
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-2">
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill"></i> Track</button>
-                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus"></i> Plan Trip</button>
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash"></i> Delete</button>
+                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill me-1"></i> Track</button>
+                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus me-1"></i> Plan Trip</button>
+                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash me-1"></i> Delete</button>
                         </div>
                     </div>
                 `;
@@ -809,8 +818,157 @@ async function loadRouteHistory(tripId) {
         container.innerHTML = '<div class="alert alert-danger py-2 small">Error loading route data.</div>';
     }
 }
+
+async function autoPlanTrip() {
+    const origin = document.getElementById('planOrigin').value;
+    const dest = document.getElementById('planDest').value;
+    const date = document.getElementById('planDate').value;
+    const eventId = document.getElementById('planEvent').value;
+    
+    if (!origin || !dest || !date) {
+        ksToast('Please fill origin, destination, and date first', 'error');
+        return;
+    }
+    
+    const res = await fetch('/api/v1/trips/auto-plan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+        body: JSON.stringify({
+            origin: origin,
+            destination: dest,
+            trip_date: date,
+            event_id: eventId,
+            seat_buffer: 0
+        })
+    });
+    
+    const json = await res.json();
+    if(json.success && json.data.plans) {
+        const plan = json.data.plans[0];
+        if (plan) {
+            document.getElementById('autoPlanResult').innerHTML = `
+                <strong>Auto-plan success:</strong> Assigning ${plan.vehicles.length} vehicle(s). Excess seats: ${plan.excess_seats}.
+                <input type="hidden" id="planAutoId" value="${plan.plan_id}">
+            `;
+            ksToast('Auto-plan applied', 'success');
+        } else if (json.data.shortfall) {
+            document.getElementById('autoPlanResult').innerHTML = `
+                <strong class="text-danger">Shortfall:</strong> Need ${json.data.shortfall} more seats.
+            `;
+        }
+    } else {
+        ksToast('Auto-plan failed: ' + (json.message || ''), 'error');
+    }
+}
+
 </script>
 <?php
 $slot = ob_get_clean();
 include __DIR__ . '/../../layouts/app.blade.php';
 ?>
+
+
+
+<script>
+// Auto-injected Context-Aware Dropdowns
+document.addEventListener('DOMContentLoaded', loadGlobalDropdowns);
+
+async function fetchDropdownData(url) {
+    try {
+        const res = await fetch(url).then(r => r.json());
+        if (res.data && res.data.data) return res.data.data;
+        if (res.data) return res.data;
+        return [];
+    } catch (e) {
+        console.error('Error fetching ' + url, e);
+        return [];
+    }
+}
+
+async function populateSelect(selector, url, labelFn) {
+    const select = document.querySelector(selector);
+    if (!select) return;
+    const defaultText = select.options[0] ? select.options[0].text : 'Select...';
+    select.innerHTML = '<option value="">Loading...</option>';
+    const data = await fetchDropdownData(url);
+    select.innerHTML = `<option value="">${defaultText}</option>`;
+    data.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = labelFn(item);
+        select.appendChild(opt);
+    });
+}
+
+async function loadGlobalDropdowns() {
+    const escapeHtml = typeof ksEscape === 'function' ? ksEscape : (s) => String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;");
+    
+    // Venues
+    const venueSels = ['#createVenue', '#createVenueHK', '#bookingVenue', '#eventVenue', '#activityVenue', '[name="venue_id"]'];
+    venueSels.forEach(sel => {
+        populateSelect(sel, '/api/v1/venues?limit=100', v => escapeHtml(v.name));
+    });
+
+    // Employees
+    const empSels = ['#createEmployee', '#createEmployeeHK', '#eventOrganizer', '#vehicleDriver', '#tripDriver', '[name="organizer_employee_id"]', '#v_driver', '#pt_driver'];
+    empSels.forEach(sel => {
+        populateSelect(sel, '/api/v1/employees?limit=200', e => escapeHtml((e.first_name || '') + ' ' + (e.last_name || '')).trim());
+    });
+
+    // Vendors
+    const vendorSels = ['#createVendor'];
+    vendorSels.forEach(sel => {
+        populateSelect(sel, '/api/v1/vendors?limit=100', v => escapeHtml(v.vendor_name || v.name));
+    });
+
+    // Events
+    const eventSels = ['#bookingEvent', '#tripEvent', '#activityEvent', '#pt_event_id', '#bEventId', '[name="event_id"]'];
+    eventSels.forEach(sel => {
+        populateSelect(sel, '/api/v1/events?limit=100', e => escapeHtml(e.name || e.event_reference));
+    });
+
+    // Teams
+    const teamSels = ['#bTeamId', '[name="team_id"]'];
+    teamSels.forEach(sel => {
+        populateSelect(sel, '/api/v2/teams?limit=100', t => escapeHtml(t.name || t.team_name || t.id)); // Using fallback endpoint if needed
+    });
+
+    // Tournaments
+    const tournSels = ['#bTournamentId', '[name="tournament_id"]'];
+    tournSels.forEach(sel => {
+        populateSelect(sel, '/api/v1/tournaments?limit=100', t => escapeHtml(t.name || t.tournament_name || t.id)); 
+    });
+
+    // Cascading Facilities
+    const venueFacilityMap = [
+        ['#createVenue', '#createFacility'],
+        ['#createVenueHK', '#createFacilityHK'],
+        ['#bookingVenue', '#bookingFacility'],
+        ['#bVenueId', '#bFacilityId'],
+        ['[name="venue_id"]', '[name="facility_id"]']
+    ];
+    
+    for (const [vSel, fSel] of venueFacilityMap) {
+        const vSelect = document.querySelector(vSel);
+        const fSelect = document.querySelector(fSel);
+        if (vSelect && fSelect) {
+            vSelect.addEventListener('change', async (e) => {
+                const venueId = e.target.value;
+                if (!venueId) {
+                    fSelect.innerHTML = '<option value="">Select Facility...</option>';
+                    return;
+                }
+                fSelect.innerHTML = '<option value="">Loading...</option>';
+                const data = await fetchDropdownData(`/api/v1/venues/${venueId}/facilities`);
+                fSelect.innerHTML = '<option value="">Select Facility...</option>';
+                data.forEach(f => {
+                    const opt = document.createElement('option');
+                    opt.value = f.id;
+                    opt.textContent = `${escapeHtml(f.name)} (${escapeHtml(f.facility_type)})`;
+                    fSelect.appendChild(opt);
+                });
+            });
+        }
+    }
+}
+</script>

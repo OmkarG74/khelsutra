@@ -149,7 +149,7 @@ ob_start();
                                         <a href="/inventory/<?= (int)$item['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0;" title="Edit Item">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-                                        <form action="/inventory/<?= (int)$item['id'] ?>/delete" method="POST" class="d-inline" onsubmit="return confirm('Are you sure you want to delete \'<?= addslashes(htmlspecialchars($item['item_name'])) ?>\'?');">
+                                        <form action="/inventory/<?= (int)$item['id'] ?>/delete" method="POST" style="display: contents;" class="d-inline" onsubmit="return confirm('Are you sure you want to delete \'<?= addslashes(htmlspecialchars($item['item_name'])) ?>\'?');">
                                             <button type="submit" class="btn btn-outline-danger" style="border-radius: 0 6px 6px 0; border-left: 0; padding: 4px 8px; font-size: 12px;" title="Delete Item">
                                                 <i class="bi bi-trash"></i>
                                             </button>
