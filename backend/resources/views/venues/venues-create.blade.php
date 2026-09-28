@@ -123,7 +123,7 @@ ob_start();
             </div>
 
             <div id="facilitiesContainer">
-                <div class="row g-3 facility-row mb-3 pb-3 border-bottom align-items-start">
+                <div class="row g-3 facility-row mb-3 pb-3 border-bottom">
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold text-dark">Facility Name</label>
                         <input type="text" name="facility_name[]" class="form-control" placeholder="e.g. Main Turf Pitch 1" style="font-size: 13px; border-radius: var(--ks-radius-button);">
@@ -145,8 +145,9 @@ ob_start();
                         </select>
                         <div class="form-text" style="font-size: 10px; margin-top: 2px;">Hold Ctrl/Cmd to select multiple</div>
                     </div>
-                    <div class="col-md-1 d-flex align-items-end justify-content-end" style="height: 60px;">
-                        <button type="button" class="btn btn-outline-danger btn-sm remove-facility-btn mb-4" style="border-radius: var(--ks-radius-button); height: 38px; width: 38px;" disabled>
+                    <div class="col-md-1">
+                        <label class="form-label d-block">&nbsp;</label>
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-facility-btn w-100 d-flex align-items-center justify-content-center" style="border-radius: var(--ks-radius-button); height: 38px;" disabled title="Remove Facility">
                             <i class="bi bi-trash"></i>
                         </button>
                     </div>
