@@ -164,6 +164,32 @@ class AuthService extends BaseService
         $signature = hash_hmac('sha256', $encodedPayload, $secret);
         $token = $encodedPayload . '.' . $signature;
 
+        // Resolve athlete_id / employee_id / coach_id dynamically
+        $athleteId = !empty($membership['athlete_id']) ? (int)$membership['athlete_id'] : null;
+        $employeeId = !empty($membership['employee_id']) ? (int)$membership['employee_id'] : null;
+        $coachId = null;
+
+        if (!$athleteId && $roleSlug === 'athlete' && $orgId) {
+            $athStmt = $this->pdo->prepare("SELECT id FROM athletes WHERE organization_id = :org AND (user_id = :uid OR email = :email) AND deleted_at IS NULL LIMIT 1");
+            $athStmt->execute([':org' => $orgId, ':uid' => $user['id'], ':email' => $user['email']]);
+            $foundAth = $athStmt->fetchColumn();
+            if ($foundAth) $athleteId = (int)$foundAth;
+        }
+
+        if (!$employeeId && $roleSlug === 'coach' && $orgId) {
+            $empStmt = $this->pdo->prepare("SELECT id FROM employees WHERE organization_id = :org AND (user_id = :uid OR email = :email) AND deleted_at IS NULL LIMIT 1");
+            $empStmt->execute([':org' => $orgId, ':uid' => $user['id'], ':email' => $user['email']]);
+            $foundEmp = $empStmt->fetchColumn();
+            if ($foundEmp) $employeeId = (int)$foundEmp;
+        }
+
+        if ($employeeId && $orgId) {
+            $cStmt = $this->pdo->prepare("SELECT id FROM coach_profiles WHERE employee_id = :emp_id AND organization_id = :org AND deleted_at IS NULL LIMIT 1");
+            $cStmt->execute([':emp_id' => $employeeId, ':org' => $orgId]);
+            $cRow = $cStmt->fetchColumn();
+            if ($cRow) $coachId = (int)$cRow;
+        }
+
         return [
             'user' => [
                 'id' => (int)$user['id'],
@@ -173,6 +199,9 @@ class AuthService extends BaseService
                 'email' => $user['email'],
                 'phone' => $user['phone'],
                 'status' => $user['status'],
+                'athlete_id' => $athleteId,
+                'employee_id' => $employeeId,
+                'coach_id' => $coachId,
                 'last_login_at' => date('Y-m-d H:i:s'),
             ],
             'organization' => $orgData,
@@ -278,6 +307,32 @@ class AuthService extends BaseService
         $permStmt->execute([':role_id' => $roleId]);
         $permissions = $permStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 
+        // Resolve athlete_id / employee_id / coach_id dynamically
+        $athleteId = !empty($membership['athlete_id']) ? (int)$membership['athlete_id'] : null;
+        $employeeId = !empty($membership['employee_id']) ? (int)$membership['employee_id'] : null;
+        $coachId = null;
+
+        if (!$athleteId && $roleSlug === 'athlete' && $orgId) {
+            $athStmt = $this->pdo->prepare("SELECT id FROM athletes WHERE organization_id = :org AND (user_id = :uid OR email = :email) AND deleted_at IS NULL LIMIT 1");
+            $athStmt->execute([':org' => $orgId, ':uid' => $user['id'], ':email' => $user['email']]);
+            $foundAth = $athStmt->fetchColumn();
+            if ($foundAth) $athleteId = (int)$foundAth;
+        }
+
+        if (!$employeeId && $roleSlug === 'coach' && $orgId) {
+            $empStmt = $this->pdo->prepare("SELECT id FROM employees WHERE organization_id = :org AND (user_id = :uid OR email = :email) AND deleted_at IS NULL LIMIT 1");
+            $empStmt->execute([':org' => $orgId, ':uid' => $user['id'], ':email' => $user['email']]);
+            $foundEmp = $empStmt->fetchColumn();
+            if ($foundEmp) $employeeId = (int)$foundEmp;
+        }
+
+        if ($employeeId && $orgId) {
+            $cStmt = $this->pdo->prepare("SELECT id FROM coach_profiles WHERE employee_id = :emp_id AND organization_id = :org AND deleted_at IS NULL LIMIT 1");
+            $cStmt->execute([':emp_id' => $employeeId, ':org' => $orgId]);
+            $cRow = $cStmt->fetchColumn();
+            if ($cRow) $coachId = (int)$cRow;
+        }
+
         return [
             'id' => (int)$user['id'],
             'uuid' => $user['uuid'],
@@ -286,6 +341,9 @@ class AuthService extends BaseService
             'email' => $user['email'],
             'phone' => $user['phone'],
             'status' => $user['status'],
+            'athlete_id' => $athleteId,
+            'employee_id' => $employeeId,
+            'coach_id' => $coachId,
             'role_id' => $roleId,
             'role' => [
                 'id' => $roleId,

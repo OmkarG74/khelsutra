@@ -16,7 +16,7 @@ class TrainingService extends BaseService
         $this->auditLog = $auditLog ?? new AuditLogService($this->pdo);
     }
 
-    public function listSessions(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?string $date = null, ?string $status = null, ?int $teamId = null): array
+    public function listSessions(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?string $date = null, ?string $status = null, ?int $teamId = null, ?int $coachId = null): array
     {
         if (!$this->pdo) {
             return ['data' => [], 'total' => 0, 'page' => 1, 'limit' => $limit, 'total_pages' => 0];
@@ -31,8 +31,17 @@ class TrainingService extends BaseService
         }
 
         if (!empty($date)) {
-            $conditions[] = "ts.training_date = :date";
-            $params[':date'] = $date;
+            $dateLower = strtolower(trim($date));
+            if ($dateLower === 'today') {
+                $conditions[] = "ts.training_date = CURDATE()";
+            } elseif ($dateLower === 'upcoming') {
+                $conditions[] = "(ts.training_date > CURDATE() OR (ts.training_date = CURDATE() AND ts.status != 'completed'))";
+            } elseif ($dateLower === 'completed') {
+                $conditions[] = "(ts.status = 'completed' OR ts.training_date < CURDATE())";
+            } else {
+                $conditions[] = "ts.training_date = :date";
+                $params[':date'] = $date;
+            }
         }
 
         if (!empty($status)) {
@@ -43,6 +52,11 @@ class TrainingService extends BaseService
         if (!empty($teamId)) {
             $conditions[] = "ts.team_id = :team_id";
             $params[':team_id'] = $teamId;
+        }
+
+        if (!empty($coachId)) {
+            $conditions[] = "(ts.coach_id = :coach_id OR ts.team_id IN (SELECT tc.team_id FROM team_coaches tc WHERE tc.coach_id = :coach_id AND tc.organization_id = :org_id))";
+            $params[':coach_id'] = $coachId;
         }
 
         $whereClause = implode(' AND ', $conditions);
@@ -125,24 +139,25 @@ class TrainingService extends BaseService
 
         if (!$session) return null;
 
-        // Fetch roster athletes with attendance status
+        // Fetch roster athletes with attendance status (default 'not_marked' for unrecorded athletes)
         $athStmt = $this->pdo->prepare("
             SELECT 
                 a.id as athlete_id,
                 a.athlete_code,
                 a.first_name,
                 a.last_name,
-                tm.jersey_number,
-                tm.member_role,
-                ta.id as attendance_id,
-                COALESCE(ta.attendance_status, 'present') as attendance_status,
-                ta.check_in_time,
-                ta.remarks
+                MAX(tm.jersey_number) as jersey_number,
+                MAX(tm.member_role) as member_role,
+                MAX(ta.id) as attendance_id,
+                COALESCE(MAX(ta.attendance_status), 'not_marked') as attendance_status,
+                MAX(ta.check_in_time) as check_in_time,
+                MAX(ta.remarks) as remarks
             FROM team_members tm
             JOIN athletes a ON tm.athlete_id = a.id AND a.deleted_at IS NULL
             LEFT JOIN training_attendance ta ON ta.training_session_id = :session_id AND ta.athlete_id = a.id
             WHERE tm.team_id = :team_id AND tm.organization_id = :org_id AND tm.is_current = 1
-            ORDER BY tm.jersey_number ASC, a.first_name ASC
+            GROUP BY a.id, a.athlete_code, a.first_name, a.last_name
+            ORDER BY jersey_number ASC, a.first_name ASC
         ");
         $athStmt->execute([
             ':session_id' => $id,
@@ -194,28 +209,7 @@ class TrainingService extends BaseService
 
             $sessionId = (int)$this->pdo->lastInsertId();
 
-            // Populate initial attendance for team members
-            if (!empty($data['team_id'])) {
-                $tmStmt = $this->pdo->prepare("SELECT athlete_id FROM team_members WHERE team_id = :t_id AND organization_id = :org_id AND is_current = 1");
-                $tmStmt->execute([':t_id' => (int)$data['team_id'], ':org_id' => $organizationId]);
-                $athletes = $tmStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
-
-                if (!empty($athletes)) {
-                    $attSql = "
-                        INSERT INTO training_attendance (organization_id, training_session_id, athlete_id, attendance_status, recorded_by, created_at, updated_at)
-                        VALUES (:org_id, :session_id, :ath_id, 'present', :recorded_by, NOW(), NOW())
-                    ";
-                    $attStmt = $this->pdo->prepare($attSql);
-                    foreach ($athletes as $athId) {
-                        $attStmt->execute([
-                            ':org_id' => $organizationId,
-                            ':session_id' => $sessionId,
-                            ':ath_id' => $athId,
-                            ':recorded_by' => $performedBy
-                        ]);
-                    }
-                }
-            }
+            // Note: Attendance records start unrecorded (not_marked) until the coach explicitly marks attendance
 
             $this->pdo->commit();
 
@@ -308,24 +302,36 @@ class TrainingService extends BaseService
 
         $this->pdo->beginTransaction();
         try {
-            foreach ($attendanceData as $athleteId => $status) {
+            foreach ($attendanceData as $athleteId => $info) {
                 $athleteId = (int)$athleteId;
-                $status = in_array($status, ['present', 'absent', 'late', 'excused']) ? $status : 'present';
+                if ($athleteId <= 0) continue;
+
+                $status = is_array($info) ? ($info['status'] ?? $info['attendance_status'] ?? 'present') : $info;
+                $status = strtolower(trim((string)$status));
+                if ($status === 'not_marked' || empty($status)) {
+                    continue; // Skip unmarked athletes
+                }
+                $allowed = ['present', 'absent', 'late', 'excused'];
+                if (!in_array($status, $allowed, true)) {
+                    $status = 'present';
+                }
+                $remarks = is_array($info) ? ($info['remarks'] ?? null) : null;
 
                 $checkStmt = $this->pdo->prepare("SELECT id FROM training_attendance WHERE training_session_id = :s_id AND athlete_id = :a_id AND organization_id = :org_id");
                 $checkStmt->execute([':s_id' => $sessionId, ':a_id' => $athleteId, ':org_id' => $organizationId]);
                 $existingId = $checkStmt->fetchColumn();
 
                 if ($existingId) {
-                    $upStmt = $this->pdo->prepare("UPDATE training_attendance SET attendance_status = :status, updated_at = NOW() WHERE id = :id");
-                    $upStmt->execute([':status' => $status, ':id' => $existingId]);
+                    $upStmt = $this->pdo->prepare("UPDATE training_attendance SET attendance_status = :status, remarks = COALESCE(:remarks, remarks), recorded_by = :rec_by, updated_at = NOW() WHERE id = :id");
+                    $upStmt->execute([':status' => $status, ':remarks' => $remarks, ':rec_by' => $performedBy, ':id' => $existingId]);
                 } else {
-                    $inStmt = $this->pdo->prepare("INSERT INTO training_attendance (organization_id, training_session_id, athlete_id, attendance_status, recorded_by, created_at, updated_at) VALUES (:org_id, :s_id, :a_id, :status, :rec_by, NOW(), NOW())");
+                    $inStmt = $this->pdo->prepare("INSERT INTO training_attendance (organization_id, training_session_id, athlete_id, attendance_status, remarks, recorded_by, created_at, updated_at) VALUES (:org_id, :s_id, :a_id, :status, :remarks, :rec_by, NOW(), NOW())");
                     $inStmt->execute([
                         ':org_id' => $organizationId,
                         ':s_id' => $sessionId,
                         ':a_id' => $athleteId,
                         ':status' => $status,
+                        ':remarks' => $remarks,
                         ':rec_by' => $performedBy
                     ]);
                 }
