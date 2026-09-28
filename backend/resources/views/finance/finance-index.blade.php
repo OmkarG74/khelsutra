@@ -336,7 +336,7 @@ ob_start();
                                                     <i class="bi bi-eye"></i>
                                                 </a>
                                                 <?php if ($exp['payment_status'] === 'pending'): ?>
-                                                    <form method="POST" action="/finance/expenses/<?= (int)$exp['id'] ?>/approve" class="d-inline" onsubmit="return confirm('Approve this expense?');">
+                                                    <form method="POST" action="/finance/expenses/<?= (int)$exp['id'] ?>/approve" style="display: contents;" class="d-inline" onsubmit="return confirm('Approve this expense?');">
                                                         <button type="submit" class="btn btn-outline-success" title="Approve">
                                                             <i class="bi bi-check-lg"></i>
                                                         </button>
@@ -625,7 +625,7 @@ ob_start();
                                             <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editCategoryModal<?= (int)$cat['id'] ?>" title="Edit Category">
                                                 <i class="bi bi-pencil"></i>
                                             </button>
-                                            <form method="POST" action="/finance/categories/<?= (int)$cat['id'] ?>/status" class="d-inline">
+                                            <form method="POST" action="/finance/categories/<?= (int)$cat['id'] ?>/status" style="display: contents;" class="d-inline">
                                                 <input type="hidden" name="status" value="<?= $cat['status'] === 'active' ? 'inactive' : 'active' ?>">
                                                 <button type="submit" class="btn btn-sm <?= $cat['status'] === 'active' ? 'btn-outline-warning' : 'btn-outline-success' ?>" title="<?= $cat['status'] === 'active' ? 'Deactivate' : 'Activate' ?>">
                                                     <i class="bi <?= $cat['status'] === 'active' ? 'bi-pause-circle' : 'bi-play-circle' ?>"></i>

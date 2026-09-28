@@ -166,20 +166,51 @@ class VenueService extends BaseService
 
             $venueId = (int)$this->pdo->lastInsertId();
 
-            // Optional initial facility
+            // Optional initial facilities (handles both string and array for backward compatibility)
             if (!empty($data['facility_name'])) {
+                $fNames = (array)$data['facility_name'];
+                $fTypes = (array)($data['facility_type'] ?? []);
+                $fCaps  = (array)($data['facility_capacity'] ?? []);
+
                 $facSql = "
                     INSERT INTO venue_facilities (organization_id, venue_id, name, facility_type, capacity, status, created_at, updated_at)
                     VALUES (:org_id, :v_id, :name, :type, :cap, 'active', NOW(), NOW())
                 ";
                 $fStmt = $this->pdo->prepare($facSql);
-                $fStmt->execute([
-                    ':org_id' => $organizationId,
-                    ':v_id' => $venueId,
-                    ':name' => trim($data['facility_name']),
-                    ':type' => $data['facility_type'] ?? 'Main Field',
-                    ':cap' => !empty($data['facility_capacity']) ? (int)$data['facility_capacity'] : null
-                ]);
+
+                foreach ($fNames as $index => $name) {
+                    $name = trim($name);
+                    if (empty($name)) continue;
+
+                    $type = trim($fTypes[$index] ?? 'Main Field');
+                    $cap = !empty($fCaps[$index]) ? (int)$fCaps[$index] : null;
+
+                    $fStmt->execute([
+                        ':org_id' => $organizationId,
+                        ':v_id' => $venueId,
+                        ':name' => $name,
+                        ':type' => $type,
+                        ':cap' => $cap
+                    ]);
+                    
+                    $facilityId = (int)$this->pdo->lastInsertId();
+                    
+                    // Add sports for this facility
+                    $sportsKey = "facility_sports_{$index}";
+                    if (isset($data[$sportsKey]) && is_array($data[$sportsKey])) {
+                        $sportSql = "INSERT INTO facility_sports (organization_id, facility_id, sport_id, created_at, updated_at) VALUES (?, ?, ?, NOW(), NOW())";
+                        $spStmt = $this->pdo->prepare($sportSql);
+                        foreach ($data[$sportsKey] as $spId) {
+                            $spId = (int)$spId;
+                            if ($spId > 0) {
+                                // Ignore duplicate key errors if a sport is selected twice
+                                try {
+                                    $spStmt->execute([$organizationId, $facilityId, $spId]);
+                                } catch (\Exception $e) {}
+                            }
+                        }
+                    }
+                }
             }
 
             $this->pdo->commit();
