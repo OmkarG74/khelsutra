@@ -138,12 +138,23 @@ ob_start();
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small fw-semibold text-dark">Supported Sports</label>
-                        <select name="facility_sports_0[]" class="form-select sport-select" multiple style="font-size: 13px; border-radius: var(--ks-radius-button); min-height: 60px;">
-                            <?php foreach ($sports as $sport): ?>
-                                <option value="<?= $sport['id'] ?>"><?= htmlspecialchars($sport['name']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                        <div class="form-text" style="font-size: 10px; margin-top: 2px;">Hold Ctrl/Cmd to select multiple</div>
+                        <div class="dropdown">
+                            <button class="form-select text-start sport-dropdown-btn d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside" style="font-size: 13px; border-radius: var(--ks-radius-button); height: 38px; background-color: #fff;">
+                                <span class="btn-text text-muted text-truncate" style="max-width: 90%;">Select Sports...</span>
+                            </button>
+                            <ul class="dropdown-menu w-100 p-2 shadow-sm" style="font-size: 13px; max-height: 220px; overflow-y: auto; border-radius: var(--ks-radius-card);">
+                                <?php foreach ($sports as $sport): ?>
+                                    <li>
+                                        <div class="form-check m-0 py-1">
+                                            <input class="form-check-input sport-cb" type="checkbox" name="facility_sports_0[]" value="<?= $sport['id'] ?>" id="sport_0_<?= $sport['id'] ?>">
+                                            <label class="form-check-label w-100" for="sport_0_<?= $sport['id'] ?>" style="cursor: pointer;">
+                                                <?= htmlspecialchars($sport['name']) ?>
+                                            </label>
+                                        </div>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
                     </div>
                     <div class="col-md-1">
                         <label class="form-label d-block">&nbsp;</label>
@@ -188,6 +199,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             container.appendChild(newRow);
         });
+    }
+});
+
+document.addEventListener('change', function(e) {
+    if (e.target.classList.contains('sport-cb')) {
+        const dropdown = e.target.closest('.dropdown');
+        if (dropdown) {
+            const btnText = dropdown.querySelector('.sport-dropdown-btn .btn-text');
+            const checked = dropdown.querySelectorAll('.sport-cb:checked');
+            if (checked.length === 0) {
+                btnText.textContent = 'Select Sports...';
+            } else if (checked.length === 1) {
+                btnText.textContent = checked[0].nextElementSibling.textContent.trim();
+            } else {
+                btnText.textContent = checked.length + ' sports selected';
+            }
+        }
     }
 });
 </script>
