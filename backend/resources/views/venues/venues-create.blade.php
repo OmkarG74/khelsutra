@@ -106,24 +106,36 @@ ob_start();
             </div>
         </div>
 
-        <!-- Section 3: Initial Facility Slot -->
+        <!-- Section 3: Facilities -->
         <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-            <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                3. Primary Facility Slot (Optional Initial Field / Court)
-            </h5>
+            <div class="d-flex justify-content-between align-items-center mb-3" style="border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
+                <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">
+                    3. Facilities (Optional)
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="addFacilityBtn" style="border-radius: var(--ks-radius-button); font-weight: 600;">
+                    <i class="bi bi-plus-lg"></i> Add Facility
+                </button>
+            </div>
 
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label small fw-semibold text-dark">Facility Name</label>
-                    <input type="text" name="facility_name" class="form-control" placeholder="e.g. Main Turf Pitch 1" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-semibold text-dark">Facility Type</label>
-                    <input type="text" name="facility_type" class="form-control" placeholder="e.g. Grass Turf, Wooden Court" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-semibold text-dark">Slot Capacity</label>
-                    <input type="number" name="facility_capacity" class="form-control" placeholder="e.g. 50" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+            <div id="facilitiesContainer">
+                <div class="row g-3 facility-row mb-3 pb-3 border-bottom">
+                    <div class="col-md-5">
+                        <label class="form-label small fw-semibold text-dark">Facility Name</label>
+                        <input type="text" name="facility_name[]" class="form-control" placeholder="e.g. Main Turf Pitch 1" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold text-dark">Facility Type</label>
+                        <input type="text" name="facility_type[]" class="form-control" placeholder="e.g. Grass Turf, Wooden Court" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-semibold text-dark">Slot Capacity</label>
+                        <input type="number" name="facility_capacity[]" class="form-control" placeholder="e.g. 50" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end justify-content-end">
+                        <button type="button" class="btn btn-outline-danger btn-sm remove-facility-btn" style="border-radius: var(--ks-radius-button); height: 38px; width: 38px;" disabled>
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -139,6 +151,31 @@ ob_start();
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addFacilityBtn = document.getElementById('addFacilityBtn');
+    if (addFacilityBtn) {
+        addFacilityBtn.addEventListener('click', function() {
+            const container = document.getElementById('facilitiesContainer');
+            const firstRow = container.querySelector('.facility-row');
+            const newRow = firstRow.cloneNode(true);
+            
+            // Clear inputs
+            newRow.querySelectorAll('input').forEach(input => input.value = '');
+            
+            // Enable remove button
+            const removeBtn = newRow.querySelector('.remove-facility-btn');
+            removeBtn.disabled = false;
+            removeBtn.addEventListener('click', function() {
+                newRow.remove();
+            });
+            
+            container.appendChild(newRow);
+        });
+    }
+});
+</script>
 
 <?php
 $slot = ob_get_clean();

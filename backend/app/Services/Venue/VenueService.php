@@ -166,20 +166,33 @@ class VenueService extends BaseService
 
             $venueId = (int)$this->pdo->lastInsertId();
 
-            // Optional initial facility
+            // Optional initial facilities (handles both string and array for backward compatibility)
             if (!empty($data['facility_name'])) {
+                $fNames = (array)$data['facility_name'];
+                $fTypes = (array)($data['facility_type'] ?? []);
+                $fCaps  = (array)($data['facility_capacity'] ?? []);
+
                 $facSql = "
                     INSERT INTO venue_facilities (organization_id, venue_id, name, facility_type, capacity, status, created_at, updated_at)
                     VALUES (:org_id, :v_id, :name, :type, :cap, 'active', NOW(), NOW())
                 ";
                 $fStmt = $this->pdo->prepare($facSql);
-                $fStmt->execute([
-                    ':org_id' => $organizationId,
-                    ':v_id' => $venueId,
-                    ':name' => trim($data['facility_name']),
-                    ':type' => $data['facility_type'] ?? 'Main Field',
-                    ':cap' => !empty($data['facility_capacity']) ? (int)$data['facility_capacity'] : null
-                ]);
+
+                foreach ($fNames as $index => $name) {
+                    $name = trim($name);
+                    if (empty($name)) continue;
+
+                    $type = trim($fTypes[$index] ?? 'Main Field');
+                    $cap = !empty($fCaps[$index]) ? (int)$fCaps[$index] : null;
+
+                    $fStmt->execute([
+                        ':org_id' => $organizationId,
+                        ':v_id' => $venueId,
+                        ':name' => $name,
+                        ':type' => $type,
+                        ':cap' => $cap
+                    ]);
+                }
             }
 
             $this->pdo->commit();
