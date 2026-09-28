@@ -29,10 +29,62 @@ echo "Available commands:\n";
 echo "  health        Run API and database health check\n";
 echo "  migrate       Verify database schema\n";
 echo "  test          Run test suite\n";
+echo "  key:generate  Generate the application encryption key\n";
+echo "  about         Display environment and system information\n";
+echo "  serve         Start the development server\n";
 
 if ($argc > 1) {
     $command = $argv[1];
     switch ($command) {
+        case 'serve':
+            $host = '127.0.0.1';
+            $port = '8000';
+            for ($i = 2; $i < $argc; $i++) {
+                if (preg_match('/^--host=(.+)$/', $argv[$i], $m)) $host = $m[1];
+                if (preg_match('/^--port=(\d+)$/', $argv[$i], $m)) $port = $m[1];
+            }
+            $phpBinary = PHP_BINARY;
+            $publicDir = escapeshellarg(__DIR__ . '/public');
+            echo "Starting KhelSutra development server at http://{$host}:{$port}...\n";
+            echo "Using PHP binary: {$phpBinary} (" . PHP_VERSION . ")\n";
+            passthru(escapeshellarg($phpBinary) . " -S {$host}:{$port} -t " . $publicDir);
+            break;
+        case 'key:generate':
+            $key = 'base64:' . base64_encode(random_bytes(32));
+            $envPath = __DIR__ . '/.env';
+            if (file_exists($envPath)) {
+                $envContent = file_get_contents($envPath);
+                if (preg_match('/^APP_KEY=(.*)$/m', $envContent)) {
+                    $envContent = preg_replace('/^APP_KEY=(.*)$/m', 'APP_KEY=' . $key, $envContent);
+                } else {
+                    $envContent .= "\nAPP_KEY=" . $key . "\n";
+                }
+                file_put_contents($envPath, $envContent);
+                echo "Application key set successfully.\n";
+            } else {
+                echo "Error: .env file not found.\n";
+            }
+            break;
+        case '--version':
+        case '-V':
+        case 'version':
+            echo "Laravel / KhelSutra Platform 1.0.0 (PHP " . PHP_VERSION . ")\n";
+            break;
+        case 'about':
+            require_once __DIR__ . '/bootstrap/app.php';
+            echo "\nEnvironment & Configuration\n";
+            echo "---------------------------\n";
+            echo "  Application Name ... " . env('APP_NAME', 'KhelSutra') . "\n";
+            echo "  Environment ........ " . env('APP_ENV', 'local') . "\n";
+            echo "  Debug Mode ......... " . (env('APP_DEBUG', true) ? 'ENABLED' : 'OFF') . "\n";
+            echo "  URL ................ " . env('APP_URL', 'http://localhost:8000') . "\n";
+            echo "  PHP Version ........ " . PHP_VERSION . "\n";
+            echo "  Database Driver .... " . env('DB_CONNECTION', 'mysql') . "\n";
+            echo "  Database Host ...... " . env('DB_HOST', '127.0.0.1') . ":" . env('DB_PORT', '3306') . "\n";
+            echo "  Database Name ...... " . env('DB_DATABASE', 'khelsutra') . "\n";
+            echo "  Cache Driver ....... " . env('CACHE_DRIVER', 'file') . "\n";
+            echo "  Session Driver ..... " . env('SESSION_DRIVER', 'file') . "\n\n";
+            break;
         case 'health':
             $controller = new \App\Http\Controllers\Api\V1\HealthController();
             $res = $controller->check();

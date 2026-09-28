@@ -235,7 +235,7 @@ class AttendanceService extends BaseService
         ];
     }
 
-    public function getTrainingAttendanceHistory(int $orgId, ?int $sessionId = null, int $limit = 50): array
+    public function getTrainingAttendanceHistory(int $orgId, ?int $sessionId = null, int $limit = 50, ?int $athleteId = null, ?int $coachId = null): array
     {
         if (!$this->pdo) return [];
         $sql = "
@@ -243,7 +243,7 @@ class AttendanceService extends BaseService
                    CONCAT(a.first_name, ' ', a.last_name) as athlete_name, a.athlete_code,
                    cp.coach_code,
                    CONCAT(e.first_name, ' ', e.last_name) as employee_name, e.employee_code,
-                   ts.title as session_title, ts.training_date
+                   ts.title as session_title, ts.training_date, ts.start_time, ts.end_time
             FROM training_attendance ta
             LEFT JOIN athletes a ON ta.athlete_id = a.id
             LEFT JOIN coach_profiles cp ON ta.coach_id = cp.id
@@ -256,7 +256,16 @@ class AttendanceService extends BaseService
             $sql .= " AND ta.training_session_id = :sid ";
             $params[':sid'] = $sessionId;
         }
-        $sql .= " ORDER BY ta.id DESC LIMIT :limit";
+        if ($athleteId) {
+            $sql .= " AND ta.athlete_id = :aid ";
+            $params[':aid'] = $athleteId;
+        }
+        if ($coachId) {
+            $sql .= " AND (ta.coach_id = :cid OR ts.coach_id = :cid2) ";
+            $params[':cid'] = $coachId;
+            $params[':cid2'] = $coachId;
+        }
+        $sql .= " ORDER BY ts.training_date DESC, ta.id DESC LIMIT :limit";
 
         $stmt = $this->pdo->prepare($sql);
         foreach ($params as $k => $v) {

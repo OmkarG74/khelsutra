@@ -197,6 +197,7 @@ return function ($uri, $method, $requestData = []) {
     // 8. Attendance (Training & Match)
     if (preg_match('#^/api/v1/attendance/training/(\d+)$#', $uri, $m) && $method === 'POST') {
         $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        $requestData['user'] = $currentUser;
         return $controller->recordTraining($orgId, (int)$m[1], $requestData, $performedBy);
     }
     if (preg_match('#^/api/v1/attendance/matches/(\d+)$#', $uri, $m) && $method === 'POST') {
@@ -299,6 +300,78 @@ return function ($uri, $method, $requestData = []) {
     if ($uri === '/api/v1/tournaments' && $method === 'POST') {
         $controller = new \App\Http\Controllers\Api\V1\Tournaments\TournamentController();
         return $controller->store($orgId, $requestData);
+    }
+
+    // Training Sessions
+    if ($uri === '/api/v1/training-sessions' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Training\TrainingController();
+        $requestData['user'] = $currentUser;
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/training-sessions' && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Training\TrainingController();
+        $requestData['user'] = $currentUser;
+        return $controller->store($orgId, $requestData, $performedBy);
+    }
+    if (preg_match('#^/api/v1/training-sessions/(\d+)$#', $uri, $m)) {
+        $controller = new \App\Http\Controllers\Api\V1\Training\TrainingController();
+        $targetId = (int)$m[1];
+        $requestData['user'] = $currentUser;
+        if ($method === 'GET') return $controller->show($orgId, $targetId, $requestData);
+        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+    }
+
+    // Coaches
+    if ($uri === '/api/v1/coaches' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/coaches/dashboard' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        $coachId = (int)($currentUser['coach_id'] ?? ($requestData['coach_id'] ?? 1));
+        return $controller->dashboard($orgId, $coachId);
+    }
+    if ($uri === '/api/v1/coaches/athletes' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        $coachId = (int)($currentUser['coach_id'] ?? ($requestData['coach_id'] ?? 1));
+        return $controller->athletes($orgId, $coachId, $requestData);
+    }
+    if (preg_match('#^/api/v1/coaches/(\d+)$#', $uri, $m) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        return $controller->show($orgId, (int)$m[1]);
+    }
+    if (preg_match('#^/api/v1/coaches/(\d+)/athletes$#', $uri, $m) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        return $controller->athletes($orgId, (int)$m[1], $requestData);
+    }
+    if (preg_match('#^/api/v1/coaches/(\d+)/dashboard$#', $uri, $m) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        return $controller->dashboard($orgId, (int)$m[1]);
+    }
+
+    // Performance
+    if ($uri === '/api/v1/performance/metrics' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Performance\PerformanceController();
+        return $controller->metrics($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/performance' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Performance\PerformanceController();
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/performance' && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Performance\PerformanceController();
+        return $controller->store($orgId, $requestData, $performedBy);
+    }
+
+    // Achievements
+    if ($uri === '/api/v1/achievements' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Achievements\AchievementController();
+        return $controller->index($orgId, $requestData);
+    }
+    if ($uri === '/api/v1/achievements' && $method === 'POST') {
+        $controller = new \App\Http\Controllers\Api\V1\Achievements\AchievementController();
+        return $controller->store($orgId, $requestData, $performedBy);
     }
 
     if ($uri === '/api/v1/venues' && $method === 'GET') {
@@ -883,7 +956,7 @@ return function ($uri, $method, $requestData = []) {
 
     // 14. Fallback for other unassigned modules (Preserving all other members' skeleton groups)
     $skeletonGroups = [
-        'sports', 'coaches', 'performance', 'medical', 'fixtures', 'matches',
+        'sports', 'medical', 'fixtures', 'matches',
         'bookings', 'maintenance', 'housekeeping',
         'events', 'school-activities', 'transport',
         'accommodation'

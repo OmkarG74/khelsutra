@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../errors/app_exception.dart';
 import '../storage/token_storage.dart';
@@ -11,7 +12,7 @@ class ApiClient {
 
   ApiClient({http.Client? client, String? baseUrl})
       : _client = client ?? http.Client(),
-        _baseUrl = baseUrl ?? ApiConfig.localUrl;
+        _baseUrl = baseUrl ?? ApiConfig.activeBaseUrl;
 
   Future<Map<String, String>> _getHeaders() async {
     final token = await TokenStorage.getToken();
@@ -30,69 +31,89 @@ class ApiClient {
   }
 
   Future<ApiResponse<T>> get<T>(String endpoint, {T Function(dynamic)? fromJson}) async {
+    final uri = Uri.parse('$_baseUrl$endpoint');
+    debugPrint('ApiClient [GET] -> $uri');
     try {
       final headers = await _getHeaders();
       final response = await _client.get(
-        Uri.parse('$_baseUrl$endpoint'),
+        uri,
         headers: headers,
       ).timeout(ApiConfig.timeoutDuration);
+      debugPrint('ApiClient [GET] <- ${response.statusCode} from $uri');
       return _processResponse<T>(response, fromJson);
     } catch (e) {
+      debugPrint('ApiClient [GET] ERROR on $uri: $e');
       throw _handleError(e);
     }
   }
 
   Future<ApiResponse<T>> post<T>(String endpoint, {dynamic body, T Function(dynamic)? fromJson}) async {
+    final uri = Uri.parse('$_baseUrl$endpoint');
+    debugPrint('ApiClient [POST] -> $uri');
     try {
       final headers = await _getHeaders();
       final response = await _client.post(
-        Uri.parse('$_baseUrl$endpoint'),
+        uri,
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(ApiConfig.timeoutDuration);
+      debugPrint('ApiClient [POST] <- ${response.statusCode} from $uri');
       return _processResponse<T>(response, fromJson);
     } catch (e) {
+      debugPrint('ApiClient [POST] ERROR on $uri: $e');
       throw _handleError(e);
     }
   }
 
   Future<ApiResponse<T>> put<T>(String endpoint, {dynamic body, T Function(dynamic)? fromJson}) async {
+    final uri = Uri.parse('$_baseUrl$endpoint');
+    debugPrint('ApiClient [PUT] -> $uri');
     try {
       final headers = await _getHeaders();
       final response = await _client.put(
-        Uri.parse('$_baseUrl$endpoint'),
+        uri,
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(ApiConfig.timeoutDuration);
+      debugPrint('ApiClient [PUT] <- ${response.statusCode} from $uri');
       return _processResponse<T>(response, fromJson);
     } catch (e) {
+      debugPrint('ApiClient [PUT] ERROR on $uri: $e');
       throw _handleError(e);
     }
   }
 
   Future<ApiResponse<T>> patch<T>(String endpoint, {dynamic body, T Function(dynamic)? fromJson}) async {
+    final uri = Uri.parse('$_baseUrl$endpoint');
+    debugPrint('ApiClient [PATCH] -> $uri');
     try {
       final headers = await _getHeaders();
       final response = await _client.patch(
-        Uri.parse('$_baseUrl$endpoint'),
+        uri,
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(ApiConfig.timeoutDuration);
+      debugPrint('ApiClient [PATCH] <- ${response.statusCode} from $uri');
       return _processResponse<T>(response, fromJson);
     } catch (e) {
+      debugPrint('ApiClient [PATCH] ERROR on $uri: $e');
       throw _handleError(e);
     }
   }
 
   Future<ApiResponse<T>> delete<T>(String endpoint, {T Function(dynamic)? fromJson}) async {
+    final uri = Uri.parse('$_baseUrl$endpoint');
+    debugPrint('ApiClient [DELETE] -> $uri');
     try {
       final headers = await _getHeaders();
       final response = await _client.delete(
-        Uri.parse('$_baseUrl$endpoint'),
+        uri,
         headers: headers,
       ).timeout(ApiConfig.timeoutDuration);
+      debugPrint('ApiClient [DELETE] <- ${response.statusCode} from $uri');
       return _processResponse<T>(response, fromJson);
     } catch (e) {
+      debugPrint('ApiClient [DELETE] ERROR on $uri: $e');
       throw _handleError(e);
     }
   }

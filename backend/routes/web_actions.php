@@ -2336,6 +2336,7 @@ if (preg_match('#^/purchases/requests/(\d+)/cancel$#', $uri, $m)) {
 if ($uri === '/purchases/orders/create') {
     $purchaseService = new \App\Services\Purchase\PurchaseService();
     try {
+        $created = $purchaseService->createPurchaseOrder($orgId, $_POST, $userId);
         $statusMsg = ($created['status'] === 'draft')
             ? "Purchase order '{$created['po_number']}' saved as draft."
             : "Purchase order '{$created['po_number']}' issued successfully.";

@@ -10,8 +10,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController(text: 'coach@khelsutra.com');
-  final _passwordController = TextEditingController(text: 'SecretPassword123');
+  final _emailController = TextEditingController(text: 'coach@khelsutra.local');
+  final _passwordController = TextEditingController(text: 'KhelSutra@123');
   final _orgCodeController = TextEditingController(text: 'ORG-DEMO');
   bool _isLoading = false;
   String? _errorMessage;
@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString();
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -54,6 +54,24 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  void _fillAthlete() {
+    setState(() {
+      _emailController.text = 'athlete@khelsutra.local';
+      _passwordController.text = 'KhelSutra@123';
+      _orgCodeController.text = 'ORG-DEMO';
+    });
+    _handleLogin();
+  }
+
+  void _fillCoach() {
+    setState(() {
+      _emailController.text = 'coach@khelsutra.local';
+      _passwordController.text = 'KhelSutra@123';
+      _orgCodeController.text = 'ORG-DEMO';
+    });
+    _handleLogin();
   }
 
   @override
@@ -139,25 +157,18 @@ class _LoginScreenState extends State<LoginScreen> {
                       : const Text('Sign In', style: TextStyle(fontSize: 16)),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const RoleRouter(role: 'Coach')),
-                        );
-                      },
-                      child: const Text('Demo: Coach View'),
+                      onPressed: _isLoading ? null : _fillCoach,
+                      child: const Text('Login as Coach'),
                     ),
-                    const Text('•'),
+                    const Text('•', style: TextStyle(color: Colors.grey)),
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const RoleRouter(role: 'Athlete')),
-                        );
-                      },
-                      child: const Text('Demo: Athlete View'),
+                      onPressed: _isLoading ? null : _fillAthlete,
+                      child: const Text('Login as Athlete'),
                     ),
                   ],
                 ),
