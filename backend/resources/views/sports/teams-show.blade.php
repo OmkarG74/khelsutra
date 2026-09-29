@@ -12,6 +12,11 @@ $eligibleAthletesStmt = $db->prepare("
     WHERE a.organization_id = :org_id 
       AND a.status = 'active' 
       AND a.deleted_at IS NULL
+      AND a.current_sport_id = :sport_id
+      AND (
+          :team_gender NOT IN ('male', 'female')
+          OR a.gender = :team_gender
+      )
       AND a.id NOT IN (
           SELECT tm.athlete_id 
           FROM team_members tm 
@@ -21,7 +26,14 @@ $eligibleAthletesStmt = $db->prepare("
       )
     ORDER BY a.first_name ASC, a.last_name ASC
 ");
-$eligibleAthletesStmt->execute([':org_id' => $orgId, ':team_id' => $teamId, ':org_id2' => $orgId]);
+$teamGender = strtolower(trim($team['gender'] ?? ''));
+$eligibleAthletesStmt->execute([
+    ':org_id' => $orgId, 
+    ':team_id' => $teamId, 
+    ':org_id2' => $orgId, 
+    ':sport_id' => $team['sport_id'],
+    ':team_gender' => $teamGender
+]);
 $eligibleAthletes = $eligibleAthletesStmt ? $eligibleAthletesStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
 // Eligible coaches via service (no raw database queries in Blade)
@@ -131,16 +143,20 @@ ob_start();
                                                 </a>
                                             </td>
                                             <td>
-                                                <?php if (!empty($cch['is_primary'])): ?>
-                                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Head Coach</span>
-                                                <?php else: ?>
-                                                    <span class="text-muted small"><?= htmlspecialchars(format_coach_role($cch['coach_role'] ?? 'assistant_coach'), ENT_QUOTES, 'UTF-8') ?></span>
-                                                <?php endif; ?>
+                                                <span class="text-dark small fw-medium"><?= htmlspecialchars(format_coach_role($cch['coach_role'] ?? 'head_coach'), ENT_QUOTES, 'UTF-8') ?></span>
                                             </td>
                                             <td class="text-muted small"><?= htmlspecialchars($cch['specialization'] ?? 'General', ENT_QUOTES, 'UTF-8') ?></td>
                                             <td class="text-muted small"><?= htmlspecialchars($cch['phone'] ?: ($cch['email'] ?: '—'), ENT_QUOTES, 'UTF-8') ?></td>
                                             <?php if ($canManageCoaches): ?>
                                                 <td class="text-end">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 me-1 edit-coach-btn" 
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#editCoachModal"
+                                                        data-coach-id="<?= (int)$cch['coach_id'] ?>"
+                                                        data-coach-name="<?= htmlspecialchars($cch['first_name'] . ' ' . $cch['last_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                                        data-role="<?= htmlspecialchars($cch['coach_role'] ?? 'head_coach', ENT_QUOTES, 'UTF-8') ?>">
+                                                        Edit
+                                                    </button>
                                                     <form action="/teams/<?= (int)$team['id'] ?>/coaches/<?= (int)$cch['coach_id'] ?>/remove" method="POST" class="d-inline m-0" onsubmit="return confirm('Remove this coach from the active coaching staff?');">
                                                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">Remove</button>
                                                     </form>
@@ -170,7 +186,7 @@ ob_start();
                                         <?php endforeach; ?>
                                     </select>
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-5">
                                     <label class="form-label small fw-semibold text-muted mb-1" for="coach_role">Role</label>
                                     <select name="coach_role" id="coach_role" class="form-select form-select-sm">
                                         <option value="head_coach">Head Coach</option>
@@ -179,14 +195,7 @@ ob_start();
                                         <option value="other">Other</option>
                                     </select>
                                 </div>
-                                <div class="col-md-2">
-                                    <input type="hidden" name="is_primary" value="0">
-                                    <div class="form-check form-switch mb-1">
-                                        <input class="form-check-input" type="checkbox" name="is_primary" id="is_primary" value="1" checked>
-                                        <label class="form-check-label small text-muted" for="is_primary">Primary</label>
-                                    </div>
-                                </div>
-                                <div class="col-md-2">
+                                <div class="col-md-2 d-flex flex-column justify-content-end pb-1">
                                     <button type="submit" class="btn btn-sm btn-primary w-100" style="background: var(--ks-blue); border-color: var(--ks-blue);">
                                         <i class="bi bi-plus-lg me-1"></i> Assign
                                     </button>
@@ -226,7 +235,17 @@ ob_start();
                                                 </a>
                                                 <div class="text-muted" style="font-size: 11px;"><?= htmlspecialchars($ath['athlete_code'], ENT_QUOTES, 'UTF-8') ?></div>
                                             </td>
-                                            <td class="text-muted small"><?= htmlspecialchars($ath['position'] ?: ucfirst($ath['member_role'] ?? 'player'), ENT_QUOTES, 'UTF-8') ?></td>
+                                            <?php
+                                                $displayRole = '';
+                                                if (($ath['member_role'] ?? '') === 'other' && !empty($ath['position'])) {
+                                                    $displayRole = $ath['position'];
+                                                } elseif (($ath['member_role'] ?? '') === 'vice_captain') {
+                                                    $displayRole = 'Vice Captain';
+                                                } else {
+                                                    $displayRole = ucfirst($ath['member_role'] ?? 'player');
+                                                }
+                                            ?>
+                                            <td class="text-muted small"><?= htmlspecialchars($displayRole, ENT_QUOTES, 'UTF-8') ?></td>
                                             <td class="text-muted small"><?= htmlspecialchars(ucfirst($ath['gender'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
                                             <td>
                                                 <span class="badge <?= ($ath['athlete_status'] ?? 'active') === 'active' ? 'badge-success' : 'badge-secondary' ?>" style="font-size: 10px;">
@@ -236,6 +255,20 @@ ob_start();
                                             <td class="text-end">
                                                 <div class="d-inline-flex justify-content-end align-items-center gap-1">
                                                     <a href="/athletes/<?= (int)$ath['athlete_id'] ?>" class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size: 11px;">View</a>
+                                                    
+                                                    <?php if ($canManageRoster ?? true): // fallback to true for UI since server validates ?>
+                                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 edit-roster-btn" style="font-size: 11px;"
+                                                            data-athlete-id="<?= (int)$ath['athlete_id'] ?>"
+                                                            data-athlete-name="<?= htmlspecialchars($ath['first_name'] . ' ' . $ath['last_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-jersey="<?= htmlspecialchars($ath['jersey_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-role="<?= htmlspecialchars($ath['member_role'] ?? 'player', ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-position="<?= htmlspecialchars($ath['position'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#editRosterModal">
+                                                        Edit
+                                                    </button>
+                                                    <?php endif; ?>
+
                                                     <form action="/teams/<?= (int)$team['id'] ?>/roster/<?= (int)$ath['athlete_id'] ?>/remove" method="POST" class="d-inline m-0" onsubmit="return confirm('Remove this athlete from the active squad?');">
                                                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 11px;">Remove</button>
                                                     </form>
@@ -254,7 +287,7 @@ ob_start();
                     <?php if (!empty($eligibleAthletes)): ?>
                         <div class="mt-3 pt-3 border-top">
                             <form action="/teams/<?= (int)$team['id'] ?>/roster/add" method="POST" class="row g-2 align-items-end">
-                                <div class="col-md-5">
+                                <div class="col-md-3">
                                     <label class="form-label small fw-semibold text-muted mb-1" for="athlete_id">Add Athlete to Squad</label>
                                     <select name="athlete_id" id="athlete_id" class="form-select form-select-sm" required>
                                         <option value="">-- Select Eligible Athlete --</option>
@@ -269,7 +302,7 @@ ob_start();
                                     <label class="form-label small fw-semibold text-muted mb-1" for="jersey_number">Jersey #</label>
                                     <input type="text" name="jersey_number" id="jersey_number" class="form-control form-control-sm" placeholder="e.g. 10" maxlength="10">
                                 </div>
-                                <div class="col-md-3">
+                                <div class="col-md-2">
                                     <label class="form-label small fw-semibold text-muted mb-1" for="member_role">Role / Pos</label>
                                     <select name="member_role" id="member_role" class="form-select form-select-sm">
                                         <option value="player">Player</option>
@@ -277,6 +310,10 @@ ob_start();
                                         <option value="vice_captain">Vice Captain</option>
                                         <option value="other">Other</option>
                                     </select>
+                                </div>
+                                <div class="col-md-3 d-none" id="custom_position_container">
+                                    <label class="form-label small fw-semibold text-muted mb-1" for="position">Custom Position</label>
+                                    <input type="text" name="position" id="position" class="form-control form-control-sm" placeholder="Enter custom position">
                                 </div>
                                 <div class="col-md-2">
                                     <button type="submit" class="btn btn-sm btn-primary w-100" style="background: var(--ks-blue); border-color: var(--ks-blue);">
@@ -370,7 +407,173 @@ ob_start();
             </div>
         </div>
     <?php endif; ?>
+
+
+    <!-- Edit Roster Modal -->
+    <div class="modal fade" id="editRosterModal" tabindex="-1" aria-labelledby="editRosterModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content" style="border-radius: var(--ks-radius-card);">
+                <form id="editRosterForm" method="POST" action="">
+                    <div class="modal-header pb-2 border-bottom-0">
+                        <h6 class="modal-title fw-bold" id="editRosterModalLabel" style="color: var(--ks-navy);">Edit Roster Details</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 12px;"></button>
+                    </div>
+                    <div class="modal-body pt-0">
+                        <div class="mb-3">
+                            <span class="small fw-semibold text-muted">Athlete: </span>
+                            <span class="small fw-bold text-dark" id="editRosterAthleteName"></span>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold text-muted mb-1" for="edit_jersey_number">Jersey #</label>
+                            <input type="text" name="jersey_number" id="edit_jersey_number" class="form-control form-control-sm" placeholder="e.g. 10" maxlength="10">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold text-muted mb-1" for="edit_member_role">Role / Pos</label>
+                            <select name="member_role" id="edit_member_role" class="form-select form-select-sm">
+                                <option value="player">Player</option>
+                                <option value="captain">Captain</option>
+                                <option value="vice_captain">Vice Captain</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        <div class="mb-2 d-none" id="edit_custom_position_container">
+                            <label class="form-label small fw-semibold text-muted mb-1" for="edit_position">Custom Position</label>
+                            <input type="text" name="position" id="edit_position" class="form-control form-control-sm" placeholder="Enter custom position">
+                        </div>
+                    </div>
+                    <div class="modal-footer pt-1 pb-2 border-top-0 d-flex justify-content-end gap-1">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue);">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Coach Modal -->
+    <div class="modal fade" id="editCoachModal" tabindex="-1" aria-labelledby="editCoachModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-sm modal-dialog-centered">
+            <div class="modal-content" style="border-radius: var(--ks-radius-card);">
+                <form id="editCoachForm" method="POST" action="">
+                    <div class="modal-header pb-2 border-bottom-0">
+                        <h6 class="modal-title fw-bold" id="editCoachModalLabel" style="color: var(--ks-navy);">Edit Coach Role</h6>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" style="font-size: 12px;"></button>
+                    </div>
+                    <div class="modal-body pt-0">
+                        <div class="mb-3">
+                            <span class="small fw-semibold text-muted">Coach: </span>
+                            <span class="small fw-bold text-dark" id="editCoachName"></span>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-semibold text-muted mb-1" for="edit_coach_role">Role</label>
+                            <select name="coach_role" id="edit_coach_role" class="form-select form-select-sm">
+                                <option value="head_coach">Head Coach</option>
+                                <option value="assistant_coach">Assistant Coach</option>
+                                <option value="fitness_coach">Fitness Coach</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer pt-1 pb-2 border-top-0 d-flex justify-content-end gap-1">
+                        <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-sm btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue);">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const editBtns = document.querySelectorAll('.edit-roster-btn');
+    const editForm = document.getElementById('editRosterForm');
+    const editAthleteName = document.getElementById('editRosterAthleteName');
+    const editJersey = document.getElementById('edit_jersey_number');
+    const editRole = document.getElementById('edit_member_role');
+    const editCustomPosContainer = document.getElementById('edit_custom_position_container');
+    const editCustomPosInput = document.getElementById('edit_position');
+    const teamId = <?= (int)$teamId ?>;
+
+    const roleSelect = document.getElementById('member_role');
+    const customPosContainer = document.getElementById('custom_position_container');
+    const customPosInput = document.getElementById('position');
+
+    if (roleSelect && customPosContainer) {
+        roleSelect.addEventListener('change', function() {
+            if (this.value === 'other') {
+                customPosContainer.classList.remove('d-none');
+                customPosInput.required = true;
+            } else {
+                customPosContainer.classList.add('d-none');
+                customPosInput.required = false;
+                customPosInput.value = '';
+            }
+        });
+    }
+
+    if (editRole && editCustomPosContainer) {
+        editRole.addEventListener('change', function() {
+            if (this.value === 'other') {
+                editCustomPosContainer.classList.remove('d-none');
+                editCustomPosInput.required = true;
+            } else {
+                editCustomPosContainer.classList.add('d-none');
+                editCustomPosInput.required = false;
+                editCustomPosInput.value = '';
+            }
+        });
+    }
+
+    editBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const athleteId = this.getAttribute('data-athlete-id');
+            editAthleteName.textContent = this.getAttribute('data-athlete-name');
+            editJersey.value = this.getAttribute('data-jersey');
+            
+            const role = this.getAttribute('data-role');
+            if(role) {
+                editRole.value = role;
+            } else {
+                editRole.value = 'player';
+            }
+
+            const position = this.getAttribute('data-position');
+            editCustomPosInput.value = position || '';
+            if (editRole.value === 'other') {
+                editCustomPosContainer.classList.remove('d-none');
+                editCustomPosInput.required = true;
+            } else {
+                editCustomPosContainer.classList.add('d-none');
+                editCustomPosInput.required = false;
+            }
+
+            editForm.action = `/teams/${teamId}/roster/${athleteId}/edit`;
+        });
+    });
+
+    const editCoachBtns = document.querySelectorAll('.edit-coach-btn');
+    const editCoachForm = document.getElementById('editCoachForm');
+    const editCoachName = document.getElementById('editCoachName');
+    const editCoachRoleSelect = document.getElementById('edit_coach_role');
+
+    editCoachBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const coachId = this.getAttribute('data-coach-id');
+            editCoachName.textContent = this.getAttribute('data-coach-name');
+            
+            const role = this.getAttribute('data-role');
+            if(role) {
+                editCoachRoleSelect.value = role;
+            } else {
+                editCoachRoleSelect.value = 'head_coach';
+            }
+
+            editCoachForm.action = `/teams/${teamId}/coaches/${coachId}/edit`;
+        });
+    });
+});
+</script>
 
 <?php
 $slot = ob_get_clean();

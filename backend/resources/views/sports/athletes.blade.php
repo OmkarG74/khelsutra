@@ -14,10 +14,15 @@ $athletes = $result['data'] ?? [];
 $totalAthletes = $result['total'] ?? 0;
 $totalPages = $result['total_pages'] ?? 1;
 
-// Fetch sports for filter dropdown
-$pdo = \App\Services\BaseService::getDatabaseConnection();
-$sportsList = $pdo->query("SELECT id, name FROM sports WHERE status = 'active' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-
+$sportService = new \App\Services\Sport\SportService();
+$sportsList = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sportsList[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sportsList, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 ob_start();
 ?>
 

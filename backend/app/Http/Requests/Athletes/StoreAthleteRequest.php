@@ -58,8 +58,8 @@ class StoreAthleteRequest
         }
 
         // 2. Sport & Roster
-        $sportId = (int)($this->data['current_sport_id'] ?? ($this->data['primary_sport_id'] ?? 0));
-        if ($sportId <= 0) {
+        $sportInput = $this->data['current_sport_id'] ?? ($this->data['primary_sport_id'] ?? '');
+        if (empty($sportInput)) {
             $errors['current_sport_id'][] = 'Primary sport selection is required.';
         }
 

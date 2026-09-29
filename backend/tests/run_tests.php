@@ -281,6 +281,16 @@ $tests = [
         $t = new \Tests\Feature\RegressionRenderTest();
         return $t->testUnauthorizedOrganizationAccessRemainsBlocked();
     },
+    'Feature: Athlete Sport & Team Validation (Phase 5/10)' => function() {
+        require_once __DIR__ . '/Feature/AthleteSportTeamValidationTest.php';
+        $t = new \Tests\Feature\AthleteSportTeamValidationTest();
+        return $t->testSportTeamValidation();
+    },
+    'Feature: Athlete Sport Slug Resolution' => function() {
+        require_once __DIR__ . '/Feature/AthleteSportSlugTest.php';
+        $t = new \Tests\Feature\AthleteSportSlugTest();
+        return $t->testSportSlugResolution();
+    },
 ];
 
 $passed = 0;

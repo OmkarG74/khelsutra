@@ -38,11 +38,48 @@ if (!function_exists('base_path')) {
     }
 }
 
+// Global config helper
+if (!function_exists('config')) {
+    function config($key, $default = null) {
+        static $configCache = null;
+        if ($configCache === null) {
+            $configCache = [];
+            $basePath = dirname(__DIR__);
+            foreach (glob($basePath . '/config/*.php') as $configFile) {
+                $fileKey = basename($configFile, '.php');
+                $configCache[$fileKey] = require $configFile;
+            }
+        }
+        
+        $parts = explode('.', $key);
+        $value = $configCache;
+        foreach ($parts as $part) {
+            if (is_array($value) && array_key_exists($part, $value)) {
+                $value = $value[$part];
+            } else {
+                return $default;
+            }
+        }
+        return $value;
+    }
+}
+
+// Composer autoloader
+$vendorAutoload = $basePath . '/vendor/autoload.php';
+if (file_exists($vendorAutoload)) {
+    require_once $vendorAutoload;
+} else {
+    throw new RuntimeException(
+        'Composer autoloader not found. Run composer install in backend/.'
+    );
+}
+
 require_once dirname(__DIR__) . '/app/Helpers/ApiResponse.php';
 require_once dirname(__DIR__) . '/app/Helpers/AuthContext.php';
 
-// Autoloader for App namespace
-require_once __DIR__ . "/database.php";
+require_once __DIR__ . '/database.php';
+
+
 
 spl_autoload_register(function ($class) {
     $prefix = 'App\\';
