@@ -3,7 +3,6 @@ $activePage = 'accommodation';
 $title = 'Accommodation Management — KhelSutra';
 ob_start();
 ?>
-?>
 <div class="ks-page-header mb-4">
     <div class="ks-header-left">
         <h2 class="ks-page-title">Accommodation Management</h2>

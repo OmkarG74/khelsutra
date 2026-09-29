@@ -3,11 +3,10 @@ $activePage = 'transport';
 $title = 'Transport Management — KhelSutra';
 ob_start();
 ?>
-?>
 <div class="ks-page-header mb-4">
     <div class="d-flex justify-content-between align-items-center">
         <div>
-            <h2 class="ks-page-title mb-1">Transport <h2 class="ks-header-title">Transport & Logistics</h2> Logistics</h2>
+            <h2 class="ks-page-title mb-1">Transport & Logistics</h2>
             <p class="ks-page-subtitle">Manage fleet vehicles, trip scheduling, and passenger logistics</p>
         </div>
     </div>
