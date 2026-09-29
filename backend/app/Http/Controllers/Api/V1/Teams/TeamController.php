@@ -42,4 +42,34 @@ class TeamController extends Controller
         $created = $this->teamService->createTeam($organizationId, $requestData);
         return ApiResponse::success($created, 'Team created successfully', 201);
     }
+
+    public function athletes(int $organizationId, int $teamId, array $requestData = []): array
+    {
+        $pdo = $this->teamService->getPdo();
+        if (!$pdo) {
+            return ApiResponse::success(['data' => [], 'total' => 0], 'No athletes found', 200);
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT 
+                a.id, a.athlete_code, a.first_name, a.middle_name, a.last_name,
+                a.date_of_birth, a.gender, a.phone, a.email, a.photo_path, a.status,
+                s.name as sport_name,
+                t.id as team_id, t.name as team_name,
+                tm.jersey_number, tm.member_role
+            FROM teams t
+            JOIN team_members tm ON t.id = tm.team_id AND tm.is_current = 1
+            JOIN athletes a ON tm.athlete_id = a.id AND a.deleted_at IS NULL
+            LEFT JOIN sports s ON a.current_sport_id = s.id
+            WHERE t.id = :tid AND t.organization_id = :oid AND t.deleted_at IS NULL
+            ORDER BY a.first_name ASC
+        ");
+        $stmt->execute([':tid' => $teamId, ':oid' => $organizationId]);
+        $athletes = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+
+        return ApiResponse::success([
+            'data' => $athletes,
+            'total' => count($athletes),
+        ], 'Team athletes retrieved successfully', 200);
+    }
 }

@@ -40,10 +40,20 @@ class AttendanceController extends Controller
             return ApiResponse::error('Training session not found or does not belong to your organization.', null, 404);
         }
 
-        // 2. Authorize coach: if authenticated user is a coach, ensure they own or coach this session
+        // 2. Authorize coach: if authenticated user is a coach, ensure they own or coach this session. Athletes CANNOT submit attendance.
         $currentUser = $requestData['user'] ?? null;
         $roleSlug = $currentUser['role']['slug'] ?? '';
         $isCoachUser = ($roleSlug === 'coach') || !empty($currentUser['coach_id']);
+        $isAdminUser = in_array($roleSlug, ['super_admin', 'sports_admin', 'admin']);
+        $isAthleteUser = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+
+        if ($isAthleteUser) {
+            return ApiResponse::error('Access denied: Athletes are not permitted to submit training attendance.', null, 403);
+        }
+
+        if (!$isCoachUser && !$isAdminUser) {
+            return ApiResponse::error('Access denied: Only authorized coaches and administrators can record attendance.', null, 403);
+        }
 
         if ($isCoachUser) {
             $coachId = (int)($currentUser['coach_id'] ?? 0);
@@ -72,6 +82,8 @@ class AttendanceController extends Controller
                 if (!$isCoachOfSession) {
                     return ApiResponse::error('Access denied: You are not authorized to record attendance for this training session.', null, 403);
                 }
+            } else {
+                return ApiResponse::error('Access denied: Coach profile required.', null, 403);
             }
         }
 
@@ -132,6 +144,30 @@ class AttendanceController extends Controller
 
     public function recordMatch(int $orgId, int $matchId, array $requestData, ?int $performedBy = null): array
     {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthleteUser = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+        if ($isAthleteUser) {
+            return ApiResponse::error('Access denied: Athletes are not permitted to submit match attendance.', null, 403);
+        }
+
+        // Support batch attendance submission
+        if (!empty($requestData['attendance']) && is_array($requestData['attendance'])) {
+            $recorded = 0;
+            foreach ($requestData['attendance'] as $item) {
+                if (is_array($item)) {
+                    try {
+                        $res = $this->attendanceService->recordMatchAttendance($orgId, $matchId, $item, $performedBy);
+                        if ($res) $recorded++;
+                    } catch (\Throwable $e) {}
+                }
+            }
+            return ApiResponse::success([
+                'match_id' => $matchId,
+                'records_recorded' => $recorded,
+            ], 'Match attendance recorded successfully', 200);
+        }
+
         $res = $this->attendanceService->recordMatchAttendance($orgId, $matchId, $requestData, $performedBy);
         if (!$res) {
             return ApiResponse::error('Validation failed. Exactly one participant (athlete, coach, or employee) must be specified with valid status.', null, 422);
@@ -141,11 +177,47 @@ class AttendanceController extends Controller
 
     public function trainingHistory(int $orgId, array $requestData): array
     {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthlete = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+
         $sessionId = !empty($requestData['training_session_id']) ? (int)$requestData['training_session_id'] : null;
         $athleteId = !empty($requestData['athlete_id']) ? (int)$requestData['athlete_id'] : null;
         $coachId = !empty($requestData['coach_id']) ? (int)$requestData['coach_id'] : null;
         $limit = (int)($requestData['limit'] ?? 50);
+
+        if ($isAthlete) {
+            $userAthleteId = (int)($currentUser['athlete_id'] ?? 0);
+            if ($athleteId && $athleteId !== $userAthleteId) {
+                return ApiResponse::error('Access denied: Athletes can only view their own attendance history.', null, 403);
+            }
+            $athleteId = $userAthleteId;
+        }
+
         $history = $this->attendanceService->getTrainingAttendanceHistory($orgId, $sessionId, $limit, $athleteId, $coachId);
         return ApiResponse::success($history, 'Training attendance history retrieved', 200);
+    }
+
+    public function matchHistory(int $orgId, array $requestData): array
+    {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthlete = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+
+        $matchId = !empty($requestData['match_id']) ? (int)$requestData['match_id'] : null;
+        $athleteId = !empty($requestData['athlete_id']) ? (int)$requestData['athlete_id'] : null;
+        $coachId = !empty($requestData['coach_id']) ? (int)$requestData['coach_id'] : null;
+        $limit = (int)($requestData['limit'] ?? 50);
+
+        if ($isAthlete) {
+            $userAthleteId = (int)($currentUser['athlete_id'] ?? 0);
+            if ($athleteId && $athleteId !== $userAthleteId) {
+                return ApiResponse::error('Access denied: Athletes can only view their own match attendance history.', null, 403);
+            }
+            $athleteId = $userAthleteId;
+        }
+
+        $history = $this->attendanceService->getMatchAttendanceHistory($orgId, $matchId, $limit, $athleteId, $coachId);
+        return ApiResponse::success($history, 'Match attendance history retrieved', 200);
     }
 }

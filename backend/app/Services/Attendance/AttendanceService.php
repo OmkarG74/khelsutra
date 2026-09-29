@@ -315,4 +315,47 @@ class AttendanceService extends BaseService
         $stmt->execute([':org_id' => $orgId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
+
+    public function getMatchAttendanceHistory(int $orgId, ?int $matchId = null, int $limit = 50, ?int $athleteId = null, ?int $coachId = null): array
+    {
+        if (!$this->pdo) return [];
+        $sql = "
+            SELECT ma.*, 
+                   CONCAT(a.first_name, ' ', a.last_name) as athlete_name, a.athlete_code,
+                   m.match_reference, m.status as match_status, m.actual_start_time,
+                   f.fixture_reference, f.scheduled_date, f.scheduled_start_time,
+                   ht.name as home_team_name, at.name as away_team_name,
+                   tr.name as tournament_name
+            FROM match_attendance ma
+            LEFT JOIN athletes a ON ma.athlete_id = a.id
+            LEFT JOIN matches m ON ma.match_id = m.id
+            LEFT JOIN fixtures f ON m.fixture_id = f.id
+            LEFT JOIN teams ht ON f.home_team_id = ht.id
+            LEFT JOIN teams at ON f.away_team_id = at.id
+            LEFT JOIN tournaments tr ON f.tournament_id = tr.id
+            WHERE ma.organization_id = :org_id
+        ";
+        $params = [':org_id' => $orgId];
+        if ($matchId) {
+            $sql .= " AND ma.match_id = :mid ";
+            $params[':mid'] = $matchId;
+        }
+        if ($athleteId) {
+            $sql .= " AND ma.athlete_id = :aid ";
+            $params[':aid'] = $athleteId;
+        }
+        if ($coachId) {
+            $sql .= " AND ma.coach_id = :cid ";
+            $params[':cid'] = $coachId;
+        }
+        $sql .= " ORDER BY f.scheduled_date DESC, ma.id DESC LIMIT :limit";
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
 }

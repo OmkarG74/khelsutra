@@ -9,6 +9,7 @@ import '../data/coach_repository.dart';
 import 'coach_athletes_screen.dart';
 import 'coach_select_attendance_session_screen.dart';
 import 'coach_create_training_screen.dart';
+import 'coach_matches_screen.dart';
 import 'coach_performance_screen.dart';
 import 'coach_profile_screen.dart';
 import 'coach_reports_screen.dart';
@@ -84,6 +85,15 @@ class _CoachDashboardScreenState extends State<CoachDashboardScreen> {
   void _openPerformance() async {
     final res = await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const CoachPerformanceScreen()),
+    );
+    if (res == true) {
+      _loadData();
+    }
+  }
+
+  void _openMatches() async {
+    final res = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CoachMatchesScreen(isStandalone: true)),
     );
     if (res == true) {
       _loadData();
@@ -355,7 +365,7 @@ class _CoachDashboardScreenState extends State<CoachDashboardScreen> {
                     onTap: _openCreateTraining,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildQuickActionButton(
                     icon: Icons.how_to_reg,
@@ -364,7 +374,16 @@ class _CoachDashboardScreenState extends State<CoachDashboardScreen> {
                     onTap: _openAttendance,
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    icon: Icons.sports_kabaddi,
+                    label: 'Matches',
+                    color: const Color(0xFF0284C7),
+                    onTap: _openMatches,
+                  ),
+                ),
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildQuickActionButton(
                     icon: Icons.groups,
@@ -373,11 +392,11 @@ class _CoachDashboardScreenState extends State<CoachDashboardScreen> {
                     onTap: () => setState(() => _selectedIndex = 1),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 6),
                 Expanded(
                   child: _buildQuickActionButton(
                     icon: Icons.speed,
-                    label: 'Performance',
+                    label: 'Evaluate',
                     color: AppTheme.accentColor,
                     onTap: _openPerformance,
                   ),
