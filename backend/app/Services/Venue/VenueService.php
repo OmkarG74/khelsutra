@@ -426,6 +426,13 @@ class VenueService extends BaseService
 
         $ref = $data['booking_reference'] ?? ('BKG-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)));
 
+        // Auto-approve only if the user has the booking management permission.
+        // Otherwise, the booking starts as pending and must be reviewed.
+        $sessionPermissions = $_SESSION['auth']['permissions'] ?? [];
+        $canAutoApprove = in_array('venue.booking.manage', $sessionPermissions, true);
+        $bookingStatus = $canAutoApprove ? 'approved' : 'pending';
+        $approvedBy = $canAutoApprove ? $performedBy : null;
+
         $sql = "
             INSERT INTO venue_bookings (
                 organization_id, venue_id, facility_id, booking_reference,
@@ -434,7 +441,7 @@ class VenueService extends BaseService
             ) VALUES (
                 :org_id, :v_id, :fac_id, :ref,
                 :user_id, :b_type, :purpose, :team_id,
-                :b_date, :stime, :etime, 'approved', :appr_by, NOW(), :notes, NOW(), NOW()
+                :b_date, :stime, :etime, :status, :appr_by, :appr_at, :notes, NOW(), NOW()
             )
         ";
 
@@ -451,7 +458,9 @@ class VenueService extends BaseService
             ':b_date' => $bookingDate,
             ':stime' => $startTime,
             ':etime' => $endTime,
-            ':appr_by' => $performedBy,
+            ':status' => $bookingStatus,
+            ':appr_by' => $approvedBy,
+            ':appr_at' => $canAutoApprove ? date('Y-m-d H:i:s') : null,
             ':notes' => $data['notes'] ?? null,
         ]);
 
