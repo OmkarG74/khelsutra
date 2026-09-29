@@ -22,13 +22,32 @@ ob_start();
         <div>
             <h1 class="ks-page-title">Venues</h1>
         </div>
-        <div class="ks-header-actions">
-            <a href="/venues/bookings/create" class="ks-btn ks-btn-secondary">
-                <i class="bi bi-calendar-plus"></i> New Booking
-            </a>
-            <a href="/venues/create" class="ks-btn ks-btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
-                <i class="bi bi-plus-lg"></i> Add Venue
-            </a>
+        <div class="ks-header-actions d-flex gap-2">
+            <!-- Bookings Dropdown -->
+            <div class="dropdown">
+                <button class="ks-btn ks-btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+                    <i class="bi bi-calendar-plus"></i> Bookings
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: var(--ks-radius-md); font-size: 13px;">
+                    <li><a class="dropdown-item py-2" href="/venues/bookings/create"><i class="bi bi-plus-circle me-2 text-primary"></i> New Booking</a></li>
+                    <?php if (in_array($_SESSION['auth']['role_slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+                    <li><a class="dropdown-item py-2" href="/operations/bookings"><i class="bi bi-eye me-2 text-secondary"></i> View Bookings</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+
+            <!-- Venues Dropdown -->
+            <div class="dropdown">
+                <button class="ks-btn ks-btn-primary dropdown-toggle d-inline-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+                    <i class="bi bi-geo-alt-fill"></i> Venues
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: var(--ks-radius-md); font-size: 13px;">
+                    <li><a class="dropdown-item py-2" href="/venues"><i class="bi bi-eye me-2 text-primary"></i> View Venues</a></li>
+                    <?php if (in_array($_SESSION['auth']['role_slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+                    <li><a class="dropdown-item py-2" href="/venues/create"><i class="bi bi-plus-lg me-2 text-secondary"></i> Add Venue</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
         </div>
     </div>
 
