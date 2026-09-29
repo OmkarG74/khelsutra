@@ -1,6 +1,6 @@
 <?php
 // Resolve current active role strictly from authenticated session (never from query parameters)
-$currentRole = $_SESSION['auth']['role_slug'] ?? 'sports_admin';
+$currentRole = $_SESSION['auth']['role']['slug'] ?? 'sports_admin';
 $activePage = $activePage ?? 'dashboard';
 
 // Role-aware navigation definitions for all 7 application roles

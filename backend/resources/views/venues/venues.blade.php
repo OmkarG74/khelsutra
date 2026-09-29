@@ -30,7 +30,7 @@ ob_start();
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: var(--ks-radius-md); font-size: 13px;">
                     <li><a class="dropdown-item py-2" href="/venues/bookings/create"><i class="bi bi-plus-circle me-2 text-primary"></i> New Booking</a></li>
-                    <?php if (in_array($_SESSION['auth']['role_slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+                    <?php if (in_array($_SESSION['auth']['role']['slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
                     <li><a class="dropdown-item py-2" href="/operations/bookings"><i class="bi bi-eye me-2 text-secondary"></i> View Bookings</a></li>
                     <?php endif; ?>
                 </ul>
@@ -43,7 +43,7 @@ ob_start();
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: var(--ks-radius-md); font-size: 13px;">
                     <li><a class="dropdown-item py-2" href="/venues"><i class="bi bi-eye me-2 text-primary"></i> View Venues</a></li>
-                    <?php if (in_array($_SESSION['auth']['role_slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+                    <?php if (in_array($_SESSION['auth']['role']['slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
                     <li><a class="dropdown-item py-2" href="/venues/create"><i class="bi bi-plus-lg me-2 text-secondary"></i> Add Venue</a></li>
                     <?php endif; ?>
                 </ul>
