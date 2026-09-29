@@ -3,7 +3,7 @@ $pageTitle = 'Budget Details — KhelSutra';
 $activePage = 'finance';
 $orgId = current_organization_id();
 
-$id = (int)($data['id'] ?? 0);
+$id = (int)($id ?? ($data['id'] ?? ($_GET['id'] ?? 0)));
 $financeService = new \App\Services\Finance\FinanceService();
 $budget = $financeService->getBudget($orgId, $id);
 $categories = $financeService->listCategories($orgId, 'expense', 'active');
@@ -20,21 +20,6 @@ ob_start();
 ?>
 
 <div class="ks-content">
-    <?php if (!empty($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-            <i class="bi bi-check-circle-fill fs-5"></i>
-            <div><?= htmlspecialchars($_GET['success'], ENT_QUOTES, 'UTF-8') ?></div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!empty($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-            <div><?= htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8') ?></div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
 
     <?php if (!$budget): ?>
         <div class="card p-5 text-center shadow-sm border-0" style="border-radius: var(--ks-radius-card); background: #fff;">

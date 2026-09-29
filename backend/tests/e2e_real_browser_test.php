@@ -6,6 +6,8 @@
  * Simulates a real browser user over HTTP (127.0.0.1:8000) using cURL sessions,
  * cookies, form submissions, and HTML DOM validation.
  */
+require_once __DIR__ . '/../vendor/autoload.php';
+require_once __DIR__ . '/../bootstrap/app.php';
 
 $baseUrl = 'http://127.0.0.1:8000';
 $cookieFile = __DIR__ . '/test_cookie.txt';
