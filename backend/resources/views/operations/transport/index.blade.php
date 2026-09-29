@@ -666,6 +666,7 @@ function openTripDrawer(tripId) {
         `;
     } else if (trip.status === 'in_progress') {
         actionButtons = `
+            <button class="ks-btn ks-btn-secondary w-100 mb-2" onclick="updateTripStatus(${trip.id}, 'planned')"><i class="bi bi-pause-circle"></i> Pause Trip</button>
             <button class="ks-btn ks-btn-primary w-100" onclick="updateTripStatus(${trip.id}, 'completed')"><i class="bi bi-check-circle"></i> Complete Trip</button>
         `;
     } else {
