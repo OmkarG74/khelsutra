@@ -201,7 +201,7 @@ class _AthletePerformanceScreenState extends State<AthletePerformanceScreen> {
                                     ),
                                   ),
                                   const Text(
-                                    'RATING',
+                                    'TRAINING SCORE',
                                     style: TextStyle(
                                       color: Colors.white70,
                                       fontSize: 9,
@@ -219,7 +219,7 @@ class _AthletePerformanceScreenState extends State<AthletePerformanceScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 const Text(
-                                  'Performance Rating',
+                                  'Overall Training Score',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -490,10 +490,10 @@ class _AthletePerformanceScreenState extends State<AthletePerformanceScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Score', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                          const Text('Result Value', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                           const SizedBox(height: 4),
                           Text(
-                            '${item.score} ${item.unit}',
+                            '${item.score} ${item.unit}'.trim(),
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                           ),
                         ],
@@ -511,14 +511,16 @@ class _AthletePerformanceScreenState extends State<AthletePerformanceScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Rating', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                          const Text('Training Score', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                           const SizedBox(height: 4),
                           Text(
-                            '${item.percentage.toInt()}%',
+                            item.trainingScore != null
+                                ? '${item.trainingScore!.toStringAsFixed(1)} / 10'
+                                : '${item.percentage.toInt()}%',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: AppTheme.successColor,
+                              color: AppTheme.accentColor,
                             ),
                           ),
                         ],

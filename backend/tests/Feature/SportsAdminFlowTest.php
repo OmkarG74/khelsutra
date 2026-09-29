@@ -232,8 +232,8 @@ class SportsAdminFlowTest
         if (empty($tourney['id'])) return false;
         $tourneyId = (int)$tourney['id'];
 
-        // 2. Add participating teams
-        $stmt = $this->pdo->prepare("SELECT id FROM teams WHERE organization_id = :org AND deleted_at IS NULL LIMIT 2");
+        // 2. Add participating teams matching the tournament's sport
+        $stmt = $this->pdo->prepare("SELECT id FROM teams WHERE organization_id = :org AND sport_id = 1 AND status = 'active' AND deleted_at IS NULL LIMIT 2");
         $stmt->execute([':org' => $this->orgId]);
         $teams = $stmt->fetchAll(PDO::FETCH_COLUMN);
 

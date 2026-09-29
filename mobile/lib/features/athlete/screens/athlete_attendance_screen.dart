@@ -19,17 +19,27 @@ class AthleteAttendanceScreen extends StatefulWidget {
   State<AthleteAttendanceScreen> createState() => _AthleteAttendanceScreenState();
 }
 
-class _AthleteAttendanceScreenState extends State<AthleteAttendanceScreen> {
+class _AthleteAttendanceScreenState extends State<AthleteAttendanceScreen>
+    with SingleTickerProviderStateMixin {
   final AthleteRepository _repository = AthleteRepository();
+  late TabController _tabController;
 
   bool _isLoading = true;
   String? _errorMessage;
   AthleteAttendanceSummary? _summary;
+  List<MatchAttendanceRecordItem> _matchRecords = [];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadData() async {
@@ -40,9 +50,15 @@ class _AthleteAttendanceScreenState extends State<AthleteAttendanceScreen> {
 
     try {
       final summary = await _repository.getAttendance();
+      List<MatchAttendanceRecordItem> matchAttendance = [];
+      try {
+        matchAttendance = await _repository.getMatchAttendance();
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _summary = summary;
+        _matchRecords = matchAttendance;
         _isLoading = false;
       });
     } catch (e) {
@@ -108,15 +124,26 @@ class _AthleteAttendanceScreenState extends State<AthleteAttendanceScreen> {
     final records = summary.records;
 
     return Scaffold(
-      appBar: widget.isStandalone
-          ? const KhelSutraAppBar(
-              title: 'Attendance Record',
-              showBackButton: true,
-            )
-          : null,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: SingleChildScrollView(
+      appBar: AppBar(
+        title: const Text('Attendance Record'),
+        automaticallyImplyLeading: widget.isStandalone,
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: AppTheme.accentColor,
+          tabs: const [
+            Tab(text: 'Training Drills'),
+            Tab(text: 'Match Day'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          RefreshIndicator(
+            onRefresh: _loadData,
+            child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16.0),
           child: Column(
@@ -340,6 +367,99 @@ class _AthleteAttendanceScreenState extends State<AthleteAttendanceScreen> {
             ],
           ),
         ),
+      ),
+      _buildMatchesTab(),
+    ],
+  ),
+);
+}
+
+  Widget _buildMatchesTab() {
+    if (_matchRecords.isEmpty) {
+      return const Center(
+        child: EmptyState(
+          icon: Icons.sports_kabaddi,
+          title: 'No Match Attendance Records',
+          description: 'Official competition roster presence and match attendance will appear here.',
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadData,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _matchRecords.length,
+        itemBuilder: (context, index) {
+          final m = _matchRecords[index];
+          final isPresent = m.isPresent;
+          Color statusColor = isPresent ? AppTheme.successColor : AppTheme.dangerColor;
+          if (m.attendanceStatus == 'late') statusColor = Colors.orange;
+          if (m.attendanceStatus == 'excused') statusColor = Colors.blue;
+
+          return Card(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      isPresent ? Icons.check : Icons.close,
+                      color: statusColor,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${m.homeTeamName} vs ${m.awayTeamName}',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${m.matchDate}${m.tournamentName != null ? " • ${m.tournamentName}" : ""}',
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                        ),
+                        if (m.remarks != null && m.remarks!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Remarks: ${m.remarks}',
+                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      m.attendanceStatus.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

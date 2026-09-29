@@ -50,14 +50,22 @@ class CoachRepository {
     throw Exception(res.message);
   }
 
-  /// Get athletes assigned to this coach's teams
-  Future<List<CoachRosterAthleteItem>> getAthletes({int? coachId, String? search}) async {
+  /// Get athletes assigned to this coach's teams with optional teamId filter
+  Future<List<CoachRosterAthleteItem>> getAthletes({int? coachId, String? search, int? teamId}) async {
     final resolvedId = await _resolveCoachId(coachId);
     if (resolvedId == null) return [];
 
-    var endpoint = '/coaches/$resolvedId/athletes';
+    final queryParams = <String>[];
     if (search != null && search.isNotEmpty) {
-      endpoint += '?search=${Uri.encodeComponent(search)}';
+      queryParams.add('search=${Uri.encodeComponent(search)}');
+    }
+    if (teamId != null) {
+      queryParams.add('team_id=$teamId');
+    }
+
+    var endpoint = '/coaches/$resolvedId/athletes';
+    if (queryParams.isNotEmpty) {
+      endpoint += '?${queryParams.join('&')}';
     }
 
     final res = await _client.get<Map<String, dynamic>>(
@@ -245,6 +253,7 @@ class CoachRepository {
     int? sportId,
     int? teamId,
     int? trainingSessionId,
+    double? trainingScore,
     double? overallRating,
     String? evaluationDate,
     String? coachRemarks,
@@ -252,12 +261,14 @@ class CoachRepository {
     List<Map<String, dynamic>>? values,
     List<Map<String, dynamic>>? metrics,
   }) async {
+    final score = trainingScore ?? overallRating;
     final body = {
       'athlete_id': athleteId,
       if (sportId != null) 'sport_id': sportId,
       if (teamId != null) 'team_id': teamId,
       if (trainingSessionId != null) 'training_session_id': trainingSessionId,
-      if (overallRating != null) 'overall_rating': overallRating,
+      if (score != null) 'training_score': score,
+      if (score != null) 'overall_rating': score,
       'coach_remarks': coachRemarks ?? remarks ?? '',
       'evaluation_date': evaluationDate ?? DateTime.now().toIso8601String().substring(0, 10),
       if (values != null) 'values': values,
@@ -314,5 +325,83 @@ class CoachRepository {
           .toList();
     }
     return [];
+  }
+
+  /// Get athlete documents for Coach Athlete Details view
+  Future<List<AthleteDocumentItem>> getAthleteDocuments(int athleteId) async {
+    final res = await _client.get<List<dynamic>>(
+      '/athletes/$athleteId/documents',
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!
+          .map((e) => AthleteDocumentItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Get matches for coach's teams
+  Future<List<MatchItem>> getMatches({int? coachId, String? status}) async {
+    final resolvedId = await _resolveCoachId(coachId);
+    final queryParams = <String>[];
+    if (resolvedId != null) queryParams.add('coach_id=$resolvedId');
+    if (status != null && status.isNotEmpty) queryParams.add('status=$status');
+
+    var endpoint = '/matches';
+    if (queryParams.isNotEmpty) {
+      endpoint += '?${queryParams.join('&')}';
+    }
+
+    final res = await _client.get<List<dynamic>>(
+      endpoint,
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!
+          .map((e) => MatchItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Get match details with roster attendance
+  Future<MatchItem> getMatchDetails(int matchId) async {
+    final res = await _client.get<MatchItem>(
+      '/matches/$matchId',
+      fromJson: (json) => MatchItem.fromJson(Map<String, dynamic>.from(json as Map)),
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!;
+    }
+    throw Exception(res.message);
+  }
+
+  /// Record match attendance for an athlete or batch
+  Future<void> recordMatchAttendance({
+    required int matchId,
+    int? athleteId,
+    String? status,
+    String? remarks,
+    List<Map<String, dynamic>>? attendance,
+  }) async {
+    final body = {
+      if (attendance != null) 'attendance': attendance,
+      if (athleteId != null) 'athlete_id': athleteId,
+      if (status != null) 'attendance_status': status.toLowerCase(),
+      if (remarks != null && remarks.isNotEmpty) 'remarks': remarks,
+    };
+
+    final res = await _client.post(
+      '/attendance/matches/$matchId',
+      body: body,
+    );
+
+    if (!res.success) {
+      throw Exception(res.message);
+    }
   }
 }

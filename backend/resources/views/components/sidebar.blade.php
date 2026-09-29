@@ -45,7 +45,7 @@ $navMenus = [
         ['key' => 'profile', 'label' => 'My Profile', 'icon' => 'bi-person-badge', 'url' => '/athletes'],
         ['key' => 'teams', 'label' => 'My Team', 'icon' => 'bi-people-fill', 'url' => '/teams'],
         ['key' => 'training', 'label' => 'Training', 'icon' => 'bi-stopwatch-fill', 'url' => '/training'],
-        ['key' => 'attendance', 'label' => 'My Attendance', 'icon' => 'bi-calendar-check', 'url' => '/attendance/training'],
+        ['key' => 'attendance', 'label' => 'My Attendance', 'icon' => 'bi-calendar-check', 'url' => '/attendance/history'],
         ['key' => 'leave', 'label' => 'Apply Leave', 'icon' => 'bi-calendar-plus', 'url' => '/leave/create'],
         ['key' => 'performance', 'label' => 'Performance', 'icon' => 'bi-graph-up-arrow', 'url' => '/athletes'],
         ['key' => 'achievements', 'label' => 'Achievements', 'icon' => 'bi-award-fill', 'url' => '/athletes'],
@@ -67,6 +67,7 @@ $navMenus = [
     ],
     'venue_manager' => [
         ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'bi-house-door-fill', 'url' => '/dashboard'],
+        ['key' => 'venues', 'label' => 'Venues & Bookings', 'icon' => 'bi-geo-alt-fill', 'url' => '/venues'],
         ['key' => 'events', 'label' => 'Events', 'icon' => 'bi-calendar-event', 'url' => '/operations/events'],
         ['key' => 'transport', 'label' => 'Transport', 'icon' => 'bi-truck', 'url' => '/operations/transport'],
         ['key' => 'accommodation', 'label' => 'Accommodation', 'icon' => 'bi-building-fill-add', 'url' => '/operations/accommodation'],

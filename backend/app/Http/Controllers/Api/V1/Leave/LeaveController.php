@@ -33,10 +33,24 @@ class LeaveController extends Controller
 
     public function index(int $orgId, array $requestData): array
     {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthlete = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+
         $status = $requestData['status'] ?? null;
         $limit = (int)($requestData['limit'] ?? 50);
         $offset = (int)($requestData['offset'] ?? 0);
-        $requests = $this->leaveService->listLeaveRequests($orgId, $status, $limit, $offset);
+
+        $filter = ['status' => $status, 'limit' => $limit, 'offset' => $offset];
+        if ($isAthlete) {
+            $filter['applicant_type'] = 'athlete';
+            $filter['athlete_id'] = (int)$currentUser['athlete_id'];
+        } elseif (!empty($requestData['athlete_id'])) {
+            $filter['applicant_type'] = 'athlete';
+            $filter['athlete_id'] = (int)$requestData['athlete_id'];
+        }
+
+        $requests = $this->leaveService->listLeaveRequests($orgId, $filter, $limit, $offset);
         return ApiResponse::success($requests, 'Leave requests retrieved', 200);
     }
 
@@ -51,6 +65,15 @@ class LeaveController extends Controller
 
     public function store(int $orgId, array $requestData, ?int $performedBy = null): array
     {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthlete = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+
+        if ($isAthlete) {
+            $requestData['applicant_type'] = 'athlete';
+            $requestData['athlete_id'] = (int)$currentUser['athlete_id'];
+        }
+
         try {
             $leave = $this->leaveService->applyLeave($orgId, $requestData, $performedBy);
             if (!$leave) {

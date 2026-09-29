@@ -1,49 +1,90 @@
 <?php
 $teamId = (int)($id ?? ($_GET['id'] ?? 0));
 $orgId = current_organization_id();
-$teamService = new \App\Services\Team\TeamService();
-$team = $teamService->getTeam($orgId, $teamId);
 
-$db = \App\Services\BaseService::getDatabaseConnection();
-// Available athletes eligible to be added to this team (active, not deleted, not currently active in this team)
-$eligibleAthletesStmt = $db->prepare("
-    SELECT a.id, a.athlete_code, a.first_name, a.last_name
-    FROM athletes a
-    WHERE a.organization_id = :org_id 
-      AND a.status = 'active' 
-      AND a.deleted_at IS NULL
-      AND a.current_sport_id = :sport_id
-      AND (
-          :team_gender NOT IN ('male', 'female')
-          OR a.gender = :team_gender
-      )
-      AND a.id NOT IN (
-          SELECT tm.athlete_id 
-          FROM team_members tm 
-          WHERE tm.team_id = :team_id 
-            AND tm.organization_id = :org_id2 
-            AND tm.is_current = 1
-      )
-    ORDER BY a.first_name ASC, a.last_name ASC
-");
-$teamGender = strtolower(trim($team['gender'] ?? ''));
-$eligibleAthletesStmt->execute([
-    ':org_id' => $orgId, 
-    ':team_id' => $teamId, 
-    ':org_id2' => $orgId, 
-    ':sport_id' => $team['sport_id'],
-    ':team_gender' => $teamGender
-]);
-$eligibleAthletes = $eligibleAthletesStmt ? $eligibleAthletesStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentUser = $_SESSION['auth']['user'] ?? null;
+$isAthlete = ($currentRoleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+$isCoach = ($currentRoleSlug === 'coach') || !empty($currentUser['coach_id']);
+
+$accessDenied = false;
+$accessDeniedMessage = 'Access denied: You are not authorized to view this team.';
+
+$pdo = \App\Services\BaseService::getDatabaseConnection();
+
+if ($isAthlete && $pdo) {
+    $athleteId = (int)($currentUser['athlete_id'] ?? 0);
+    $tmStmt = $pdo->prepare("SELECT 1 FROM team_members WHERE team_id = :tid AND athlete_id = :aid AND organization_id = :oid AND is_current = 1 LIMIT 1");
+    $tmStmt->execute([':tid' => $teamId, ':aid' => $athleteId, ':oid' => $orgId]);
+    if (!$tmStmt->fetchColumn()) {
+        $accessDenied = true;
+        $accessDeniedMessage = 'Access denied: You are not a rostered athlete in this team squad.';
+    }
+} elseif ($isCoach && $pdo) {
+    $coachId = (int)($currentUser['coach_id'] ?? 0);
+    if (!$coachId && !empty($currentUser['id'])) {
+        $cStmt = $pdo->prepare("
+            SELECT cp.id 
+            FROM coach_profiles cp 
+            JOIN employees e ON cp.employee_id = e.id 
+            WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL 
+            LIMIT 1
+        ");
+        $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $orgId]);
+        $coachId = (int)($cStmt->fetchColumn() ?: 0);
+    }
+    $tcStmt = $pdo->prepare("SELECT 1 FROM team_coaches WHERE team_id = :tid AND coach_id = :cid AND organization_id = :oid LIMIT 1");
+    $tcStmt->execute([':tid' => $teamId, ':cid' => $coachId, ':oid' => $orgId]);
+    if (!$tcStmt->fetchColumn()) {
+        $accessDenied = true;
+        $accessDeniedMessage = 'Access denied: You are not assigned to coach this team squad.';
+    }
+}
+
+$teamService = new \App\Services\Team\TeamService();
+$team = (!$accessDenied) ? $teamService->getTeam($orgId, $teamId) : null;
+
+$eligibleAthletes = [];
+if ($team && !$isAthlete && !$isCoach && $pdo) {
+    $eligibleAthletesStmt = $pdo->prepare("
+        SELECT a.id, a.athlete_code, a.first_name, a.last_name
+        FROM athletes a
+        WHERE a.organization_id = :org_id 
+          AND a.status = 'active' 
+          AND a.deleted_at IS NULL
+          AND a.current_sport_id = :sport_id
+          AND (
+              :team_gender NOT IN ('male', 'female')
+              OR a.gender = :team_gender
+          )
+          AND a.id NOT IN (
+              SELECT tm.athlete_id 
+              FROM team_members tm 
+              WHERE tm.team_id = :team_id 
+                AND tm.organization_id = :org_id2 
+                AND tm.is_current = 1
+          )
+        ORDER BY a.first_name ASC, a.last_name ASC
+    ");
+    $teamGender = strtolower(trim($team['gender'] ?? ''));
+    $eligibleAthletesStmt->execute([
+        ':org_id' => $orgId, 
+        ':team_id' => $teamId, 
+        ':org_id2' => $orgId, 
+        ':sport_id' => $team['sport_id'],
+        ':team_gender' => $teamGender
+    ]);
+    $eligibleAthletes = $eligibleAthletesStmt ? $eligibleAthletesStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
 
 // Eligible coaches via service (no raw database queries in Blade)
-$eligibleCoaches = $team ? $teamService->getEligibleCoaches($orgId, $teamId) : [];
+$eligibleCoaches = ($team && !$isAthlete && !$isCoach) ? $teamService->getEligibleCoaches($orgId, $teamId) : [];
 
 // RBAC check for coach management visibility
 $permissionService = new \App\Services\Rbac\PermissionService();
 $currentUserId = current_user_id() ?? 0;
 $userPermissions = $currentUserId > 0 ? $permissionService->getUserPermissions($currentUserId, $orgId) : [];
-$canManageCoaches = in_array('team.coaches.manage', $userPermissions, true) || in_array('team.manage', $userPermissions, true);
+$canManageCoaches = (!$isAthlete && !$isCoach) && (in_array('team.coaches.manage', $userPermissions, true) || in_array('team.manage', $userPermissions, true));
 
 $pageTitle = $team ? htmlspecialchars($team['name'] . ' — Team Details') : 'Team Details';
 $activePage = 'teams';
@@ -52,7 +93,18 @@ ob_start();
 ?>
 
 <div class="ks-content">
-    <?php if (!$team): ?>
+    <?php if ($accessDenied): ?>
+        <div class="card p-5 text-center my-4" style="border: 1px solid #FECACA; background: #FEF2F2; border-radius: var(--ks-radius-card);">
+            <div class="mb-3"><i class="bi bi-shield-lock-fill fs-1 text-danger"></i></div>
+            <h4 class="fw-bold text-danger">403 — Access Forbidden</h4>
+            <p class="text-muted small"><?= htmlspecialchars($accessDeniedMessage, ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="mt-3">
+                <a href="<?= $isAthlete ? '/dashboard' : '/teams' ?>" class="btn btn-outline-danger" style="border-radius: var(--ks-radius-button); font-weight: 500;">
+                    <i class="bi bi-arrow-left me-1"></i> Return to <?= $isAthlete ? 'Dashboard' : 'My Coached Teams' ?>
+                </a>
+            </div>
+        </div>
+    <?php elseif (!$team): ?>
         <div class="card p-5 text-center" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
             <div class="mb-3"><i class="bi bi-shield-x fs-1 text-muted"></i></div>
             <h4 class="fw-bold" style="color: var(--ks-navy);">Team Not Found</h4>
@@ -105,11 +157,13 @@ ob_start();
                 </div>
             </div>
 
+            <?php if (!$isCoach && !$isAthlete): ?>
             <div class="d-flex gap-2">
                 <a href="/teams/<?= (int)$team['id'] ?>/edit" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 8px 18px;">
                     <i class="bi bi-pencil-square"></i> Edit Team
                 </a>
             </div>
+            <?php endif; ?>
         </div>
 
         <div class="row g-3">

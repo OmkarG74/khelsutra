@@ -4,6 +4,7 @@ import '../../../core/models/coach_models.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../auth/services/auth_service.dart';
 import '../data/coach_repository.dart';
+import 'coach_athletes_screen.dart';
 
 class CoachProfileScreen extends StatefulWidget {
   const CoachProfileScreen({super.key});
@@ -347,6 +348,20 @@ class _CoachProfileScreenState extends State<CoachProfileScreen> {
                       leading: const Icon(Icons.groups, color: AppTheme.primaryColor),
                       title: Text(t.teamName, style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text('${t.roleInTeam} • ${t.sportName}'),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CoachAthletesScreen(
+                              isStandalone: true,
+                              teamId: t.teamId,
+                              teamName: t.teamName,
+                            ),
+                          ),
+                        );
+                      },
                     )),
               const SizedBox(height: 20),
             ],

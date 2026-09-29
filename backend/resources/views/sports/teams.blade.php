@@ -3,16 +3,69 @@ $pageTitle = 'Teams — KhelSutra';
 $activePage = 'teams';
 $orgId = current_organization_id();
 
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentUser = $_SESSION['auth']['user'] ?? null;
+$isAthlete = ($currentRoleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+$isCoach = ($currentRoleSlug === 'coach') || !empty($currentUser['coach_id']);
+
 $teamService = new \App\Services\Team\TeamService();
 $page = (int)($_GET['page'] ?? 1);
 $search = trim($_GET['search'] ?? '');
 $sportId = !empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null;
 $status = trim($_GET['status'] ?? '');
 
-$result = $teamService->listTeams($orgId, $page, 15, $search ?: null, $sportId, $status ?: null);
-$teams = $result['data'] ?? [];
-$total = $result['total'] ?? 0;
-$totalPages = $result['total_pages'] ?? 1;
+$pdo = \App\Services\BaseService::getDatabaseConnection();
+if ($isAthlete && $pdo) {
+    $athleteId = (int)($currentUser['athlete_id'] ?? 0);
+    $stmt = $pdo->prepare("
+        SELECT t.*, s.name as sport_name 
+        FROM teams t 
+        JOIN team_members tm ON t.id = tm.team_id AND tm.is_current = 1
+        LEFT JOIN sports s ON t.sport_id = s.id
+        WHERE tm.athlete_id = :aid AND t.organization_id = :oid AND t.deleted_at IS NULL
+        ORDER BY t.name ASC
+    ");
+    $stmt->execute([':aid' => $athleteId, ':oid' => $orgId]);
+    $teams = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+    $total = count($teams);
+    $totalPages = 1;
+} elseif ($isCoach && $pdo) {
+    $coachId = (int)($currentUser['coach_id'] ?? 0);
+    if (!$coachId && !empty($currentUser['id'])) {
+        $cStmt = $pdo->prepare("
+            SELECT cp.id 
+            FROM coach_profiles cp 
+            JOIN employees e ON cp.employee_id = e.id 
+            WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL 
+            LIMIT 1
+        ");
+        $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $orgId]);
+        $coachId = (int)($cStmt->fetchColumn() ?: 0);
+    }
+    if ($coachId) {
+        $stmt = $pdo->prepare("
+            SELECT t.*, s.name as sport_name 
+            FROM teams t 
+            JOIN team_coaches tc ON t.id = tc.team_id 
+            LEFT JOIN sports s ON t.sport_id = s.id
+            WHERE tc.coach_id = :cid AND t.organization_id = :oid AND t.deleted_at IS NULL
+            ORDER BY t.name ASC
+        ");
+        $stmt->execute([':cid' => $coachId, ':oid' => $orgId]);
+        $teams = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+        $total = count($teams);
+        $totalPages = 1;
+    } else {
+        $teams = [];
+        $total = 0;
+        $totalPages = 1;
+    }
+} else {
+    $result = $teamService->listTeams($orgId, $page, 15, $search ?: null, $sportId, $status ?: null);
+    $teams = $result['data'] ?? [];
+    $total = $result['total'] ?? 0;
+    $totalPages = $result['total_pages'] ?? 1;
+}
 
 // Fetch sports from config
 $sportService = new \App\Services\Sport\SportService();
@@ -30,13 +83,15 @@ ob_start();
 
 <div class="ks-page-header">
     <div>
-        <h1 class="ks-page-title">Teams</h1>
+        <h1 class="ks-page-title"><?= $isCoach ? 'My Coached Teams' : ($isAthlete ? 'My Teams' : 'Teams') ?></h1>
     </div>
+    <?php if (!$isCoach && !$isAthlete): ?>
     <div class="ks-header-actions">
         <a href="/teams/create" class="ks-btn ks-btn-primary" id="btnCreateTeam">
             <i class="bi bi-plus-lg"></i> Create Team
         </a>
     </div>
+    <?php endif; ?>
 </div>
 
 <!-- Search & Filters Toolbar -->
@@ -132,18 +187,25 @@ ob_start();
                                     <?php
                                         $tStatus = $team['status'] ?? 'active';
                                     ?>
+                                    <?php if (!$isCoach && !$isAthlete): ?>
                                     <form action="/teams/<?= (int)$team['id'] ?>/status" method="POST" style="display: contents;" class="d-inline m-0 p-0">
                                         <input type="hidden" name="status" value="<?= $tStatus === 'active' ? 'inactive' : 'active' ?>">
                                         <button type="submit" class="badge <?= $tStatus === 'active' ? 'badge-success' : 'badge-secondary' ?>" style="cursor: pointer; border: none; border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize; font-family: inherit;" title="Click to toggle status to <?= $tStatus === 'active' ? 'Inactive' : 'Active' ?>">
                                             <?= htmlspecialchars($tStatus, ENT_QUOTES, 'UTF-8') ?>
                                         </button>
                                     </form>
+                                    <?php else: ?>
+                                    <span class="badge <?= $tStatus === 'active' ? 'badge-success' : 'badge-secondary' ?>" style="border-radius: 12px; font-size: 11px; padding: 4px 10px; text-transform: capitalize;">
+                                        <?= htmlspecialchars($tStatus, ENT_QUOTES, 'UTF-8') ?>
+                                    </span>
+                                    <?php endif; ?>
                                 </td>
                                 <td class="py-3 px-3 text-end">
                                     <div class="btn-group btn-group-sm">
-                                        <a href="/teams/<?= (int)$team['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Squad Details">
+                                        <a href="/teams/<?= (int)$team['id'] ?>" class="btn btn-outline-secondary" style="border-radius: <?= (!$isCoach && !$isAthlete) ? '6px 0 0 6px' : '6px' ?>;" title="View Squad Details">
                                             <i class="bi bi-eye"></i>
                                         </a>
+                                        <?php if (!$isCoach && !$isAthlete): ?>
                                         <a href="/teams/<?= (int)$team['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0;" title="Edit Team">
                                             <i class="bi bi-pencil"></i>
                                         </a>
@@ -152,6 +214,7 @@ ob_start();
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
+                                        <?php endif; ?>
                                     </div>
                                 </td>
                             </tr>

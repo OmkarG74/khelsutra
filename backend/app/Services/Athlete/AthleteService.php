@@ -28,6 +28,11 @@ class AthleteService
         return $this->documentService;
     }
 
+    public function getPdo(): ?PDO
+    {
+        return $this->pdo;
+    }
+
     public function listAthletes(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?int $sportId = null, ?string $status = null): array
     {
         return $this->repository->getPaginated($organizationId, $page, $limit, $search, $sportId, $status);

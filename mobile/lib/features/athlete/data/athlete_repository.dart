@@ -146,6 +146,127 @@ class AthleteRepository {
     return [];
   }
 
+  /// Get athlete documents
+  Future<List<AthleteDocumentItem>> getDocuments({int? athleteId}) async {
+    final resolvedId = await _resolveAthleteId(athleteId);
+    if (resolvedId == null) return [];
+
+    final res = await _client.get<List<dynamic>>(
+      '/athletes/$resolvedId/documents',
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!
+          .map((e) => AthleteDocumentItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Get athlete medical and injury profile
+  Future<Map<String, dynamic>> getMedical({int? athleteId}) async {
+    final resolvedId = await _resolveAthleteId(athleteId);
+    if (resolvedId == null) return {};
+
+    final res = await _client.get<Map<String, dynamic>>(
+      '/athletes/$resolvedId/medical',
+      fromJson: (json) => Map<String, dynamic>.from(json as Map),
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!;
+    }
+    return {};
+  }
+
+  /// Get athlete upcoming fixtures and matches
+  Future<List<MatchItem>> getMatches() async {
+    final res = await _client.get<List<dynamic>>(
+      '/matches',
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!
+          .map((e) => MatchItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Get athlete match attendance history
+  Future<List<MatchAttendanceRecordItem>> getMatchAttendance({int? athleteId}) async {
+    final resolvedId = await _resolveAthleteId(athleteId);
+    final endpoint = resolvedId != null
+        ? '/attendance/matches/history?athlete_id=$resolvedId'
+        : '/attendance/matches/history';
+
+    final res = await _client.get<List<dynamic>>(
+      endpoint,
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!
+          .map((e) => MatchAttendanceRecordItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Get leave types
+  Future<List<Map<String, dynamic>>> getLeaveTypes() async {
+    final res = await _client.get<List<dynamic>>(
+      '/leave/types',
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    }
+    return [];
+  }
+
+  /// Get athlete leave requests
+  Future<List<LeaveRequestItem>> getLeaveRequests() async {
+    final res = await _client.get<List<dynamic>>(
+      '/leave/requests',
+      fromJson: (json) => json is List ? json : [],
+    );
+
+    if (res.success && res.data != null) {
+      return res.data!
+          .map((e) => LeaveRequestItem.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Apply for athlete leave
+  Future<void> applyLeave({
+    required int leaveTypeId,
+    required String startDate,
+    required String endDate,
+    String? reason,
+  }) async {
+    final resolvedId = await _resolveAthleteId(null);
+    final res = await _client.post(
+      '/leave/requests',
+      body: {
+        'leave_type_id': leaveTypeId,
+        'start_date': startDate,
+        'end_date': endDate,
+        'applicant_type': 'athlete',
+        'athlete_id': resolvedId,
+        'reason': reason,
+      },
+    );
+    if (!res.success) {
+      throw Exception(res.message);
+    }
+  }
+
   /// Mark notification as read
   Future<void> markNotificationAsRead(int notificationId) async {
     try {
