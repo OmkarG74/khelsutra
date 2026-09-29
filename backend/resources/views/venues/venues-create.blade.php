@@ -3,10 +3,16 @@ $pageTitle = 'Add Venue — KhelSutra';
 $activePage = 'venues';
 $orgId = current_organization_id();
 
-// Fetch sports
-$db = \App\Services\BaseService::getDatabaseConnection();
-$sportsStmt = $db->query("SELECT id, name FROM sports WHERE status = 'active' ORDER BY name ASC");
-$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+// Fetch sports from config
+$sportService = new \App\Services\Sport\SportService();
+$sports = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sports[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sports, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 
 ob_start();
 ?>

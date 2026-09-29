@@ -49,9 +49,21 @@
                 $flashSuccess = $_GET['success'] ?? $_SESSION['flash_success'] ?? null;
                 $flashError = $_GET['error'] ?? $_SESSION['flash_error'] ?? null;
                 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
+                $slotContent = $slot ?? ($content ?? '');
+                $hasInlineSuccess = $flashSuccess && (
+                    str_contains($slotContent, htmlspecialchars($flashSuccess, ENT_QUOTES, 'UTF-8')) ||
+                    str_contains($slotContent, htmlspecialchars($flashSuccess)) ||
+                    str_contains($slotContent, $flashSuccess)
+                );
+                $hasInlineError = $flashError && (
+                    str_contains($slotContent, htmlspecialchars($flashError, ENT_QUOTES, 'UTF-8')) ||
+                    str_contains($slotContent, htmlspecialchars($flashError)) ||
+                    str_contains($slotContent, $flashError)
+                );
                 ?>
 
-                <?php if ($flashSuccess): ?>
+                <?php if ($flashSuccess && !$hasInlineSuccess): ?>
                     <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4 py-2 px-3 shadow-sm" role="alert" style="border-radius: 10px; font-size: 13.5px; border-left: 4px solid var(--ks-success);">
                         <i class="bi bi-check-circle-fill text-success fs-5"></i>
                         <span class="fw-medium text-dark"><?= htmlspecialchars($flashSuccess) ?></span>
@@ -59,7 +71,7 @@
                     </div>
                 <?php endif; ?>
 
-                <?php if ($flashError): ?>
+                <?php if ($flashError && !$hasInlineError): ?>
                     <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4 py-2 px-3 shadow-sm" role="alert" style="border-radius: 10px; font-size: 13.5px; border-left: 4px solid var(--ks-danger);">
                         <i class="bi bi-exclamation-octagon-fill text-danger fs-5"></i>
                         <span class="fw-medium text-dark"><?= htmlspecialchars($flashError) ?></span>
@@ -67,7 +79,7 @@
                     </div>
                 <?php endif; ?>
 
-                <?= $slot ?? '' ?>
+                <?= $slotContent ?>
             </main>
         </div>
     </div>

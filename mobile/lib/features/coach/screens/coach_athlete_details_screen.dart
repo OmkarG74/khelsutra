@@ -36,6 +36,7 @@ class _CoachAthleteDetailsScreenState extends State<CoachAthleteDetailsScreen>
   List<PerformanceRecordItem> _performanceRecords = [];
   List<AchievementItemModel> _achievements = [];
   List<TrainingSessionItem> _trainings = [];
+  List<AthleteDocumentItem> _documents = [];
 
   @override
   void initState() {
@@ -53,6 +54,11 @@ class _CoachAthleteDetailsScreenState extends State<CoachAthleteDetailsScreen>
     try {
       final athleteId = int.tryParse(widget.athlete.id) ?? 1;
       final details = await _repo.getAthleteDetails(athleteId);
+      List<AthleteDocumentItem> docs = [];
+      try {
+        docs = await _repo.getAthleteDocuments(athleteId);
+      } catch (_) {}
+
       if (!mounted) return;
       setState(() {
         _profile = details['profile'] as AthleteProfile?;
@@ -60,6 +66,7 @@ class _CoachAthleteDetailsScreenState extends State<CoachAthleteDetailsScreen>
         _performanceRecords = (details['performance'] as List<PerformanceRecordItem>?) ?? [];
         _achievements = (details['achievements'] as List<AchievementItemModel>?) ?? [];
         _trainings = (details['trainings'] as List<TrainingSessionItem>?) ?? [];
+        _documents = docs;
         _isLoading = false;
       });
     } catch (e) {
@@ -397,49 +404,118 @@ class _CoachAthleteDetailsScreenState extends State<CoachAthleteDetailsScreen>
   }
 
   Widget _buildPerformanceTab(List<AssessmentRecord> assessments) {
-    if (assessments.isEmpty) {
-      return const Center(
-        child: EmptyState(
-          icon: Icons.trending_up,
-          title: 'No Performance Records',
-          description: 'No physical evaluations logged for this athlete yet.',
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: assessments.length,
-      itemBuilder: (context, index) {
-        final a = assessments[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(a.testName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                    Text('${a.score} ${a.unit}',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.primaryColor)),
-                  ],
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Evaluation History',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final res = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CoachPerformanceScreen(
+                        initialAthleteId: widget.athlete.id,
+                      ),
+                    ),
+                  );
+                  if (res == true) {
+                    _loadAthleteDetails();
+                  }
+                },
+                icon: const Icon(Icons.add, size: 16),
+                label: const Text('Record'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 4),
-                Text('${a.date} • ${a.category}',
-                    style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary)),
-                if (a.notes.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(a.notes, style: const TextStyle(fontSize: 12, color: AppTheme.textColor)),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
-        );
-      },
+        ),
+        Expanded(
+          child: assessments.isEmpty
+              ? const Center(
+                  child: EmptyState(
+                    icon: Icons.trending_up,
+                    title: 'No Performance Records',
+                    description: 'No physical evaluations logged for this athlete yet.',
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: assessments.length,
+                  itemBuilder: (context, index) {
+                    final a = assessments[index];
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    a.testName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Result: ${a.score} ${a.unit}'.trim(),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: AppTheme.primaryColor,
+                                      ),
+                                    ),
+                                    if (a.trainingScore != null) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Training Score: ${a.trainingScore!.toStringAsFixed(1)} / 10',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.accentColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${a.date} • ${a.category}',
+                              style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                            ),
+                            if (a.notes.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(a.notes, style: const TextStyle(fontSize: 12, color: AppTheme.textColor)),
+                            ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -504,20 +580,39 @@ class _CoachAthleteDetailsScreenState extends State<CoachAthleteDetailsScreen>
   }
 
   Widget _buildDocumentsTab() {
-    return const Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.badge, color: AppTheme.primaryColor),
-              title: Text('Official Sports Federation Card'),
-              subtitle: Text('Registered under KhelSutra Organization'),
-              trailing: Icon(Icons.verified, color: AppTheme.successColor, size: 20),
+    if (_documents.isEmpty) {
+      return const Center(
+        child: EmptyState(
+          icon: Icons.description_outlined,
+          title: 'No Documents',
+          description: 'No verified documents found for this athlete.',
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _documents.length,
+      itemBuilder: (context, index) {
+        final doc = _documents[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 10),
+          child: ListTile(
+            leading: const Icon(Icons.description, color: AppTheme.primaryColor),
+            title: Text(doc.documentName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            subtitle: Text(
+              '${doc.documentType}${doc.expiryDate != null ? " • Exp: ${doc.expiryDate}" : ""}',
+              style: const TextStyle(fontSize: 12),
             ),
+            trailing: doc.isVerified
+                ? const Icon(Icons.verified, color: AppTheme.successColor, size: 20)
+                : Text(
+                    doc.verificationStatus.toUpperCase(),
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted, fontWeight: FontWeight.bold),
+                  ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

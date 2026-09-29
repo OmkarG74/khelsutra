@@ -100,12 +100,23 @@ class TrainingService extends BaseService
         $stmt->execute();
         $sessions = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        foreach ($sessions as &$s) {
+            $s['id'] = (int)$s['id'];
+            if (isset($s['team_id'])) $s['team_id'] = $s['team_id'] !== null ? (int)$s['team_id'] : null;
+            if (isset($s['venue_id'])) $s['venue_id'] = $s['venue_id'] !== null ? (int)$s['venue_id'] : null;
+            if (isset($s['facility_id'])) $s['facility_id'] = $s['facility_id'] !== null ? (int)$s['facility_id'] : null;
+            if (isset($s['coach_id'])) $s['coach_id'] = $s['coach_id'] !== null ? (int)$s['coach_id'] : null;
+            $s['total_roster_count'] = (int)($s['total_roster_count'] ?? 0);
+            $s['present_count'] = (int)($s['present_count'] ?? 0);
+        }
+        unset($s);
+
         return [
             'data' => $sessions,
-            'total' => $total,
+            'total' => (int)$total,
             'page' => $page,
             'limit' => $limit,
-            'total_pages' => ceil($total / max(1, $limit)),
+            'total_pages' => (int)ceil($total / max(1, $limit)),
         ];
     }
 
@@ -164,7 +175,21 @@ class TrainingService extends BaseService
             ':team_id' => $session['team_id'],
             ':org_id' => $organizationId
         ]);
-        $session['roster_attendance'] = $athStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $session['id'] = (int)$session['id'];
+        if (isset($session['team_id'])) $session['team_id'] = $session['team_id'] !== null ? (int)$session['team_id'] : null;
+        if (isset($session['venue_id'])) $session['venue_id'] = $session['venue_id'] !== null ? (int)$session['venue_id'] : null;
+        if (isset($session['facility_id'])) $session['facility_id'] = $session['facility_id'] !== null ? (int)$session['facility_id'] : null;
+        if (isset($session['coach_id'])) $session['coach_id'] = $session['coach_id'] !== null ? (int)$session['coach_id'] : null;
+
+        $roster = $athStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        foreach ($roster as &$r) {
+            $r['athlete_id'] = (int)$r['athlete_id'];
+            if (isset($r['attendance_id']) && $r['attendance_id'] !== null) {
+                $r['attendance_id'] = (int)$r['attendance_id'];
+            }
+        }
+        unset($r);
+        $session['roster_attendance'] = $roster;
 
         return $session;
     }

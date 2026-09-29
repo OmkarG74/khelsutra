@@ -17,7 +17,44 @@ $currentUser = $_SESSION['auth']['user'] ?? [
     'last_name' => 'Sharma'
 ];
 $orgId = current_organization_id();
-$userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+
+// Athlete POST authorization check
+if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
+    $allowedAthletePostPatterns = [
+        '#^/leave/create#',
+        '#^/logout#'
+    ];
+    $allowed = false;
+    foreach ($allowedAthletePostPatterns as $p) {
+        if (preg_match($p, $uri)) { $allowed = true; break; }
+    }
+    if (!$allowed) {
+        http_response_code(403);
+        echo "403 Forbidden: Athletes cannot perform this administrative or operational action.";
+        exit;
+    }
+}
+
+// Coach POST authorization check
+if ($currentRoleSlug === 'coach' || $currentRoleId === 4) {
+    $blockedCoachPostPatterns = [
+        '#^/athletes/create#', '#^/athletes/\d+/delete#', '#^/athletes/\d+/status#',
+        '#^/coaches/create#', '#^/coaches/\d+/edit#', '#^/coaches/\d+/delete#',
+        '#^/teams/create#', '#^/teams/\d+/delete#',
+        '#^/venues/create#', '#^/venues/\d+/edit#',
+        '#^/inventory#', '#^/equipment#', '#^/vendors#', '#^/purchases#',
+        '#^/payroll#', '#^/hr#', '#^/users#', '#^/roles#', '#^/permissions#'
+    ];
+    foreach ($blockedCoachPostPatterns as $p) {
+        if (preg_match($p, $uri)) {
+            http_response_code(403);
+            echo "403 Forbidden: Coaches are not authorized to perform administrative mutations.";
+            exit;
+        }
+    }
+}
 
 // ==========================================
 // 1. ATHLETE ACTIONS
@@ -141,7 +178,7 @@ if (preg_match('#^/athletes/(\d+)/edit$#', $uri, $m)) {
     $lastName = trim($_POST['last_name'] ?? '');
     $dob = trim($_POST['date_of_birth'] ?? '');
     $gender = trim($_POST['gender'] ?? '');
-    $sportId = (int)($_POST['current_sport_id'] ?? 0);
+    $sportInput = trim($_POST['current_sport_id'] ?? '');
     $status = trim($_POST['status'] ?? '');
 
     if (empty($firstName) || empty($lastName)) {
@@ -156,7 +193,7 @@ if (preg_match('#^/athletes/(\d+)/edit$#', $uri, $m)) {
         header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('Gender is required.'));
         exit;
     }
-    if ($sportId <= 0) {
+    if (empty($sportInput)) {
         header('Location: /athletes/' . $athleteId . '/edit?error=' . urlencode('Primary Sport is required.'));
         exit;
     }
@@ -705,6 +742,54 @@ if (preg_match('#^/teams/(\d+)/roster/add$#', $uri, $m)) {
     }
 }
 
+if (preg_match('#^/teams/(\d+)/roster/(\d+)/edit$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $athleteId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManageRoster = $permissionService->hasPermission($userPayload, 'team.members.manage', $orgId)
+                    || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canManageRoster) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManageRoster = in_array('team.members.manage', $userPermissions, true)
+                        || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canManageRoster) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unauthorized: You do not have permission to manage team rosters.'));
+        exit;
+    }
+
+    $teamService = new \App\Services\Team\TeamService();
+    try {
+        $ok = $teamService->updateAthleteRoster($orgId, $teamId, $athleteId, $_POST, $userId);
+        if ($ok) {
+            header('Location: /teams/' . $teamId . '?success=' . urlencode('Athlete roster details updated successfully.'));
+        } else {
+            header('Location: /teams/' . $teamId . '?error=' . urlencode('Failed to update athlete roster details.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to update roster: ' . $e->getMessage()));
+        exit;
+    }
+}
+
 if (preg_match('#^/teams/(\d+)/roster/(\d+)/remove$#', $uri, $m)) {
     $teamId = (int)$m[1];
     $athleteId = (int)$m[2];
@@ -879,6 +964,63 @@ if (preg_match('#^/teams/(\d+)/coaches/(\d+)/remove$#', $uri, $m)) {
         exit;
     } catch (\Throwable $e) {
         header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to remove coach: ' . $e->getMessage()));
+        exit;
+    }
+}
+
+if (preg_match('#^/teams/(\d+)/coaches/(\d+)/edit$#', $uri, $m)) {
+    $teamId = (int)$m[1];
+    $coachId = (int)$m[2];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+
+    // Untrusted organization_id defense
+    unset($_POST['organization_id']);
+
+    // RBAC Authorization check using PermissionService semantics (no role-name bypasses)
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canManageCoaches = $permissionService->hasPermission($userPayload, 'team.coaches.manage', $orgId)
+                     || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+
+    if (!$canManageCoaches) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canManageCoaches = in_array('team.coaches.manage', $userPermissions, true)
+                         || in_array('team.manage', $userPermissions, true);
+    }
+
+    if (!$canManageCoaches) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unauthorized: You do not have permission to manage team coaches.'));
+        exit;
+    }
+
+    if ($coachId <= 0) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Invalid coach specified.'));
+        exit;
+    }
+    
+    $role = trim((string)($_POST['coach_role'] ?? ''));
+
+    $teamService = new \App\Services\Team\TeamService();
+    try {
+        $ok = $teamService->updateCoachRole($orgId, $teamId, $coachId, $role, $userId);
+        if ($ok) {
+            header('Location: /teams/' . $teamId . '?success=' . urlencode('Coach role updated successfully.'));
+        } else {
+            header('Location: /teams/' . $teamId . '?error=' . urlencode('Failed to update coach role.'));
+        }
+        exit;
+    } catch (\Throwable $e) {
+        header('Location: /teams/' . $teamId . '?error=' . urlencode('Unable to update coach role: ' . $e->getMessage()));
         exit;
     }
 }

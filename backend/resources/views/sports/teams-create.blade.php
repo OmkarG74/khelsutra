@@ -5,9 +5,16 @@ $orgId = current_organization_id();
 
 $db = \App\Services\BaseService::getDatabaseConnection();
 
-// Sports
-$sportsStmt = $db->query("SELECT id, name FROM sports ORDER BY name ASC");
-$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+// Sports from config
+$sportService = new \App\Services\Sport\SportService();
+$sports = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sports[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sports, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 
 // Active Coaches
 $coachStmt = $db->prepare("
@@ -22,7 +29,7 @@ $coaches = $coachStmt ? $coachStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
 // Active Athletes
 $athStmt = $db->prepare("
-    SELECT id, athlete_code, first_name, last_name, current_sport_id
+    SELECT id, athlete_code, first_name, last_name, current_sport_id, gender, date_of_birth
     FROM athletes
     WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL
     ORDER BY first_name ASC
@@ -137,11 +144,14 @@ ob_start();
             </h5>
             <p class="text-muted small mb-3">Select athletes to enroll in this squad. You can also assign or transfer athletes anytime later.</p>
 
-            <div class="row g-2" style="max-height: 220px; overflow-y: auto; padding-right: 5px;">
+            <div class="row g-2" id="rosterContainer" style="max-height: 220px; overflow-y: auto; padding-right: 5px;">
                 <?php foreach ($athletes as $ath): ?>
-                    <div class="col-md-4 col-sm-6">
+                    <div class="col-md-4 col-sm-6 athlete-item" 
+                         data-sport="<?= (int)$ath['current_sport_id'] ?>" 
+                         data-gender="<?= htmlspecialchars($ath['gender'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
+                         data-dob="<?= htmlspecialchars($ath['date_of_birth'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
                         <div class="form-check p-2 border rounded" style="background: var(--ks-page-bg);">
-                            <input class="form-check-input ms-0 me-2" type="checkbox" name="athlete_ids[]" value="<?= (int)$ath['id'] ?>" id="ath_<?= (int)$ath['id'] ?>">
+                            <input class="form-check-input ms-0 me-2 athlete-checkbox" type="checkbox" name="athlete_ids[]" value="<?= (int)$ath['id'] ?>" id="ath_<?= (int)$ath['id'] ?>">
                             <label class="form-check-label small fw-medium text-dark" for="ath_<?= (int)$ath['id'] ?>">
                                 <?= htmlspecialchars($ath['first_name'] . ' ' . $ath['last_name'], ENT_QUOTES, 'UTF-8') ?>
                                 <span class="text-muted" style="font-size: 11px;">(<?= htmlspecialchars($ath['athlete_code'], ENT_QUOTES, 'UTF-8') ?>)</span>
@@ -149,6 +159,9 @@ ob_start();
                         </div>
                     </div>
                 <?php endforeach; ?>
+                <div id="noEligibleAthletesMessage" class="col-12 text-center text-muted small py-3" style="display: none;">
+                    No eligible athletes found for the selected Sport, Gender, and Age Group.
+                </div>
             </div>
         </div>
 
@@ -163,6 +176,104 @@ ob_start();
         </div>
     </form>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sportSelect = document.querySelector('select[name="sport_id"]');
+    const genderSelect = document.querySelector('select[name="gender"]');
+    const ageGroupInput = document.querySelector('input[name="age_group"]');
+    const athleteItems = document.querySelectorAll('.athlete-item');
+    const noAthletesMessage = document.getElementById('noEligibleAthletesMessage');
+
+    function calculateAge(dobStr) {
+        if (!dobStr) return null;
+        const dob = new Date(dobStr);
+        if (isNaN(dob.getTime())) return null;
+        const diff_ms = Date.now() - dob.getTime();
+        const age_dt = new Date(diff_ms); 
+        return Math.abs(age_dt.getUTCFullYear() - 1970);
+    }
+
+    function isAgeEligible(age, ageGroupStr) {
+        if (age === null) return true; 
+        
+        ageGroupStr = ageGroupStr.toLowerCase().trim();
+        if (ageGroupStr === 'senior' || ageGroupStr === 'open' || ageGroupStr === '') return true;
+        
+        let match = ageGroupStr.match(/u(?:nder)?[-_ ]?(\d+)/);
+        if (match) {
+            const maxAge = parseInt(match[1], 10);
+            return age <= maxAge;
+        }
+        
+        match = ageGroupStr.match(/over[-_ ]?(\d+)/);
+        if (match) {
+            const minAge = parseInt(match[1], 10);
+            return age >= minAge;
+        }
+
+        return true; 
+    }
+
+    function filterRoster() {
+        const selectedSportVal = sportSelect.value;
+        const selectedGender = genderSelect.value.toLowerCase();
+        const selectedAgeGroup = ageGroupInput.value;
+
+        let visibleCount = 0;
+
+        athleteItems.forEach(item => {
+            const athSport = item.getAttribute('data-sport');
+            const athGender = item.getAttribute('data-gender').toLowerCase();
+            const athDob = item.getAttribute('data-dob');
+            const checkbox = item.querySelector('.athlete-checkbox');
+
+            let isEligible = true;
+
+            // 1. Sport (value is directly the ID)
+            if (selectedSportVal && athSport !== selectedSportVal) {
+                isEligible = false;
+            }
+
+            // 2. Gender
+            if (selectedGender !== 'mixed' && selectedGender !== 'open' && selectedGender !== '') {
+                if (athGender !== selectedGender) {
+                    isEligible = false;
+                }
+            }
+
+            // 3. Age Group
+            const athAge = calculateAge(athDob);
+            if (!isAgeEligible(athAge, selectedAgeGroup)) {
+                isEligible = false;
+            }
+
+            if (isEligible) {
+                item.style.display = '';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+                if (checkbox.checked) {
+                    checkbox.checked = false;
+                }
+            }
+        });
+
+        if (visibleCount === 0) {
+            noAthletesMessage.style.display = 'block';
+        } else {
+            noAthletesMessage.style.display = 'none';
+        }
+    }
+
+    sportSelect.addEventListener('change', filterRoster);
+    genderSelect.addEventListener('change', filterRoster);
+    ageGroupInput.addEventListener('input', filterRoster);
+
+    // Initial load filtering
+    filterRoster();
+});
+</script>
 
 <?php
 $slot = ob_get_clean();

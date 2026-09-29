@@ -79,6 +79,63 @@ return function ($uri, $method, $requestData = []) {
     $performedBy = (int)($currentUser['id'] ?? 1);
     $userId = $performedBy;
 
+    // Member 5 RBAC Permission Enforcer
+    $checkPermission = function (string|array $requiredPermissions) use ($currentUser, $orgId) {
+        $roleId = (int)($currentUser['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+        $roleName = $currentUser['role']['name'] ?? '';
+
+        // Super Admin bypasses all checks
+        if ($roleId === 1 || $roleName === 'Super Admin') {
+            return true;
+        }
+
+        // Check user permission overrides (deny/grant) FIRST before blanket role grants
+        if (!empty($currentUser['id']) && $orgId) {
+            $db = \App\Services\BaseService::getDatabaseConnection();
+            if ($db) {
+                $checkList = is_array($requiredPermissions) ? $requiredPermissions : [$requiredPermissions];
+                foreach ($checkList as $perm) {
+                    $ovStmt = $db->prepare("
+                        SELECT upo.override_type 
+                        FROM user_permission_overrides upo 
+                        JOIN permissions p ON upo.permission_id = p.id 
+                        WHERE upo.user_id = :uid AND upo.organization_id = :oid AND p.name = :pname
+                        LIMIT 1
+                    ");
+                    $ovStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => (int)$orgId, ':pname' => $perm]);
+                    $ovr = $ovStmt->fetchColumn();
+                    if ($ovr === 'deny') return false;
+                    if ($ovr === 'grant') return true;
+                }
+            }
+        }
+
+        // Sports Administrator has full organization-level permissions (if not explicitly denied above)
+        if ($roleId === 2 || $roleName === 'Sports Administrator') {
+            return true;
+        }
+
+        // Check user permissions list
+        $userPerms = $currentUser['permissions'] ?? [];
+        if (empty($userPerms) && !empty($currentUser['id'])) {
+            $permService = new \App\Services\Rbac\PermissionService();
+            $userPerms = $permService->getUserPermissions((int)$currentUser['id'], (int)$orgId);
+            if (empty($userPerms) && $roleId) {
+                $rolePerms = $permService->getRolePermissions($roleId);
+                $userPerms = array_column($rolePerms, 'name');
+            }
+        }
+
+        $checkList = is_array($requiredPermissions) ? $requiredPermissions : [$requiredPermissions];
+        foreach ($checkList as $perm) {
+            if (in_array($perm, $userPerms, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
     // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
     if (str_starts_with($uri, '/api/v1/organizations')) {
         if (!$isSuperAdmin) {
@@ -113,28 +170,45 @@ return function ($uri, $method, $requestData = []) {
 
     // 5. User Management & RBAC
     if ($uri === '/api/v1/users') {
-        $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
-        if ($method === 'GET') return $controller->index($orgId, $requestData);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['user.view', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
+            return $controller->index($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['user.create', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/users/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['user.view', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission(['user.update', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/users/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+        if (!$checkPermission(['user.deactivate', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Users\UserController();
         return $controller->setStatus($orgId, (int)$m[1], $requestData, $performedBy);
     }
 
     if ($uri === '/api/v1/roles' && $method === 'GET') {
+        if (!$checkPermission(['user.view', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->roles();
     }
     if ($uri === '/api/v1/permissions' && $method === 'GET') {
+        if (!$checkPermission(['user.view', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->permissions();
     }
     if (preg_match('#^/api/v1/roles/(\d+)/permissions$#', $uri, $m) && $method === 'GET') {
+        if (!$checkPermission(['user.view', 'user.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         return (new \App\Http\Controllers\Api\V1\Rbac\RbacController())->rolePermissions((int)$m[1]);
     }
     if ($uri === '/api/v1/permissions/override' && $method === 'POST') {
@@ -147,51 +221,99 @@ return function ($uri, $method, $requestData = []) {
     // 6. Departments & Employee Categories
     if ($uri === '/api/v1/departments') {
         $controller = new \App\Http\Controllers\Api\V1\Staff\DepartmentController();
-        if ($method === 'GET') return $controller->index($orgId);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['employee.create', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/departments/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Staff\DepartmentController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission(['employee.update', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
     }
 
     if ($uri === '/api/v1/employee-categories') {
         $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeCategoryController();
-        if ($method === 'GET') return $controller->index($orgId);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['employee.create', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/employee-categories/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeCategoryController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission(['employee.update', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
     }
 
     // 7. Employees & Documents
     if ($uri === '/api/v1/employees') {
         $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeController();
-        if ($method === 'GET') return $controller->index($orgId, $requestData);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['employee.create', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/employees/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission(['employee.update', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/employees/(\d+)/documents$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Staff\EmployeeDocumentController();
         $empId = (int)$m[1];
-        if ($method === 'GET') return $controller->index($orgId, $empId);
-        if ($method === 'POST') return $controller->store($orgId, $empId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['employee.view', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId, $empId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['employee.update', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $empId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/employees/(\d+)/coach-profile$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Coaches\CoachProfileController();
         $empId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $empId);
-        if ($method === 'POST' || $method === 'PUT') return $controller->storeOrUpdate($orgId, $empId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['coach.view', 'coach.manage', 'employee.view'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $empId);
+        }
+        if ($method === 'POST' || $method === 'PUT') {
+            if (!$checkPermission(['coach.update', 'coach.manage', 'employee.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeOrUpdate($orgId, $empId, $requestData, $performedBy);
+        }
     }
 
     // 8. Attendance (Training & Match)
@@ -202,21 +324,32 @@ return function ($uri, $method, $requestData = []) {
     }
     if (preg_match('#^/api/v1/attendance/matches/(\d+)$#', $uri, $m) && $method === 'POST') {
         $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        $requestData['user'] = $currentUser;
         return $controller->recordMatch($orgId, (int)$m[1], $requestData, $performedBy);
     }
     if ($uri === '/api/v1/attendance/training/history' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        $requestData['user'] = $currentUser;
         return $controller->trainingHistory($orgId, $requestData);
+    }
+    if (($uri === '/api/v1/attendance/matches/history' || $uri === '/api/v1/attendance/match/history') && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Attendance\AttendanceController();
+        $requestData['user'] = $currentUser;
+        return $controller->matchHistory($orgId, $requestData);
     }
 
     // 9. Leave Management
     if ($uri === '/api/v1/leave/types') {
         $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
         if ($method === 'GET') return $controller->types($orgId);
-        if ($method === 'POST') return $controller->storeType($orgId, $requestData, $performedBy);
+        if ($method === 'POST') {
+            if (!$checkPermission(['leave.create', 'leave.approve'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeType($orgId, $requestData, $performedBy);
+        }
     }
     if ($uri === '/api/v1/leave/requests') {
         $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
+        $requestData['user'] = $currentUser;
         if ($method === 'GET') return $controller->index($orgId, $requestData);
         if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
     }
@@ -225,6 +358,7 @@ return function ($uri, $method, $requestData = []) {
         return $controller->show($orgId, (int)$m[1]);
     }
     if (preg_match('#^/api/v1/leave/requests/(\d+)/review$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('leave.approve')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Leave\LeaveController();
         return $controller->review($orgId, (int)$m[1], $requestData, $performedBy);
     }
@@ -233,33 +367,50 @@ return function ($uri, $method, $requestData = []) {
     if (preg_match('#^/api/v1/payroll/salary-structures/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
         $empId = (int)$m[1];
-        if ($method === 'GET') return $controller->getSalaryStructure($orgId, $empId);
-        if ($method === 'POST' || $method === 'PUT') return $controller->setSalaryStructure($orgId, $empId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['payroll.view', 'payroll.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->getSalaryStructure($orgId, $empId);
+        }
+        if ($method === 'POST' || $method === 'PUT') {
+            if (!$checkPermission('payroll.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->setSalaryStructure($orgId, $empId, $requestData, $performedBy);
+        }
     }
     if ($uri === '/api/v1/payroll/periods') {
         $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
-        if ($method === 'GET') return $controller->periods($orgId);
-        if ($method === 'POST') return $controller->storePeriod($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['payroll.view', 'payroll.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->periods($orgId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('payroll.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storePeriod($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/payroll/periods/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+        if (!$checkPermission('payroll.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
         return $controller->updatePeriodStatus($orgId, (int)$m[1], $requestData, $performedBy);
     }
     if ($uri === '/api/v1/payroll/records' && $method === 'GET') {
+        if (!$checkPermission(['payroll.view', 'payroll.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
         return $controller->records($orgId, $requestData);
     }
     if (preg_match('#^/api/v1/payroll/periods/(\d+)/employees/(\d+)/process$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('payroll.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
         return $controller->process($orgId, (int)$m[1], (int)$m[2], $requestData, $performedBy);
     }
     if (preg_match('#^/api/v1/payroll/records/(\d+)/payment$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+        if (!$checkPermission('payroll.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Payroll\PayrollController();
         return $controller->updatePayment($orgId, (int)$m[1], $requestData, $performedBy);
     }
 
     // 11. Audit Logs
     if ($uri === '/api/v1/audit-logs' && $method === 'GET') {
+        if (!$checkPermission('audit.view')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Audit\AuditLogController();
         return $controller->index($orgId, $requestData);
     }
@@ -268,28 +419,57 @@ return function ($uri, $method, $requestData = []) {
     if ($uri === '/api/v1/athletes' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Athletes\AthleteController();
         $page = (int)($requestData['page'] ?? 1);
-        return $controller->index($orgId, $page);
+        $requestData['user'] = $currentUser;
+        return $controller->index($orgId, $page, 15, $requestData);
     }
     if ($uri === '/api/v1/athletes' && $method === 'POST') {
+        if (!$checkPermission(['athlete.create', 'athlete.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Athletes\AthleteController();
         return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/athletes/(\d+)/documents$#', $uri, $matches) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Athletes\AthleteController();
+        $id = (int)$matches[1];
+        $requestData['user'] = $currentUser;
+        return $controller->documents($orgId, $id, $requestData);
+    }
+    if (preg_match('#^/api/v1/athletes/(\d+)/medical$#', $uri, $matches) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Athletes\AthleteController();
+        $id = (int)$matches[1];
+        $requestData['user'] = $currentUser;
+        return $controller->medical($orgId, $id, $requestData);
     }
     if (preg_match('#^/api/v1/athletes/(\d+)$#', $uri, $matches)) {
         $controller = new \App\Http\Controllers\Api\V1\Athletes\AthleteController();
         $id = (int)$matches[1];
-        if ($method === 'GET') return $controller->show($orgId, $id);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $id, $requestData);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $id);
+        $requestData['user'] = $currentUser;
+        if ($method === 'GET') return $controller->show($orgId, $id, $requestData);
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission(['athlete.update', 'athlete.edit', 'athlete.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $id, $requestData);
+        }
+        if ($method === 'DELETE') {
+            if (!$checkPermission(['athlete.delete', 'athlete.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->destroy($orgId, $id);
+        }
     }
 
     if ($uri === '/api/v1/teams' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Teams\TeamController();
         $page = (int)($requestData['page'] ?? 1);
-        return $controller->index($orgId, $page);
+        $requestData['user'] = $currentUser;
+        return $controller->index($orgId, $page, 15, $requestData);
     }
     if ($uri === '/api/v1/teams' && $method === 'POST') {
+        if (!$checkPermission(['team.create', 'team.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Teams\TeamController();
         return $controller->store($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/teams/(\d+)/athletes$#', $uri, $matches) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Teams\TeamController();
+        $teamId = (int)$matches[1];
+        $requestData['user'] = $currentUser;
+        return $controller->athletes($orgId, $teamId, $requestData);
     }
 
     if ($uri === '/api/v1/tournaments' && $method === 'GET') {
@@ -298,8 +478,20 @@ return function ($uri, $method, $requestData = []) {
         return $controller->index($orgId, $page);
     }
     if ($uri === '/api/v1/tournaments' && $method === 'POST') {
+        if (!$checkPermission(['tournament.create', 'tournament.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Tournaments\TournamentController();
         return $controller->store($orgId, $requestData);
+    }
+
+    // Matches and Fixtures
+    if (($uri === '/api/v1/matches' || $uri === '/api/v1/fixtures') && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Matches\MatchController();
+        $requestData['user'] = $currentUser;
+        return $controller->index($orgId, $requestData);
+    }
+    if (preg_match('#^/api/v1/matches/(\d+)$#', $uri, $m) && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Matches\MatchController();
+        return $controller->show($orgId, (int)$m[1]);
     }
 
     // Training Sessions
@@ -309,6 +501,7 @@ return function ($uri, $method, $requestData = []) {
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/training-sessions' && $method === 'POST') {
+        if (!$checkPermission(['training.create', 'training.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Training\TrainingController();
         $requestData['user'] = $currentUser;
         return $controller->store($orgId, $requestData, $performedBy);
@@ -318,8 +511,14 @@ return function ($uri, $method, $requestData = []) {
         $targetId = (int)$m[1];
         $requestData['user'] = $currentUser;
         if ($method === 'GET') return $controller->show($orgId, $targetId, $requestData);
-        if ($method === 'PUT' || $method === 'PATCH') return $controller->update($orgId, $targetId, $requestData, $performedBy);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+        if ($method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission(['training.update', 'training.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
+        if ($method === 'DELETE') {
+            if (!$checkPermission(['training.manage', 'training.update'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->destroy($orgId, $targetId, $performedBy);
+        }
     }
 
     // Coaches
@@ -353,14 +552,17 @@ return function ($uri, $method, $requestData = []) {
     // Performance
     if ($uri === '/api/v1/performance/metrics' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Performance\PerformanceController();
+        $requestData['user'] = $currentUser;
         return $controller->metrics($orgId, $requestData);
     }
     if ($uri === '/api/v1/performance' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Performance\PerformanceController();
+        $requestData['user'] = $currentUser;
         return $controller->index($orgId, $requestData);
     }
     if ($uri === '/api/v1/performance' && $method === 'POST') {
         $controller = new \App\Http\Controllers\Api\V1\Performance\PerformanceController();
+        $requestData['user'] = $currentUser;
         return $controller->store($orgId, $requestData, $performedBy);
     }
 
@@ -665,20 +867,36 @@ return function ($uri, $method, $requestData = []) {
     // ==========================================
     if ($uri === '/api/v1/inventory/categories') {
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryCategoryController();
-        if ($method === 'GET') return $controller->index($orgId);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/inventory/categories/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryCategoryController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
+        if ($method === 'DELETE') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->destroy($orgId, $targetId, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/inventory/categories/(\d+)/status$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryCategoryController();
         $targetId = (int)$m[1];
         if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
             return $controller->setStatus($orgId, $targetId, $requestData, $performedBy);
         }
     }
@@ -688,29 +906,52 @@ return function ($uri, $method, $requestData = []) {
     // ==========================================
     if ($uri === '/api/v1/inventory/items' || $uri === '/api/v1/inventory') {
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
-        if ($method === 'GET') return $controller->index($orgId, $requestData);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if ($uri === '/api/v1/inventory/categories' && $method === 'GET') {
+        if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
         return $controller->categories($orgId);
     }
     if ($uri === '/api/v1/inventory/low-stock' && $method === 'GET') {
+        if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
         return $controller->lowStock($orgId);
     }
     if (preg_match('#^/api/v1/inventory/(?:items/)?(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
+        if ($method === 'DELETE') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->destroy($orgId, $targetId, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/inventory/(?:items/)?(\d+)/transactions$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Inventory\InventoryController();
         $targetId = (int)$m[1];
-        if ($method === 'POST') return $controller->recordTransaction($orgId, $targetId, $requestData, $performedBy);
-        if ($method === 'GET') return $controller->transactions($orgId, $targetId, $requestData);
+        if ($method === 'POST') {
+            if (!$checkPermission('inventory.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->recordTransaction($orgId, $targetId, $requestData, $performedBy);
+        }
+        if ($method === 'GET') {
+            if (!$checkPermission(['inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->transactions($orgId, $targetId, $requestData);
+        }
     }
 
     // ==========================================
@@ -718,30 +959,54 @@ return function ($uri, $method, $requestData = []) {
     // ==========================================
     if ($uri === '/api/v1/equipment') {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
-        if ($method === 'GET') return $controller->index($orgId);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['equipment.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/equipment/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['equipment.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
+        if ($method === 'DELETE') {
+            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->destroy($orgId, $targetId, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/equipment/(\d+)/assign$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
         $targetId = (int)$m[1];
-        if ($method === 'POST') return $controller->assign($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'POST') {
+            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->assign($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/equipment/(\d+)/return$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
         $targetId = (int)$m[1];
-        if ($method === 'POST') return $controller->returnItem($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'POST') {
+            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->returnItem($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/equipment/(\d+)/assignments$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->assignments($orgId, $targetId);
+        if ($method === 'GET') {
+            if (!$checkPermission(['equipment.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->assignments($orgId, $targetId);
+        }
     }
 
     // ==========================================
@@ -749,32 +1014,62 @@ return function ($uri, $method, $requestData = []) {
     // ==========================================
     if ($uri === '/api/v1/vendors') {
         $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
-        if ($method === 'GET') return $controller->index($orgId);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['vendor.manage', 'purchase.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->index($orgId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('vendor.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/vendors/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->show($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'POST') return $controller->update($orgId, $targetId, $requestData, $performedBy);
-        if ($method === 'DELETE') return $controller->destroy($orgId, $targetId, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['vendor.manage', 'purchase.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->show($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission('vendor.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->update($orgId, $targetId, $requestData, $performedBy);
+        }
+        if ($method === 'DELETE') {
+            if (!$checkPermission('vendor.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->destroy($orgId, $targetId, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/vendors/(\d+)/status$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
         $targetId = (int)$m[1];
-        if ($method === 'POST') return $controller->setStatus($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'POST') {
+            if (!$checkPermission('vendor.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->setStatus($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/vendors/(\d+)/invoices$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->invoices($orgId, $targetId);
-        if ($method === 'POST') return $controller->storeInvoice($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['vendor.manage', 'purchase.manage', 'finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->invoices($orgId, $targetId);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['vendor.manage', 'purchase.manage', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeInvoice($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/vendor-invoices/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Vendor\VendorController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->showInvoice($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'POST') return $controller->updateInvoice($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['vendor.manage', 'purchase.manage', 'finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->showInvoice($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission(['vendor.manage', 'purchase.manage', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->updateInvoice($orgId, $targetId, $requestData, $performedBy);
+        }
     }
 
     // ==========================================
@@ -782,55 +1077,81 @@ return function ($uri, $method, $requestData = []) {
     // ==========================================
     if ($uri === '/api/v1/purchases/requests') {
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
-        if ($method === 'GET') return $controller->requests($orgId, $requestData);
-        if ($method === 'POST') return $controller->storeRequest($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['purchase.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->requests($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission(['purchase.manage', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeRequest($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/purchases/requests/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->showRequest($orgId, $targetId);
+        if ($method === 'GET') {
+            if (!$checkPermission(['purchase.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->showRequest($orgId, $targetId);
+        }
     }
     if (preg_match('#^/api/v1/purchases/requests/(\d+)/submit$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission(['purchase.manage', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         return $controller->submitRequest($orgId, (int)$m[1], $performedBy);
     }
     if (preg_match('#^/api/v1/purchases/requests/(\d+)/approve$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         return $controller->approveRequest($orgId, (int)$m[1], $performedBy);
     }
     if (preg_match('#^/api/v1/purchases/requests/(\d+)/reject$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         return $controller->rejectRequest($orgId, (int)$m[1], $requestData, $performedBy);
     }
     if (preg_match('#^/api/v1/purchases/requests/(\d+)/cancel$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission(['purchase.manage', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         return $controller->cancelRequest($orgId, (int)$m[1], $performedBy);
     }
 
     if ($uri === '/api/v1/purchases/orders') {
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
-        if ($method === 'GET') return $controller->orders($orgId, $requestData);
-        if ($method === 'POST') return $controller->storeOrder($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->orders($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeOrder($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/purchases/orders/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->showOrder($orgId, $targetId);
+        if ($method === 'GET') {
+            if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->showOrder($orgId, $targetId);
+        }
     }
     if (preg_match('#^/api/v1/purchases/orders/(\d+)/status$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         return $controller->updateOrderStatus($orgId, (int)$m[1], $requestData, $performedBy);
     }
     if (preg_match('#^/api/v1/purchases/orders/(\d+)/receive$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         return $controller->receiveGoods($orgId, (int)$m[1], $requestData, $performedBy);
     }
 
     if ($uri === '/api/v1/purchases/receipts') {
+        if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         if ($method === 'GET') return $controller->receipts($orgId, $requestData);
     }
     if (preg_match('#^/api/v1/purchases/receipts/(\d+)$#', $uri, $m)) {
+        if (!$checkPermission('purchase.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Purchase\PurchaseController();
         if ($method === 'GET') return $controller->showReceipt($orgId, (int)$m[1]);
     }
@@ -839,66 +1160,109 @@ return function ($uri, $method, $requestData = []) {
     // Member 5: Financial Management
     // ==========================================
     if ($uri === '/api/v1/finance/summary' && $method === 'GET') {
+        if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         return $controller->summary($orgId, $requestData);
     }
     if ($uri === '/api/v1/finance/category-summary' && $method === 'GET') {
+        if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         return $controller->categorySummary($orgId, $requestData);
     }
     if ($uri === '/api/v1/finance/categories') {
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
-        if ($method === 'GET') return $controller->indexCategories($orgId, $requestData);
-        if ($method === 'POST') return $controller->storeCategory($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->indexCategories($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeCategory($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/finance/categories/(\d+)$#', $uri, $m)) {
+        if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         $targetId = (int)$m[1];
         if ($method === 'GET') return $controller->showCategory($orgId, $targetId);
     }
     if ($uri === '/api/v1/finance/income') {
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
-        if ($method === 'GET') return $controller->indexIncome($orgId, $requestData);
-        if ($method === 'POST') return $controller->storeIncome($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->indexIncome($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeIncome($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/finance/income/(\d+)$#', $uri, $m)) {
+        if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         $targetId = (int)$m[1];
         if ($method === 'GET') return $controller->showIncome($orgId, $targetId);
     }
     if ($uri === '/api/v1/finance/expenses') {
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
-        if ($method === 'GET') return $controller->indexExpenses($orgId, $requestData);
-        if ($method === 'POST') return $controller->storeExpense($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->indexExpenses($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeExpense($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/finance/expenses/(\d+)$#', $uri, $m)) {
+        if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         $targetId = (int)$m[1];
         if ($method === 'GET') return $controller->showExpense($orgId, $targetId);
     }
     if (preg_match('#^/api/v1/finance/expenses/(\d+)/approve$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         return $controller->approveExpense($orgId, (int)$m[1], $performedBy);
     }
     if (preg_match('#^/api/v1/finance/expenses/(\d+)/reject$#', $uri, $m) && $method === 'POST') {
+        if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         return $controller->rejectExpense($orgId, (int)$m[1], $requestData, $performedBy);
     }
     if ($uri === '/api/v1/finance/budgets') {
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
-        if ($method === 'GET') return $controller->indexBudgets($orgId, $requestData);
-        if ($method === 'POST') return $controller->storeBudget($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->indexBudgets($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storeBudget($orgId, $requestData, $performedBy);
+        }
     }
     if (preg_match('#^/api/v1/finance/budgets/(\d+)$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
         $targetId = (int)$m[1];
-        if ($method === 'GET') return $controller->showBudget($orgId, $targetId);
-        if ($method === 'PUT' || $method === 'POST') return $controller->updateBudget($orgId, $targetId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->showBudget($orgId, $targetId);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->updateBudget($orgId, $targetId, $requestData, $performedBy);
+        }
     }
     if ($uri === '/api/v1/finance/payments') {
         $controller = new \App\Http\Controllers\Api\V1\Finance\FinanceController();
-        if ($method === 'GET') return $controller->indexPayments($orgId, $requestData);
-        if ($method === 'POST') return $controller->storePayment($orgId, $requestData, $performedBy);
+        if ($method === 'GET') {
+            if (!$checkPermission(['finance.view', 'finance.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->indexPayments($orgId, $requestData);
+        }
+        if ($method === 'POST') {
+            if (!$checkPermission('finance.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->storePayment($orgId, $requestData, $performedBy);
+        }
     }
 
     // ==========================================
@@ -907,7 +1271,10 @@ return function ($uri, $method, $requestData = []) {
     if ($uri === '/api/v1/notifications') {
         $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
         if ($method === 'GET') return $controller->index($orgId, $userId, $requestData);
-        if ($method === 'POST') return $controller->store($orgId, $requestData, $userId);
+        if ($method === 'POST') {
+            if (!$checkPermission(['notification.manage', 'inventory.manage', 'finance.manage', 'purchase.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+            return $controller->store($orgId, $requestData, $userId);
+        }
     }
     if ($uri === '/api/v1/notifications/unread-count' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Notification\NotificationController();
@@ -929,6 +1296,9 @@ return function ($uri, $method, $requestData = []) {
     // ==========================================
     // Reports & Analytics APIs
     // ==========================================
+    if (str_starts_with($uri, '/api/v1/reports/')) {
+        if (!$checkPermission(['report.view', 'inventory.manage', 'finance.manage', 'purchase.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
+    }
     if ($uri === '/api/v1/reports/operational' && $method === 'GET') {
         $controller = new \App\Http\Controllers\Api\V1\Reports\ReportController();
         return $controller->operational($orgId);
@@ -956,7 +1326,7 @@ return function ($uri, $method, $requestData = []) {
 
     // 14. Fallback for other unassigned modules (Preserving all other members' skeleton groups)
     $skeletonGroups = [
-        'sports', 'medical', 'fixtures', 'matches',
+        'sports', 'medical',
         'bookings', 'maintenance', 'housekeeping',
         'events', 'school-activities', 'transport',
         'accommodation'

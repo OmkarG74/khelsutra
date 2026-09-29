@@ -1,3 +1,4 @@
+import '../network/json_parser.dart';
 import 'athlete_models.dart';
 
 class CoachProfile {
@@ -46,15 +47,15 @@ class CoachProfile {
         [];
 
     return CoachProfile(
-      id: (json['id'] as num?)?.toInt() ?? (json['coach_profile_id'] as num?)?.toInt() ?? 0,
+      id: parseInt(json['id'] ?? json['coach_profile_id']),
       coachCode: json['coach_code']?.toString() ?? '',
-      employeeId: (json['employee_id'] as num?)?.toInt() ?? 0,
+      employeeId: parseInt(json['employee_id']),
       employeeCode: json['employee_code']?.toString() ?? '',
       firstName: json['first_name']?.toString() ?? '',
       lastName: json['last_name']?.toString() ?? '',
       specialization: json['specialization']?.toString() ?? 'General Coach',
       qualification: json['qualification']?.toString(),
-      experienceYears: json['experience_years'] != null ? double.tryParse(json['experience_years'].toString()) : null,
+      experienceYears: parseNullableDouble(json['experience_years']),
       phone: json['phone']?.toString(),
       email: json['email']?.toString(),
       designation: json['designation']?.toString() ?? 'Coach',
@@ -84,11 +85,11 @@ class CoachAssignedTeam {
 
   factory CoachAssignedTeam.fromJson(Map<String, dynamic> json) {
     return CoachAssignedTeam(
-      teamId: (json['team_id'] as num?)?.toInt() ?? 0,
+      teamId: parseInt(json['team_id']),
       teamName: json['team_name']?.toString() ?? 'Team',
       sportName: json['sport_name']?.toString(),
       coachRole: json['coach_role']?.toString() ?? 'head_coach',
-      isPrimary: json['is_primary'] == 1 || json['is_primary'] == true,
+      isPrimary: json['is_primary'] == 1 || json['is_primary'] == true || json['is_primary']?.toString() == '1',
     );
   }
 }
@@ -123,13 +124,13 @@ class CoachDashboardData {
         [];
 
     return CoachDashboardData(
-      teamsCount: (json['teams_count'] as num?)?.toInt() ?? 0,
-      athletesCount: (json['athletes_count'] as num?)?.toInt() ?? 0,
-      todaySessionsCount: (json['today_sessions_count'] as num?)?.toInt() ?? 0,
+      teamsCount: parseInt(json['teams_count']),
+      athletesCount: parseInt(json['athletes_count']),
+      todaySessionsCount: parseInt(json['today_sessions_count']),
       todaySessions: list,
-      attendanceRate: (json['attendance_rate'] as num?)?.toDouble() ?? 0.0,
-      totalAttendanceRecords: (json['total_attendance_records'] as num?)?.toInt() ?? 0,
-      presentCount: (json['present_count'] as num?)?.toInt() ?? 0,
+      attendanceRate: parseDouble(json['attendance_rate']),
+      totalAttendanceRecords: parseInt(json['total_attendance_records']),
+      presentCount: parseInt(json['present_count']),
     );
   }
 }
@@ -145,6 +146,7 @@ class CoachRosterAthleteItem {
   final String? phone;
   final String? email;
   final String status;
+  final int? sportId;
   final String sportName;
   final int? teamId;
   final String teamName;
@@ -162,6 +164,7 @@ class CoachRosterAthleteItem {
     this.phone,
     this.email,
     required this.status,
+    this.sportId,
     required this.sportName,
     this.teamId,
     required this.teamName,
@@ -173,7 +176,7 @@ class CoachRosterAthleteItem {
 
   factory CoachRosterAthleteItem.fromJson(Map<String, dynamic> json) {
     return CoachRosterAthleteItem(
-      id: (json['id'] as num?)?.toInt() ?? 0,
+      id: parseInt(json['id']),
       athleteCode: json['athlete_code']?.toString() ?? '',
       firstName: json['first_name']?.toString() ?? '',
       middleName: json['middle_name']?.toString(),
@@ -183,13 +186,24 @@ class CoachRosterAthleteItem {
       phone: json['phone']?.toString(),
       email: json['email']?.toString(),
       status: json['status']?.toString() ?? 'active',
+      sportId: parseNullableInt(json['sport_id']),
       sportName: json['sport_name']?.toString() ?? 'Sports',
-      teamId: (json['team_id'] as num?)?.toInt(),
+      teamId: parseNullableInt(json['team_id']),
       teamName: json['team_name']?.toString() ?? 'Roster Team',
       jerseyNumber: json['jersey_number']?.toString(),
       memberRole: json['member_role']?.toString() ?? 'player',
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CoachRosterAthleteItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
 class PerformanceMetricItem {
@@ -217,15 +231,25 @@ class PerformanceMetricItem {
 
   factory PerformanceMetricItem.fromJson(Map<String, dynamic> json) {
     return PerformanceMetricItem(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      sportId: (json['sport_id'] as num?)?.toInt(),
+      id: parseInt(json['id']),
+      sportId: parseNullableInt(json['sport_id']),
       name: json['name']?.toString() ?? '',
       code: json['code']?.toString() ?? '',
       metricType: json['metric_type']?.toString() ?? 'number',
       unit: json['unit']?.toString(),
-      minValue: json['min_value'] != null ? double.tryParse(json['min_value'].toString()) : null,
-      maxValue: json['max_value'] != null ? double.tryParse(json['max_value'].toString()) : null,
+      minValue: parseNullableDouble(json['min_value']),
+      maxValue: parseNullableDouble(json['max_value']),
       description: json['description']?.toString(),
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PerformanceMetricItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

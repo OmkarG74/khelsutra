@@ -56,6 +56,7 @@ class LeaveService extends BaseService
         $status = null;
         $applicantType = null;
 
+        $athleteId = null;
         if (is_array($statusOrFilters)) {
             $rawStatus = $statusOrFilters['status'] ?? null;
             if (is_string($rawStatus) && !empty($rawStatus)) {
@@ -64,6 +65,9 @@ class LeaveService extends BaseService
             $rawApplicant = $statusOrFilters['applicant_type'] ?? null;
             if (is_string($rawApplicant) && in_array($rawApplicant, ['employee', 'athlete'], true)) {
                 $applicantType = $rawApplicant;
+            }
+            if (!empty($statusOrFilters['athlete_id'])) {
+                $athleteId = (int)$statusOrFilters['athlete_id'];
             }
             if (isset($statusOrFilters['limit'])) {
                 $limit = (int)$statusOrFilters['limit'];
@@ -103,6 +107,11 @@ class LeaveService extends BaseService
         if ($applicantType) {
             $sql .= " AND lr.applicant_type = :applicant_type ";
             $params[':applicant_type'] = $applicantType;
+        }
+
+        if ($athleteId) {
+            $sql .= " AND lr.athlete_id = :athlete_id ";
+            $params[':athlete_id'] = $athleteId;
         }
 
         $sql .= " ORDER BY lr.id DESC LIMIT :limit OFFSET :offset";

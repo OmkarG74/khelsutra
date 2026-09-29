@@ -5,8 +5,15 @@ $tournService = new \App\Services\Tournament\TournamentService();
 $tournament = $tournService->getTournament($orgId, $tournId);
 
 $db = \App\Services\BaseService::getDatabaseConnection();
-$sportsStmt = $db->query("SELECT id, name FROM sports ORDER BY name ASC");
-$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$sportService = new \App\Services\Sport\SportService();
+$sports = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sports[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sports, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 
 $lvlStmt = $db->query("SELECT id, name FROM tournament_levels ORDER BY id ASC");
 $levels = $lvlStmt ? $lvlStmt->fetchAll(PDO::FETCH_ASSOC) : [];

@@ -8,33 +8,85 @@ $sportId = !empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null;
 $status = !empty($_GET['status']) ? trim($_GET['status']) : null;
 $page = max(1, (int)($_GET['page'] ?? 1));
 
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentUser = $_SESSION['auth']['user'] ?? null;
+$isAthlete = ($currentRoleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+$isCoach = ($currentRoleSlug === 'coach') || !empty($currentUser['coach_id']);
+
+if ($isAthlete) {
+    $myAthleteId = (int)($currentUser['athlete_id'] ?? 0);
+    if ($myAthleteId) {
+        if (!headers_sent()) {
+            header("Location: /athletes/{$myAthleteId}");
+            exit;
+        }
+        echo "<script>window.location.href='/athletes/{$myAthleteId}';</script>";
+        exit;
+    }
+}
+
 $athleteService = new \App\Services\Athlete\AthleteService();
-$result = $athleteService->listAthletes($orgId, $page, 15, $search, $sportId, $status);
-$athletes = $result['data'] ?? [];
-$totalAthletes = $result['total'] ?? 0;
-$totalPages = $result['total_pages'] ?? 1;
 
-// Fetch sports for filter dropdown
-$pdo = \App\Services\BaseService::getDatabaseConnection();
-$sportsList = $pdo->query("SELECT id, name FROM sports WHERE status = 'active' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
+if ($isCoach) {
+    $coachId = (int)($currentUser['coach_id'] ?? 0);
+    $pdo = \App\Services\BaseService::getDatabaseConnection();
+    if (!$coachId && !empty($currentUser['id']) && $pdo) {
+        $cStmt = $pdo->prepare("
+            SELECT cp.id 
+            FROM coach_profiles cp 
+            JOIN employees e ON cp.employee_id = e.id 
+            WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL 
+            LIMIT 1
+        ");
+        $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $orgId]);
+        $coachId = (int)($cStmt->fetchColumn() ?: 0);
+    }
+    if ($coachId) {
+        $coachController = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+        $coachRes = $coachController->athletes($orgId, $coachId, ['search' => $search]);
+        $athletes = $coachRes['data']['data'] ?? [];
+        $totalAthletes = $coachRes['data']['total'] ?? count($athletes);
+        $totalPages = 1;
+    } else {
+        $athletes = [];
+        $totalAthletes = 0;
+        $totalPages = 1;
+    }
+} else {
+    $result = $athleteService->listAthletes($orgId, $page, 15, $search, $sportId, $status);
+    $athletes = $result['data'] ?? [];
+    $totalAthletes = $result['total'] ?? 0;
+    $totalPages = $result['total_pages'] ?? 1;
+}
 
+$sportService = new \App\Services\Sport\SportService();
+$sportsList = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sportsList[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sportsList, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 ob_start();
 ?>
 
 <!-- Page Header (Clean Page Title + Action, No Subtitle) -->
 <div class="ks-page-header">
     <div>
-        <h1 class="ks-page-title">Athletes</h1>
+        <h1 class="ks-page-title"><?= $isCoach ? 'My Squad Athletes' : 'Athletes' ?></h1>
     </div>
     <div class="ks-header-actions">
         <a href="/reports" class="ks-btn ks-btn-secondary">
             <i class="bi bi-download"></i>
             <span>Export Report</span>
         </a>
+        <?php if (!$isCoach && !$isAthlete): ?>
         <a href="/athletes/create" class="ks-btn ks-btn-primary" id="btnAddAthlete">
             <i class="bi bi-plus-lg"></i>
             <span>Add Athlete</span>
         </a>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -134,18 +186,25 @@ ob_start();
                             </td>
                             <td>
                                 <?php $aStatus = $ath['status'] ?? 'active'; ?>
+                                <?php if (!$isCoach && !$isAthlete): ?>
                                 <form action="/athletes/<?= (int)$ath['id'] ?>/status" method="POST" class="d-inline m-0 p-0">
                                     <input type="hidden" name="status" value="<?= $aStatus === 'active' ? 'inactive' : 'active' ?>">
                                     <button type="submit" class="ks-badge ks-badge-<?= $aStatus === 'active' ? 'confirmed' : 'pending' ?> text-capitalize" style="cursor: pointer; border: 1px solid <?= $aStatus === 'active' ? '#BBF7D0' : '#FED7AA' ?>; background-color: <?= $aStatus === 'active' ? '#DCFCE7' : '#FFEDD5' ?>; color: <?= $aStatus === 'active' ? '#166534' : '#9A3412' ?>; padding: 0 10px; font-family: inherit;" title="Click to toggle status to <?= $aStatus === 'active' ? 'Inactive' : 'Active' ?>">
                                         <?= htmlspecialchars($aStatus, ENT_QUOTES, 'UTF-8') ?>
                                     </button>
                                 </form>
+                                <?php else: ?>
+                                <span class="ks-badge ks-badge-<?= $aStatus === 'active' ? 'confirmed' : 'pending' ?> text-capitalize" style="padding: 4px 10px;">
+                                    <?= htmlspecialchars($aStatus, ENT_QUOTES, 'UTF-8') ?>
+                                </span>
+                                <?php endif; ?>
                             </td>
                             <td style="text-align: right;">
                                 <div class="d-flex align-items-center justify-content-end gap-1">
                                     <a href="/athletes/<?= (int)$ath['id'] ?>" class="btn btn-sm btn-outline-secondary" title="View Profile" style="padding: 4px 8px; font-size: 12px;">
                                         <i class="bi bi-eye"></i> View
                                     </a>
+                                    <?php if (!$isCoach && !$isAthlete): ?>
                                     <a href="/athletes/<?= (int)$ath['id'] ?>/edit" class="btn btn-sm btn-outline-primary" title="Edit Athlete" style="padding: 4px 8px; font-size: 12px;">
                                         <i class="bi bi-pencil"></i> Edit
                                     </a>
@@ -154,6 +213,7 @@ ob_start();
                                             <i class="bi bi-trash"></i> Delete
                                         </button>
                                     </form>
+                                    <?php endif; ?>
                                 </div>
                             </td>
                         </tr>

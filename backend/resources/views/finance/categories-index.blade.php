@@ -10,22 +10,6 @@ ob_start();
 ?>
 
 <div class="ks-content">
-    <?php if (!empty($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-            <i class="bi bi-check-circle-fill fs-5"></i>
-            <div><?= htmlspecialchars($_GET['success'], ENT_QUOTES, 'UTF-8') ?></div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-
-    <?php if (!empty($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-            <i class="bi bi-exclamation-triangle-fill fs-5"></i>
-            <div><?= htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8') ?></div>
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-    <?php endif; ?>
-
     <!-- Breadcrumb & Header -->
     <div class="d-flex align-items-center gap-2 mb-2">
         <a href="/finance" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Finance Hub</a>
@@ -202,5 +186,5 @@ ob_start();
 </div>
 
 <?php
-$content = ob_get_clean();
+$slot = $content = ob_get_clean();
 require __DIR__ . '/../layouts/app.blade.php';

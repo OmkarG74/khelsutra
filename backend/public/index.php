@@ -157,60 +157,142 @@ if (str_starts_with($uri, '/api/')) {
 }
 
 // 3. Web RBAC Protection Guards
+$render403 = function (string $message = 'You do not have the required permissions to access this area.') {
+    http_response_code(403);
+    ?>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>403 Forbidden — KhelSutra Platform</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+        <link rel="stylesheet" href="/assets/css/khelsutra-design-system.css">
+        <style>
+            body {
+                font-family: 'Inter', sans-serif;
+                background: var(--ks-page-bg, #F8FAFC);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+                padding: 24px;
+                color: var(--ks-text, #1E293B);
+            }
+            .ks-error-box {
+                max-width: 480px;
+                text-align: center;
+                background: #fff;
+                padding: 40px 32px;
+                border-radius: var(--ks-radius-modal, 16px);
+                border: 1px solid var(--ks-border, #E2E8F0);
+                box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+            }
+        </style>
+    </head>
+    <body>
+        <div class="ks-error-box">
+            <div style="font-size: 56px; font-weight: 800; color: #DC2626; line-height: 1;">403</div>
+            <h3 class="fw-bold mt-3 mb-2" style="color: #0B192C;">Access Forbidden</h3>
+            <p class="text-muted small mb-4"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="d-flex justify-content-center gap-2">
+                <a href="/dashboard" class="btn btn-primary px-4 py-2" style="border-radius: 8px; font-weight: 600; font-size: 13px;">Return to Dashboard</a>
+                <a href="/logout" class="btn btn-outline-secondary px-3 py-2" style="border-radius: 8px; font-size: 13px;">Sign Out</a>
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
+    exit;
+};
+
 if (str_starts_with($uri, '/super-admin/')) {
     $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
     $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? 2);
     if ($currentRoleId !== 1 && $currentRoleSlug !== 'super_admin') {
-        http_response_code(403);
-        ?>
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>403 Forbidden — KhelSutra Platform</title>
-            <link rel="preconnect" href="https://fonts.googleapis.com">
-            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-            <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-            <link rel="stylesheet" href="/assets/css/khelsutra-design-system.css">
-            <style>
-                body {
-                    font-family: 'Inter', sans-serif;
-                    background: var(--ks-page-bg, #F8FAFC);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    min-height: 100vh;
-                    padding: 24px;
-                    color: var(--ks-text, #1E293B);
-                }
-                .ks-error-box {
-                    max-width: 480px;
-                    text-align: center;
-                    background: #fff;
-                    padding: 40px 32px;
-                    border-radius: var(--ks-radius-modal, 16px);
-                    border: 1px solid var(--ks-border, #E2E8F0);
-                    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
-                }
-            </style>
-        </head>
-        <body>
-            <div class="ks-error-box">
-                <div style="font-size: 56px; font-weight: 800; color: #DC2626; line-height: 1;">403</div>
-                <h3 class="fw-bold mt-3 mb-2" style="color: #0B192C;">Access Forbidden</h3>
-                <p class="text-muted small mb-4">You do not have the required permissions to access this platform administration area. Your current authenticated role is strictly isolated to your organisation context.</p>
-                <div class="d-flex justify-content-center gap-2">
-                    <a href="/dashboard" class="btn btn-primary px-4 py-2" style="border-radius: 8px; font-weight: 600; font-size: 13px;">Return to Dashboard</a>
-                    <a href="/logout" class="btn btn-outline-secondary px-3 py-2" style="border-radius: 8px; font-size: 13px;">Sign Out</a>
-                </div>
-            </div>
-        </body>
-        </html>
-        <?php
-        exit;
+        $render403('You do not have the required permissions to access this platform administration area. Your current authenticated role is strictly isolated to your organisation context.');
+    }
+}
+
+// Session-level web RBAC validation for other roles
+if (isset($_SESSION['auth']['role'])) {
+    $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+    $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? 2);
+
+    if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
+        $blockedPatterns = [
+            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/inventory#', '#^/equipment#', 
+            '#^/vendors#', '#^/purchases#', '#^/finance#', '#^/users#', '#^/roles#', 
+            '#^/permissions#', '#^/audit-logs#', '#^/venues#', '#^/operations#',
+            '#^/coaches#', '#^/athletes/create#', '#^/athletes/\d+/edit#',
+            '#^/teams/create#', '#^/teams/\d+/edit#', '#^/tournaments/create#', '#^/tournaments/\d+/edit#',
+            '#^/training/create#', '#^/training/\d+/edit#', '#^/attendance/training#', '#^/attendance/matches#'
+        ];
+        foreach ($blockedPatterns as $p) {
+            if (preg_match($p, $uri)) {
+                $render403('Athletes are restricted from accessing this administrative or operational area.');
+            }
+        }
+    } elseif ($currentRoleSlug === 'coach' || $currentRoleId === 4) {
+        $blockedPatterns = [
+            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/inventory#', '#^/equipment#', 
+            '#^/vendors#', '#^/purchases#', '#^/finance#', '#^/users#', '#^/roles#', 
+            '#^/permissions#', '#^/audit-logs#', '#^/venues/create#', '#^/venues/\d+/edit#',
+            '#^/coaches/create#', '#^/coaches/\d+/edit#', '#^/athletes/create#', '#^/athletes/\d+/edit#',
+            '#^/teams/create#', '#^/teams/\d+/edit#', '#^/tournaments/create#', '#^/tournaments/\d+/edit#'
+        ];
+        foreach ($blockedPatterns as $p) {
+            if (preg_match($p, $uri)) {
+                $render403('Coaches are restricted from accessing system-level, HR/payroll, or inventory configuration.');
+            }
+        }
+    } elseif ($currentRoleSlug === 'hr_finance' || $currentRoleId === 3) {
+        $blockedPatterns = [
+            '#^/users#', '#^/roles#', '#^/permissions#',
+            '#^/athletes/create#', '#^/athletes/\d+/edit#',
+            '#^/coaches/create#', '#^/coaches/\d+/edit#',
+            '#^/teams/create#', '#^/teams/\d+/edit#',
+            '#^/tournaments/create#', '#^/tournaments/\d+/edit#',
+            '#^/training/create#', '#^/training/\d+/edit#',
+            '#^/venues/create#', '#^/venues/\d+/edit#',
+            '#^/inventory/create#', '#^/equipment/create#', '#^/vendors/create#'
+        ];
+        foreach ($blockedPatterns as $p) {
+            if (preg_match($p, $uri)) {
+                $render403('HR & Finance role is not authorized to create or modify sports competitions or facilities.');
+            }
+        }
+    } elseif ($currentRoleSlug === 'inventory_manager' || $currentRoleId === 7) {
+        $blockedPatterns = [
+            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/users#', '#^/roles#', 
+            '#^/permissions#', '#^/audit-logs#',
+            '#^/athletes#', '#^/coaches#', '#^/teams#', '#^/tournaments#',
+            '#^/training#', '#^/attendance#', '#^/venues#', '#^/operations#'
+        ];
+        foreach ($blockedPatterns as $p) {
+            if (preg_match($p, $uri)) {
+                $render403('Inventory Managers are restricted to inventory, equipment, vendors, and purchase orders.');
+            }
+        }
+    } elseif ($currentRoleSlug === 'venue_manager' || $currentRoleId === 6) {
+        $blockedPatterns = [
+            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/users#', '#^/roles#', 
+            '#^/permissions#', '#^/audit-logs#',
+            '#^/inventory#', '#^/equipment#', '#^/vendors#', '#^/purchases#',
+            '#^/athletes/create#', '#^/athletes/\d+/edit#',
+            '#^/coaches/create#', '#^/coaches/\d+/edit#',
+            '#^/teams/create#', '#^/teams/\d+/edit#',
+            '#^/training/create#', '#^/training/\d+/edit#'
+        ];
+        foreach ($blockedPatterns as $p) {
+            if (preg_match($p, $uri)) {
+                $render403('Venue & Tournament Managers are restricted from HR, payroll, and inventory administration.');
+            }
+        }
     }
 }
 
@@ -239,6 +321,7 @@ if ($viewTarget && is_callable($viewTarget)) {
     if (!empty($result['view'])) {
         $viewPath = __DIR__ . '/../resources/views/' . $result['view'] . '.blade.php';
         if (file_exists($viewPath)) {
+            $data = $result['data'] ?? [];
             extract($result['data'] ?? []);
             include $viewPath;
             exit;

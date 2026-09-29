@@ -490,6 +490,163 @@ class TeamRosterWebActionTest
     }
 
     /**
+     * TEST 13: Custom Position Validation and Hierarchy
+     */
+    public function testCustomPositionValidation(): bool
+    {
+        $teamId = $this->createTestTeam($this->orgId);
+        
+        $athPlayerId = $this->createTestAthlete($this->orgId);
+        $athCaptainId = $this->createTestAthlete($this->orgId);
+        $athViceId = $this->createTestAthlete($this->orgId);
+        $athOtherFailId = $this->createTestAthlete($this->orgId);
+        $athOtherPassId = $this->createTestAthlete($this->orgId);
+
+        // A. Player
+        $this->executeWebAction("/teams/{$teamId}/roster/add", [
+            'athlete_id' => $athPlayerId,
+            'member_role' => 'player'
+        ]);
+        
+        // B. Captain
+        $this->executeWebAction("/teams/{$teamId}/roster/add", [
+            'athlete_id' => $athCaptainId,
+            'member_role' => 'captain'
+        ]);
+
+        // C. Vice Captain
+        $this->executeWebAction("/teams/{$teamId}/roster/add", [
+            'athlete_id' => $athViceId,
+            'member_role' => 'vice_captain'
+        ]);
+
+        // D. Other without position (should fail)
+        $this->executeWebAction("/teams/{$teamId}/roster/add", [
+            'athlete_id' => $athOtherFailId,
+            'member_role' => 'other',
+            'position' => ''
+        ]);
+
+        // E. Other with position
+        $this->executeWebAction("/teams/{$teamId}/roster/add", [
+            'athlete_id' => $athOtherPassId,
+            'member_role' => 'other',
+            'position' => 'Goalkeeper'
+        ]);
+
+        $stmt = $this->pdo->prepare("SELECT athlete_id, member_role, position FROM team_members WHERE team_id = :team_id AND is_current = 1");
+        $stmt->execute([':team_id' => $teamId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (count($rows) !== 4) return false;
+
+        $hasOther = false;
+        foreach ($rows as $r) {
+            if ((int)$r['athlete_id'] === $athOtherFailId) return false;
+            if ((int)$r['athlete_id'] === $athOtherPassId) {
+                if ($r['member_role'] !== 'other' || $r['position'] !== 'Goalkeeper') return false;
+                $hasOther = true;
+            }
+        }
+        
+        if (!$hasOther) return false;
+
+        // M. Verify role hierarchy (Captain > Vice Captain > Player > Other)
+        $team = $this->service->getTeam($this->orgId, $teamId);
+        $athletes = $team['current_athletes'] ?? [];
+        if (count($athletes) !== 4) return false;
+
+        if ($athletes[0]['member_role'] !== 'captain') return false;
+        if ($athletes[1]['member_role'] !== 'vice_captain') return false;
+        if ($athletes[2]['member_role'] !== 'player') return false;
+        if ($athletes[3]['member_role'] !== 'other') return false;
+
+        return true;
+    }
+
+    public function testGenderFilteringValidation(): bool
+    {
+        // Get a valid sport ID
+        $sportId = (int)$this->pdo->query("SELECT id FROM sports LIMIT 1")->fetchColumn();
+        if (!$sportId) {
+            $this->pdo->exec("INSERT INTO sports (name, slug) VALUES ('Test Sport', 'test-sport')");
+            $sportId = (int)$this->pdo->lastInsertId();
+        }
+
+        // Setup Male Team
+        $stmt = $this->pdo->prepare("INSERT INTO teams (organization_id, name, sport_id, team_code, status, gender) VALUES (?, ?, ?, ?, 'active', 'male')");
+        $stmt->execute([$this->orgId, 'Test Male Team ' . uniqid(), $sportId, 'TM-M-' . uniqid()]);
+        $maleTeamId = (int)$this->pdo->lastInsertId();
+        $this->createdTeamIds[] = $maleTeamId;
+
+        // Setup Mixed Team
+        $stmt = $this->pdo->prepare("INSERT INTO teams (organization_id, name, sport_id, team_code, status, gender) VALUES (?, ?, ?, ?, 'active', 'mixed')");
+        $stmt->execute([$this->orgId, 'Test Mixed Team ' . uniqid(), $sportId, 'TM-X-' . uniqid()]);
+        $mixedTeamId = (int)$this->pdo->lastInsertId();
+        $this->createdTeamIds[] = $mixedTeamId;
+
+        // Setup Athletes
+        $athStmt = $this->pdo->prepare("INSERT INTO athletes (organization_id, athlete_code, first_name, last_name, status, gender, current_sport_id) VALUES (?, ?, ?, ?, 'active', ?, ?)");
+        
+        $athStmt->execute([$this->orgId, 'ATH-M-' . uniqid(), 'John', 'Doe', 'male', $sportId]);
+        $maleAthId = (int)$this->pdo->lastInsertId();
+        $this->createdAthleteIds[] = $maleAthId;
+        
+        $athStmt->execute([$this->orgId, 'ATH-F-' . uniqid(), 'Jane', 'Doe', 'female', $sportId]);
+        $femaleAthId = (int)$this->pdo->lastInsertId();
+        $this->createdAthleteIds[] = $femaleAthId;
+        
+        $athStmt->execute([$this->orgId, 'ATH-N-' . uniqid(), 'No', 'Gender', 'not_specified', $sportId]);
+        $nullAthId = (int)$this->pdo->lastInsertId();
+        $this->createdAthleteIds[] = $nullAthId;
+
+        // 1. Male Team <- Female Athlete (Should Fail)
+        $this->executeWebAction("/teams/{$maleTeamId}/roster/add", [
+            'athlete_id' => $femaleAthId, 'member_role' => 'player'
+        ]);
+        
+        // 2. Male Team <- NULL Gender Athlete (Should Fail)
+        $this->executeWebAction("/teams/{$maleTeamId}/roster/add", [
+            'athlete_id' => $nullAthId, 'member_role' => 'player'
+        ]);
+
+        // 3. Male Team <- Male Athlete (Should Pass)
+        $this->executeWebAction("/teams/{$maleTeamId}/roster/add", [
+            'athlete_id' => $maleAthId, 'member_role' => 'player'
+        ]);
+
+        // 4. Mixed Team <- Female Athlete (Should Pass)
+        $this->executeWebAction("/teams/{$mixedTeamId}/roster/add", [
+            'athlete_id' => $femaleAthId, 'member_role' => 'player'
+        ]);
+
+        // 5. Mixed Team <- NULL Gender Athlete (Should Pass)
+        $this->executeWebAction("/teams/{$mixedTeamId}/roster/add", [
+            'athlete_id' => $nullAthId, 'member_role' => 'player'
+        ]);
+
+        // Check memberships
+        $chkStmt = $this->pdo->prepare("SELECT COUNT(*) FROM team_members WHERE team_id = ? AND athlete_id = ? AND is_current = 1");
+        
+        $chkStmt->execute([$maleTeamId, $femaleAthId]);
+        if ((int)$chkStmt->fetchColumn() > 0) return false;
+
+        $chkStmt->execute([$maleTeamId, $nullAthId]);
+        if ((int)$chkStmt->fetchColumn() > 0) return false;
+
+        $chkStmt->execute([$maleTeamId, $maleAthId]);
+        if ((int)$chkStmt->fetchColumn() !== 1) return false;
+
+        $chkStmt->execute([$mixedTeamId, $femaleAthId]);
+        if ((int)$chkStmt->fetchColumn() !== 1) return false;
+
+        $chkStmt->execute([$mixedTeamId, $nullAthId]);
+        if ((int)$chkStmt->fetchColumn() !== 1) return false;
+
+        return true;
+    }
+
+    /**
      * Run all tests in this suite.
      */
     public function runAll(): bool
@@ -507,6 +664,8 @@ class TeamRosterWebActionTest
             'testUnauthorizedRoleCannotRemoveAthlete' => $this->testUnauthorizedRoleCannotRemoveAthlete(),
             'testAuditLogCreated' => $this->testAuditLogCreated(),
             'testInvalidIdsHandledSafely' => $this->testInvalidIdsHandledSafely(),
+            'testCustomPositionValidation' => $this->testCustomPositionValidation(),
+            'testGenderFilteringValidation' => $this->testGenderFilteringValidation(),
         ];
 
         $allPassed = true;

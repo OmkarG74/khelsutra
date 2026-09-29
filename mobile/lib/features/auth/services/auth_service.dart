@@ -1,5 +1,6 @@
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_response.dart';
+import '../../../core/network/json_parser.dart';
 import '../../../core/storage/token_storage.dart';
 
 class AuthService {
@@ -38,10 +39,10 @@ class AuthService {
       }
       if (data['user'] != null) {
         final u = data['user'];
-        if (u['id'] != null) await TokenStorage.saveUserId((u['id'] as num).toInt());
-        if (u['athlete_id'] != null) await TokenStorage.saveAthleteId((u['athlete_id'] as num).toInt());
-        if (u['coach_id'] != null) await TokenStorage.saveCoachId((u['coach_id'] as num).toInt());
-        if (u['employee_id'] != null) await TokenStorage.saveEmployeeId((u['employee_id'] as num).toInt());
+        if (u['id'] != null) await TokenStorage.saveUserId(parseInt(u['id']));
+        if (u['athlete_id'] != null) await TokenStorage.saveAthleteId(parseInt(u['athlete_id']));
+        if (u['coach_id'] != null) await TokenStorage.saveCoachId(parseInt(u['coach_id']));
+        if (u['employee_id'] != null) await TokenStorage.saveEmployeeId(parseInt(u['employee_id']));
         final fullName = '${u['first_name'] ?? ''} ${u['last_name'] ?? ''}'.trim();
         await TokenStorage.saveUserName(fullName.isNotEmpty ? fullName : (u['email'] ?? 'User'));
         if (u['email'] != null) await TokenStorage.saveUserEmail(u['email'].toString());
@@ -59,10 +60,10 @@ class AuthService {
 
     if (response.success && response.data != null) {
       final u = response.data!;
-      if (u['id'] != null) await TokenStorage.saveUserId((u['id'] as num).toInt());
-      if (u['athlete_id'] != null) await TokenStorage.saveAthleteId((u['athlete_id'] as num).toInt());
-      if (u['coach_id'] != null) await TokenStorage.saveCoachId((u['coach_id'] as num).toInt());
-      if (u['employee_id'] != null) await TokenStorage.saveEmployeeId((u['employee_id'] as num).toInt());
+      if (u['id'] != null) await TokenStorage.saveUserId(parseInt(u['id']));
+      if (u['athlete_id'] != null) await TokenStorage.saveAthleteId(parseInt(u['athlete_id']));
+      if (u['coach_id'] != null) await TokenStorage.saveCoachId(parseInt(u['coach_id']));
+      if (u['employee_id'] != null) await TokenStorage.saveEmployeeId(parseInt(u['employee_id']));
       if (u['role'] != null && u['role']['name'] != null) {
         await TokenStorage.saveRole(u['role']['name'].toString());
       }

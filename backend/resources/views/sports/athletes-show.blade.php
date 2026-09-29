@@ -1,8 +1,55 @@
 <?php
 $athleteId = (int)($id ?? ($_GET['id'] ?? 0));
 $orgId = current_organization_id();
+
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentUser = $_SESSION['auth']['user'] ?? null;
+$isAthlete = ($currentRoleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+$isCoach = ($currentRoleSlug === 'coach') || !empty($currentUser['coach_id']);
+
+$accessDenied = false;
+$accessDeniedMessage = 'Access denied: You are not authorized to view this athlete profile.';
+
+if ($isAthlete) {
+    $myAthleteId = (int)($currentUser['athlete_id'] ?? 0);
+    if ($myAthleteId !== $athleteId) {
+        $accessDenied = true;
+        $accessDeniedMessage = 'Access denied: Athletes are strictly restricted to viewing their own profile.';
+    }
+} elseif ($isCoach) {
+    $coachId = (int)($currentUser['coach_id'] ?? 0);
+    $pdo = \App\Services\BaseService::getDatabaseConnection();
+    if (!$coachId && !empty($currentUser['id']) && $pdo) {
+        $cStmt = $pdo->prepare("
+            SELECT cp.id 
+            FROM coach_profiles cp 
+            JOIN employees e ON cp.employee_id = e.id 
+            WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL 
+            LIMIT 1
+        ");
+        $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $orgId]);
+        $coachId = (int)($cStmt->fetchColumn() ?: 0);
+    }
+    $isAuthorizedCoach = false;
+    if ($coachId && $pdo) {
+        $tcStmt = $pdo->prepare("
+            SELECT 1 
+            FROM team_coaches tc
+            JOIN team_members tm ON tc.team_id = tm.team_id AND tm.is_current = 1
+            WHERE tc.coach_id = :cid AND tm.athlete_id = :aid AND tc.organization_id = :oid
+            LIMIT 1
+        ");
+        $tcStmt->execute([':cid' => $coachId, ':aid' => $athleteId, ':oid' => $orgId]);
+        $isAuthorizedCoach = (bool)$tcStmt->fetchColumn();
+    }
+    if (!$isAuthorizedCoach) {
+        $accessDenied = true;
+        $accessDeniedMessage = 'Access denied: You are not authorized to view athletes outside your assigned squads.';
+    }
+}
+
 $athleteService = new \App\Services\Athlete\AthleteService();
-$athlete = $athleteService->getAthlete($orgId, $athleteId);
+$athlete = (!$accessDenied) ? $athleteService->getAthlete($orgId, $athleteId) : null;
 
 $pageTitle = $athlete ? htmlspecialchars(($athlete['first_name'] ?? '') . ' ' . ($athlete['last_name'] ?? '') . ' — Athlete Details') : 'Athlete Details';
 $activePage = 'athletes';
@@ -25,7 +72,18 @@ ob_start();
 ?>
 
 <div class="ks-page">
-    <?php if (!$athlete): ?>
+    <?php if ($accessDenied): ?>
+        <div class="ks-content-card p-5 text-center my-4" style="border: 1px solid #FECACA; background: #FEF2F2; border-radius: 12px;">
+            <div class="mb-3"><i class="bi bi-shield-lock-fill fs-1 text-danger"></i></div>
+            <h4 class="fw-bold text-danger">403 — Access Forbidden</h4>
+            <p class="text-muted small"><?= htmlspecialchars($accessDeniedMessage, ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="mt-3">
+                <a href="<?= $isAthlete ? '/dashboard' : '/athletes' ?>" class="btn btn-outline-danger" style="border-radius: 8px; font-weight: 500;">
+                    <i class="bi bi-arrow-left me-1"></i> Return to <?= $isAthlete ? 'Dashboard' : 'My Squad Athletes' ?>
+                </a>
+            </div>
+        </div>
+    <?php elseif (!$athlete): ?>
         <div class="ks-content-card p-5 text-center">
             <div class="mb-3"><i class="bi bi-person-x fs-1 text-muted"></i></div>
             <h4 class="fw-bold text-dark">Athlete Not Found</h4>
@@ -71,12 +129,14 @@ ob_start();
                     </div>
                 </div>
 
+                <?php if (!$isCoach && !$isAthlete): ?>
                 <div class="ks-page-actions">
                     <a href="/athletes/<?= (int)$athlete['id'] ?>/edit" class="ks-btn ks-btn-primary px-3 py-2">
                         <i class="bi bi-pencil-square"></i>
                         <span>Edit Athlete</span>
                     </a>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
 

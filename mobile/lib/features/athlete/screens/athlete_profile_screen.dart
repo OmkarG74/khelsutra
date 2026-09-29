@@ -5,6 +5,9 @@ import '../../auth/screens/login_screen.dart';
 import '../../auth/services/auth_service.dart';
 import '../data/athlete_repository.dart';
 import 'athlete_achievements_screen.dart';
+import 'athlete_documents_screen.dart';
+import 'athlete_medical_screen.dart';
+import 'athlete_leave_screen.dart';
 
 class AthleteProfileScreen extends StatefulWidget {
   final int? athleteId;
@@ -275,6 +278,58 @@ class _AthleteProfileScreenState extends State<AthleteProfileScreen> {
                             );
                           },
                         ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.badge_outlined, color: AppTheme.primaryColor),
+                          title: const Text('Verified Documents', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          subtitle: const Text('Official federation certificates and IDs', style: TextStyle(fontSize: 12)),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.textMuted),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AthleteDocumentsScreen(
+                                  isStandalone: true,
+                                  athleteId: p.id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.medical_services_outlined, color: AppTheme.successColor),
+                          title: const Text('Medical & Fitness Clearances', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                          subtitle: const Text('Injury history and doctor certifications', style: TextStyle(fontSize: 12)),
+                          trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.textMuted),
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AthleteMedicalScreen(
+                                  isStandalone: true,
+                                  athleteId: p.id,
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        if (widget.athleteId == null) ...[
+                          const Divider(height: 1),
+                          ListTile(
+                            leading: const Icon(Icons.event_busy_outlined, color: Colors.purple),
+                            title: const Text('Leave & Absence Requests', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                            subtitle: const Text('Apply for training leave or view request status', style: TextStyle(fontSize: 12)),
+                            trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: AppTheme.textMuted),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const AthleteLeaveScreen(
+                                    isStandalone: true,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),

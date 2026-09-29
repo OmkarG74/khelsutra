@@ -48,12 +48,14 @@ class CoachController extends Controller
         }
 
         $search = $requestData['search'] ?? null;
+        $teamId = !empty($requestData['team_id']) ? (int)$requestData['team_id'] : null;
         $params = [':cid' => $coachId, ':oid' => $organizationId];
 
         $sql = "
             SELECT DISTINCT 
                 a.id, a.athlete_code, a.first_name, a.middle_name, a.last_name,
                 a.date_of_birth, a.gender, a.phone, a.email, a.photo_path, a.status,
+                COALESCE(a.current_sport_id, s.id, t.sport_id, 1) as sport_id,
                 s.name as sport_name,
                 t.id as team_id, t.name as team_name,
                 tm.jersey_number, tm.member_role
@@ -65,6 +67,11 @@ class CoachController extends Controller
             WHERE tc.coach_id = :cid AND tc.organization_id = :oid
         ";
 
+        if ($teamId) {
+            $sql .= " AND t.id = :tid";
+            $params[':tid'] = $teamId;
+        }
+
         if (!empty($search)) {
             $sql .= " AND (a.first_name LIKE :search OR a.last_name LIKE :search OR a.athlete_code LIKE :search OR t.name LIKE :search)";
             $params[':search'] = "%{$search}%";
@@ -75,6 +82,13 @@ class CoachController extends Controller
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $athletes = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($athletes as &$a) {
+            $a['id'] = (int)$a['id'];
+            $a['sport_id'] = (int)$a['sport_id'];
+            $a['team_id'] = !empty($a['team_id']) ? (int)$a['team_id'] : null;
+        }
+        unset($a);
 
         return ApiResponse::success([
             'data' => $athletes,

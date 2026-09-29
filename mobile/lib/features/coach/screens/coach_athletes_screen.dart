@@ -11,11 +11,15 @@ import 'coach_athlete_details_screen.dart';
 class CoachAthletesScreen extends StatefulWidget {
   final bool isStandalone;
   final String initialFilter;
+  final int? teamId;
+  final String? teamName;
 
   const CoachAthletesScreen({
     super.key,
     this.isStandalone = false,
     this.initialFilter = 'All',
+    this.teamId,
+    this.teamName,
   });
 
   @override
@@ -46,7 +50,7 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
     });
 
     try {
-      final athletes = await _repo.getAthletes();
+      final athletes = await _repo.getAthletes(teamId: widget.teamId);
       if (!mounted) return;
       setState(() {
         _rosterAthletes = athletes;
@@ -69,11 +73,13 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenTitle = widget.teamName != null ? '${widget.teamName} Roster' : 'My Athletes';
+
     if (_isLoading) {
       return Scaffold(
         appBar: widget.isStandalone
-            ? const KhelSutraAppBar(
-                title: 'My Athletes',
+            ? KhelSutraAppBar(
+                title: screenTitle,
                 showBackButton: true,
               )
             : null,
@@ -86,8 +92,8 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
     if (_errorMessage != null) {
       return Scaffold(
         appBar: widget.isStandalone
-            ? const KhelSutraAppBar(
-                title: 'My Athletes',
+            ? KhelSutraAppBar(
+                title: screenTitle,
                 showBackButton: true,
               )
             : null,
@@ -139,8 +145,8 @@ class _CoachAthletesScreenState extends State<CoachAthletesScreen> {
     return Scaffold(
       appBar: widget.isStandalone
           ? KhelSutraAppBar(
-              title: 'My Athletes',
-              subtitle: '${athletes.length} athlete(s) enrolled',
+              title: screenTitle,
+              subtitle: '${athletes.length} athlete(s) in roster',
               showBackButton: true,
             )
           : null,

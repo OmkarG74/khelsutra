@@ -38,9 +38,11 @@ ob_start();
 </style>
 
 <div class="ks-page-header mb-4">
-    <div class="ks-header-left">
-        <h2 class="ks-page-title"><i class="bi bi-calendar-event" style="color:var(--ks-primary); margin-right:8px;"></i> Venue Bookings</h2>
-        <p class="ks-page-subtitle">Manage facility reservations and event scheduling</p>
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="ks-page-title mb-1">Venue Bookings</h2>
+            <p class="ks-page-subtitle mb-0">Manage facility reservations and event scheduling</p>
+        </div>
     </div>
 </div>
 
@@ -124,7 +126,7 @@ ob_start();
 </div>
 
 <div class="ks-content-card">
-    <div class="ks-table-responsive" style="overflow: visible;">
+    <div>
         <table class="ks-table">
             <thead>
                 <tr>
