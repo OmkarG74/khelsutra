@@ -124,7 +124,7 @@ ob_start();
 </div>
 
 <div class="ks-content-card">
-    <div class="ks-table-responsive">
+    <div class="ks-table-responsive" style="overflow: visible;">
         <table class="ks-table">
             <thead>
                 <tr>
@@ -334,27 +334,37 @@ function renderTable(data) {
         else if (item.status === 'cancelled') badgeClass = 'ks-badge-cancelled';
         else if (item.status === 'completed') badgeClass = 'ks-badge-scheduled';
         
-        let actions = '';
+        let actions = `
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" title="Actions" style="border: none; background: transparent;">
+                    <i class="bi bi-three-dots-vertical text-dark"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px; min-width:160px; border-radius: var(--ks-radius-md);">
+        `;
+
         if (item.status === 'pending') {
-            actions = `
-                <div class="d-flex gap-1">
-                    <button class="btn btn-success btn-sm px-2" title="Approve" onclick="updateStatus(${item.id}, 'approved')"><i class="bi bi-check"></i></button>
-                    <button class="btn btn-danger btn-sm px-2" title="Reject" onclick="openReasonModal(${item.id}, 'rejected')"><i class="bi bi-x"></i></button>
-                    <button class="btn btn-warning btn-sm px-2" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
-                </div>
+            actions += `
+                    <li><a class="dropdown-item py-2 fw-medium text-success" href="#" onclick="updateStatus(${item.id}, 'approved'); return false;"><i class="bi bi-check-lg me-2"></i>Approve</a></li>
+                    <li><a class="dropdown-item py-2 fw-medium text-danger" href="#" onclick="openReasonModal(${item.id}, 'rejected'); return false;"><i class="bi bi-x-lg me-2"></i>Reject</a></li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li><a class="dropdown-item py-2 fw-medium text-warning" style="color: #d97706 !important;" href="#" onclick="openReasonModal(${item.id}, 'cancelled'); return false;"><i class="bi bi-x-circle me-2"></i>Cancel</a></li>
             `;
         } else if (item.status === 'approved') {
-            actions = `
-                <div class="d-flex gap-1">
-                    <button class="btn btn-primary btn-sm px-2" title="Complete" onclick="updateStatus(${item.id}, 'completed')"><i class="bi bi-check-all"></i></button>
-                    <button class="btn btn-warning btn-sm px-2" title="Cancel" onclick="openReasonModal(${item.id}, 'cancelled')"><i class="bi bi-x-circle"></i></button>
-                </div>
+            actions += `
+                    <li><a class="dropdown-item py-2 fw-medium text-primary" href="#" onclick="updateStatus(${item.id}, 'completed'); return false;"><i class="bi bi-check-all me-2"></i>Complete</a></li>
+                    <li><hr class="dropdown-divider my-1"></li>
+                    <li><a class="dropdown-item py-2 fw-medium text-warning" style="color: #d97706 !important;" href="#" onclick="openReasonModal(${item.id}, 'cancelled'); return false;"><i class="bi bi-x-circle me-2"></i>Cancel</a></li>
             `;
         } else {
-            actions = `
-                <button class="btn btn-sm btn-outline-secondary" title="View"><i class="bi bi-eye"></i></button>
+            actions += `
+                    <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="bi bi-eye me-2"></i>View</a></li>
             `;
         }
+
+        actions += `
+                </ul>
+            </div>
+        `;
         
         let facilityText = item.facility_id ? ` (Fac: ${item.facility_id})` : '';
         

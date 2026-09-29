@@ -389,7 +389,7 @@ async function loadVehicles() {
                             ${expiryBadges.join('')}
                         </div>
                         <div class="d-flex justify-content-end gap-2 mt-2">
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTrackModal(${v.id})"><i class="bi bi-geo-alt-fill me-1"></i> Track</button>
+                            
                             <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus me-1"></i> Plan Trip</button>
                             <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash me-1"></i> Delete</button>
                         </div>
