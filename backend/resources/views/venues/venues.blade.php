@@ -84,8 +84,8 @@ ob_start();
     </div>
 
     <!-- Venues Table -->
-    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff; overflow: hidden;">
-        <div class="table-responsive">
+    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+        <div class="table-responsive" style="overflow: visible;">
             <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
                 <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
                     <tr>

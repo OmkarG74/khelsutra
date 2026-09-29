@@ -124,7 +124,7 @@ ob_start();
 </div>
 
 <div class="ks-content-card">
-    <div class="ks-table-responsive">
+    <div class="ks-table-responsive" style="overflow: visible;">
         <table class="ks-table">
             <thead>
                 <tr>
