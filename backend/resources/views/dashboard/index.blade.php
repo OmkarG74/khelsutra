@@ -1,11 +1,288 @@
 <?php
 $activePage = 'dashboard';
-$title = 'Sports Operations Dashboard — KhelSutra';
 
+$authRole = $_SESSION['auth']['role'] ?? [];
+$isSuperAdmin = ((int)($authRole['id'] ?? 0) === 1) 
+             || (($authRole['slug'] ?? '') === 'super_admin') 
+             || (($authRole['name'] ?? '') === 'Super Admin');
+
+if ($isSuperAdmin) {
+    $title = 'Platform Dashboard — KhelSutra Super Admin';
+    $orgService = new \App\Services\Organization\OrganizationManagementService();
+    $organizations = $orgService->listOrganizations(10);
+    $userService = new \App\Services\User\UserManagementService();
+    $allUsers = $userService->listUsers(null);
+    $totalOrgs = count($organizations);
+    $activeOrgs = count(array_filter($organizations, fn($o) => ($o['status'] ?? '') === 'active'));
+    $totalUsers = count($allUsers);
+    $totalEmployees = array_sum(array_column($organizations, 'active_employees_count'));
+
+    ob_start();
+?>
+
+<!-- Super Admin Page Header -->
+<div class="ks-page-header">
+    <div>
+        <h1 class="ks-page-title">Platform Administration Dashboard</h1>
+        <p class="ks-page-subtitle">Multi-tenant academy overview, system health, and global user provisioning.</p>
+    </div>
+    <div class="ks-header-actions">
+        <div class="ks-date-widget">
+            <i class="bi bi-calendar-check fs-5"></i>
+            <div>
+                <div class="ks-date-text"><?= date('l, d M Y') ?></div>
+                <div class="ks-time-text"><?= date('h:i A') ?></div>
+            </div>
+        </div>
+
+        <a href="/reports" class="ks-btn ks-btn-secondary">
+            <i class="bi bi-file-earmark-bar-graph"></i>
+            <span>View Reports</span>
+        </a>
+
+        <a href="/super-admin/organizations/create" class="ks-btn ks-btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            <span>Create Organisation</span>
+        </a>
+    </div>
+</div>
+
+<!-- Primary KPI Row -->
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="ks-kpi-card">
+            <div class="ks-kpi-top">
+                <div class="ks-icon-box ks-icon-blue">
+                    <i class="bi bi-building-fill fs-4"></i>
+                </div>
+                <div>
+                    <div class="ks-kpi-label">Total Academies</div>
+                    <div class="ks-kpi-value"><?= $totalOrgs ?></div>
+                </div>
+            </div>
+            <div class="ks-kpi-bottom">
+                <span class="ks-trend-text ks-trend-positive">Multi-tenant instances</span>
+                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
+                    <path d="M2 22C18 20 28 26 44 14C60 2 72 16 88 4" stroke="#0B6EF3" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="ks-kpi-card">
+            <div class="ks-kpi-top">
+                <div class="ks-icon-box ks-icon-green">
+                    <i class="bi bi-patch-check-fill fs-4"></i>
+                </div>
+                <div>
+                    <div class="ks-kpi-label">Active Subscriptions</div>
+                    <div class="ks-kpi-value"><?= $activeOrgs ?></div>
+                </div>
+            </div>
+            <div class="ks-kpi-bottom">
+                <span class="ks-trend-text text-success">Tenants operating</span>
+                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
+                    <path d="M2 18C20 18 30 24 50 16C70 8 78 4 88 12" stroke="#16A34A" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="ks-kpi-card">
+            <div class="ks-kpi-top">
+                <div class="ks-icon-box ks-icon-purple">
+                    <i class="bi bi-people-fill fs-4"></i>
+                </div>
+                <div>
+                    <div class="ks-kpi-label">Platform Users</div>
+                    <div class="ks-kpi-value"><?= $totalUsers ?></div>
+                </div>
+            </div>
+            <div class="ks-kpi-bottom">
+                <span class="ks-trend-text">Registered accounts</span>
+                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
+                    <path d="M2 14C22 10 42 18 62 12C74 8 82 14 88 6" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6">
+        <div class="ks-kpi-card">
+            <div class="ks-kpi-top">
+                <div class="ks-icon-box ks-icon-amber">
+                    <i class="bi bi-shield-lock-fill fs-4"></i>
+                </div>
+                <div>
+                    <div class="ks-kpi-label">Tenant Isolation</div>
+                    <div class="ks-kpi-value">Enforced</div>
+                </div>
+            </div>
+            <div class="ks-kpi-bottom">
+                <span class="ks-trend-text text-warning">Strict Backend Isolation</span>
+                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
+                    <path d="M2 20C16 16 34 8 52 14C70 20 78 12 88 6" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="row g-4 mb-4">
+    <!-- Left: Registered Organisations Table -->
+    <div class="col-lg-8">
+        <div class="ks-content-card h-100">
+            <div class="ks-card-header">
+                <div class="ks-header-left">
+                    <i class="bi bi-building" style="color: var(--ks-primary); font-size: 18px;"></i>
+                    <h3 class="ks-header-title">Platform Organisations</h3>
+                </div>
+                <a href="/super-admin/organizations" class="ks-header-link">
+                    <span>View All Organisations</span>
+                    <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="ks-table-responsive">
+                <table class="ks-table">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Organisation Name</th>
+                            <th>Plan</th>
+                            <th>Status</th>
+                            <th style="text-align: right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($organizations)): ?>
+                            <tr>
+                                <td colspan="5" class="text-center py-4 text-muted">No organisations registered yet.</td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach (array_slice($organizations, 0, 5) as $org): ?>
+                                <tr>
+                                    <td>
+                                        <span class="badge" style="background: #EAF3FF; color: #0B6EF3; font-weight: 600; padding: 4px 8px; border-radius: 6px;">
+                                            <?= htmlspecialchars($org['organization_code']) ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-bold text-navy"><?= htmlspecialchars($org['name']) ?></span>
+                                    </td>
+                                    <td>
+                                        <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($org['plan_name'] ?? 'Standard') ?></span>
+                                    </td>
+                                    <td>
+                                        <?php if ($org['status'] === 'active'): ?>
+                                            <span class="ks-badge ks-badge-confirmed">Active</span>
+                                        <?php else: ?>
+                                            <span class="ks-badge ks-badge-rejected"><?= htmlspecialchars(ucfirst($org['status'])) ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="text-align: right;">
+                                        <a href="/super-admin/organizations/<?= $org['id'] ?>" class="ks-btn ks-btn-secondary" style="height: 30px; padding: 0 8px; font-size: 12px;">
+                                            View
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Quick Security & Health Summary -->
+    <div class="col-lg-4">
+        <div class="ks-content-card h-100">
+            <div class="ks-card-header">
+                <div class="ks-header-left">
+                    <i class="bi bi-shield-check" style="color: var(--ks-success); font-size: 18px;"></i>
+                    <h3 class="ks-header-title">System & Security Status</h3>
+                </div>
+            </div>
+            <div class="p-3">
+                <div class="d-flex flex-column gap-3">
+                    <div class="p-3 rounded" style="background: #F8FAFD; border: 1px solid var(--ks-border-light);">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <span class="small fw-bold text-navy">Tenant Isolation</span>
+                            <span class="badge bg-success-subtle text-success">Active</span>
+                        </div>
+                        <div class="small text-muted">Strict org boundary filters applied on all backend queries.</div>
+                    </div>
+
+                    <div class="p-3 rounded" style="background: #F8FAFD; border: 1px solid var(--ks-border-light);">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <span class="small fw-bold text-navy">Standard RBAC</span>
+                            <span class="badge bg-primary-subtle text-primary">7 Roles</span>
+                        </div>
+                        <div class="small text-muted">Predefined role access enforcement active without per-user overrides.</div>
+                    </div>
+
+                    <div class="p-3 rounded" style="background: #F8FAFD; border: 1px solid var(--ks-border-light);">
+                        <div class="d-flex align-items-center justify-content-between mb-1">
+                            <span class="small fw-bold text-navy">Audit Logging</span>
+                            <span class="badge bg-info-subtle text-info">Monitoring</span>
+                        </div>
+                        <div class="small text-muted">Global audit trail tracking organizational and user mutations.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Administration Actions -->
+<div class="ks-content-card mb-4">
+    <div class="ks-card-header">
+        <div class="ks-header-left">
+            <i class="bi bi-lightning-charge-fill" style="color: var(--ks-gold); font-size: 18px;"></i>
+            <h3 class="ks-header-title">Platform Administration Actions</h3>
+        </div>
+    </div>
+    <div class="p-3">
+        <div class="d-flex flex-wrap gap-2">
+            <a href="/super-admin/organizations/create" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-building-add"></i> Create Organisation
+            </a>
+            <a href="/super-admin/organizations" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-building"></i> All Organisations
+            </a>
+            <a href="/users" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-people"></i> Manage Users
+            </a>
+            <a href="/users/create" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-person-plus"></i> Add Platform User
+            </a>
+            <a href="/roles" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-shield-lock"></i> Roles & RBAC
+            </a>
+            <a href="/audit-logs" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-journal-check"></i> Audit Logs
+            </a>
+            <a href="/settings/organization" class="btn btn-outline-primary d-flex align-items-center gap-2" style="border-radius: 8px; font-weight: 500; font-size: 13px;">
+                <i class="bi bi-sliders"></i> Global Settings
+            </a>
+        </div>
+    </div>
+</div>
+
+<?php
+    $slot = ob_get_clean();
+    include __DIR__ . '/../layouts/app.blade.php';
+    return;
+}
+
+$title = 'Sports Operations Dashboard — KhelSutra';
+$orgId = $_SESSION['current_organization_id'] ?? ($_SESSION['auth']['organization']['id'] ?? 1);
 $reportService = new \App\Services\Report\ReportService();
-$metrics = $reportService->getDashboardMetrics(1);
-$fixtures = $reportService->getUpcomingFixtures(1, 5);
-$sessions = $reportService->getTodaySessions(1, 5);
+$metrics = $reportService->getDashboardMetrics($orgId);
+$fixtures = $reportService->getUpcomingFixtures($orgId, 5);
+$sessions = $reportService->getTodaySessions($orgId, 5);
 
 ob_start();
 ?>
