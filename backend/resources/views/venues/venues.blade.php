@@ -20,7 +20,8 @@ ob_start();
     <!-- Clean Page Header Standard -->
     <div class="ks-page-header mb-4">
         <div>
-            <h1 class="ks-page-title">Venues</h1>
+            <h1 class="ks-page-title mb-1">Venues</h1>
+            <p class="ks-page-subtitle mb-0">Manage sports grounds, facilities, and physical locations</p>
         </div>
         <div class="ks-header-actions d-flex gap-2">
             <!-- Bookings Dropdown -->
