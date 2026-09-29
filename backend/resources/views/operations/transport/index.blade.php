@@ -490,6 +490,10 @@ async function loadTrips() {
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px;">
                                     <li><button class="dropdown-item py-2 fw-medium text-secondary" onclick="openTripDrawer(${t.id})"><i class="bi bi-eye me-2"></i> Details</button></li>
+                                    ${(t.status === 'planned' || t.status === 'in_progress') ? `
+                                    <li><hr class="dropdown-divider my-1"></li>
+                                    <li><button class="dropdown-item py-2 fw-medium text-danger" onclick="if(confirm('Are you sure you want to cancel this trip?')) updateTripStatus(${t.id}, 'cancelled')"><i class="bi bi-x-circle me-2"></i> Cancel Trip</button></li>
+                                    ` : ''}
                                 </ul>
                             </div>
                         </td>
@@ -762,7 +766,11 @@ async function updateTripStatus(tripId, newStatus) {
         if(res.ok) {
             ksToast('Trip status updated', 'success');
             await loadTrips();
-            openTripDrawer(tripId); // Refresh drawer
+            // Only refresh drawer if it's currently open for this trip
+            const drawer = document.getElementById('tripDrawer');
+            if(drawer && drawer.classList.contains('show') && currentTripId === tripId) {
+                openTripDrawer(tripId);
+            }
         } else {
             ksToast('Failed to update status', 'error');
         }
