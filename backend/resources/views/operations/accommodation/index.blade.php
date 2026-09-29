@@ -4,9 +4,11 @@ $title = 'Accommodation Management — KhelSutra';
 ob_start();
 ?>
 <div class="ks-page-header mb-4">
-    <div class="ks-header-left">
-        <h2 class="ks-page-title">Accommodation Management</h2>
-        <p class="ks-page-subtitle">Manage lodging facilities and room allocations for athletes and staff</p>
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="ks-page-title mb-1">Accommodation Management</h2>
+            <p class="ks-page-subtitle mb-0">Manage lodging facilities and room allocations for athletes and staff</p>
+        </div>
     </div>
 </div>
 
