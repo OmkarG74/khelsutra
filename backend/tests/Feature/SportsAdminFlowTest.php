@@ -9,6 +9,7 @@ use App\Services\Training\TrainingService;
 use App\Services\Tournament\TournamentService;
 use App\Services\Venue\VenueService;
 use App\Services\Inventory\InventoryService;
+use App\Services\Inventory\InventoryCategoryService;
 use App\Services\Report\ReportService;
 use App\Services\BaseService;
 use PDO;
@@ -332,60 +333,86 @@ class SportsAdminFlowTest
 
     public function testSportsAdminInventoryFlow(): bool
     {
-        $inv = new InventoryService();
-        $code = 'TEST-BALL-' . rand(100, 999);
+        $inv = new InventoryService($this->pdo);
+        $catService = new InventoryCategoryService($this->pdo);
 
-        // 1. Create item
-        $item = $inv->createItem($this->orgId, [
-            'category_id' => 1,
-            'item_code' => $code,
-            'item_name' => 'Automated Test Cricket Bat',
-            'quantity' => 15,
-            'unit_cost' => 2500.00,
-            'minimum_stock_level' => 3,
-            'reorder_level' => 5,
-            'location_name' => 'Gear Locker C'
-        ], $this->userId);
+        // Ensure a valid category exists for this organization
+        $categories = $catService->listCategories($this->orgId, 'active');
+        $createdCatId = null;
 
-        if (empty($item['id'])) return false;
-        $itemId = (int)$item['id'];
-
-        // 2. Issue 5 items
-        $inv->recordStockTransaction($this->orgId, $itemId, [
-            'transaction_type' => 'issue',
-            'quantity' => 5,
-            'remarks' => 'Issued to batting academy'
-        ], $this->userId);
-
-        $check1 = $inv->getItem($this->orgId, $itemId);
-        if ((int)$check1['quantity'] !== 10) return false;
-
-        // 3. Receive 10 items
-        $inv->recordStockTransaction($this->orgId, $itemId, [
-            'transaction_type' => 'receive',
-            'quantity' => 10,
-            'remarks' => 'Received new shipment'
-        ], $this->userId);
-
-        $check2 = $inv->getItem($this->orgId, $itemId);
-        if ((int)$check2['quantity'] !== 20) return false;
-
-        // 4. Insufficient stock check
-        $caught = false;
-        try {
-            $inv->recordStockTransaction($this->orgId, $itemId, [
-                'transaction_type' => 'issue',
-                'quantity' => 50,
+        if (!empty($categories)) {
+            $categoryId = (int)$categories[0]['id'];
+        } else {
+            $cat = $catService->createCategory($this->orgId, [
+                'name' => 'Sports Equipment ' . rand(1000, 9999),
+                'status' => 'active',
+                'description' => 'Test inventory category'
             ], $this->userId);
-        } catch (\Throwable $e) {
-            $caught = true;
+            $categoryId = (int)$cat['id'];
+            $createdCatId = $categoryId;
         }
 
-        if (!$caught) return false;
+        $code = 'TEST-BALL-' . rand(100, 999);
+        $itemId = 0;
 
-        // 5. Clean up soft delete
-        $inv->deleteItem($this->orgId, $itemId, $this->userId);
-        return true;
+        try {
+            // 1. Create item
+            $item = $inv->createItem($this->orgId, [
+                'category_id' => $categoryId,
+                'item_code' => $code,
+                'item_name' => 'Automated Test Cricket Bat',
+                'quantity' => 15,
+                'unit_cost' => 2500.00,
+                'minimum_stock_level' => 3,
+                'reorder_level' => 5,
+                'location_name' => 'Gear Locker C'
+            ], $this->userId);
+
+            if (empty($item['id'])) return false;
+            $itemId = (int)$item['id'];
+
+            // 2. Issue 5 items
+            $inv->recordStockTransaction($this->orgId, $itemId, [
+                'transaction_type' => 'issue',
+                'quantity' => 5,
+                'remarks' => 'Issued to batting academy'
+            ], $this->userId);
+
+            $check1 = $inv->getItem($this->orgId, $itemId);
+            if ((int)$check1['quantity'] !== 10) return false;
+
+            // 3. Receive 10 items (Stock In: Purchase)
+            $inv->recordStockTransaction($this->orgId, $itemId, [
+                'transaction_type' => 'purchase',
+                'quantity' => 10,
+                'remarks' => 'Received new shipment'
+            ], $this->userId);
+
+            $check2 = $inv->getItem($this->orgId, $itemId);
+            if ((int)$check2['quantity'] !== 20) return false;
+
+            // 4. Insufficient stock check
+            $caught = false;
+            try {
+                $inv->recordStockTransaction($this->orgId, $itemId, [
+                    'transaction_type' => 'issue',
+                    'quantity' => 50,
+                ], $this->userId);
+            } catch (\Throwable $e) {
+                $caught = true;
+            }
+
+            if (!$caught) return false;
+
+            return true;
+        } finally {
+            if ($itemId > 0) {
+                $inv->deleteItem($this->orgId, $itemId, $this->userId);
+            }
+            if ($createdCatId > 0) {
+                $catService->deleteCategory($this->orgId, $createdCatId, $this->userId);
+            }
+        }
     }
 
     public function testSportsAdminOperationalReports(): bool

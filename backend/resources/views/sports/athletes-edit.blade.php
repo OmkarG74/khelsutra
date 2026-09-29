@@ -1,18 +1,7 @@
 <?php
 $athleteId = (int)($id ?? ($_GET['id'] ?? 0));
 $orgId = current_organization_id();
-$athleteService = new \App\Services\Athlete\AthleteService();
-$athlete = $athleteService->getAthlete($orgId, $athleteId);
-
-// Fetch sports list
-$db = \App\Services\BaseService::getDatabaseConnection();
-$sportsStmt = $db->query("SELECT id, name FROM sports ORDER BY name ASC");
-$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
-
-// Fetch active teams
-$teamsStmt = $db->prepare("SELECT id, name, sport_id, team_code FROM teams WHERE organization_id = :org_id AND deleted_at IS NULL ORDER BY name ASC");
-$teamsStmt->execute([':org_id' => $orgId]);
-$teams = $teamsStmt ? $teamsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    // Data ($athlete, $sportsList, $sportMap, $teams) is injected by the router
 
 $pageTitle = $athlete ? 'Edit Athlete — ' . htmlspecialchars($athlete['first_name'] . ' ' . $athlete['last_name']) : 'Edit Athlete';
 $activePage = 'athletes';
@@ -145,10 +134,10 @@ ob_start();
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="ks-form-label">Primary Sport <span class="text-danger">*</span></label>
-                            <select name="current_sport_id" class="ks-form-select" required>
+                            <select name="current_sport_id" id="sportSelect" class="ks-form-select" required onchange="filterTeamsBySport()">
                                 <option value="">Select sport</option>
-                                <?php foreach ($sports as $sp): ?>
-                                    <option value="<?= (int)$sp['id'] ?>" <?= ($athlete['current_sport_id'] ?? '') == $sp['id'] ? 'selected' : '' ?>>
+                                <?php foreach ($sportsList as $sp): ?>
+                                    <option value="<?= htmlspecialchars($sp['id'], ENT_QUOTES, 'UTF-8') ?>" <?= ($athlete['current_sport_id'] ?? '') == $sp['db_id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($sp['name'], ENT_QUOTES, 'UTF-8') ?>
                                     </option>
                                 <?php endforeach; ?>
@@ -156,10 +145,10 @@ ob_start();
                         </div>
                         <div class="col-md-4">
                             <label class="ks-form-label">Assigned Team</label>
-                            <select name="team_id" class="ks-form-select">
+                            <select name="team_id" id="teamSelect" class="ks-form-select">
                                 <option value="">No team assignment</option>
                                 <?php foreach ($teams as $tm): ?>
-                                    <option value="<?= (int)$tm['id'] ?>" <?= ($athlete['team_id'] ?? '') == $tm['id'] ? 'selected' : '' ?>>
+                                    <option value="<?= (int)$tm['id'] ?>" data-sport-id="<?= (int)$tm['sport_id'] ?>" <?= ($athlete['team_id'] ?? '') == $tm['id'] ? 'selected' : '' ?>>
                                         <?= htmlspecialchars($tm['name'], ENT_QUOTES, 'UTF-8') ?> (<?= htmlspecialchars($tm['team_code'] ?? '', ENT_QUOTES, 'UTF-8') ?>)
                                     </option>
                                 <?php endforeach; ?>
@@ -456,6 +445,73 @@ ob_start();
         <?php endif; ?>
     <?php endif; ?>
 </div>
+
+<script>
+    var originalTeamOptions = null;
+    var sportMap = <?= json_encode($sportMap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    function filterTeamsBySport() {
+        var sportSelect = document.getElementById('sportSelect');
+        var teamSelect = document.getElementById('teamSelect');
+        if (!sportSelect || !teamSelect) return;
+
+        var sportId = sportSelect.value;
+        var dbSportId = sportMap[sportId] ? sportMap[sportId].toString() : sportId;
+
+        if (originalTeamOptions === null) {
+            originalTeamOptions = [];
+            teamSelect.querySelectorAll('option').forEach(function(opt) {
+                if (opt.value) {
+                    originalTeamOptions.push({
+                        value: opt.value,
+                        text: opt.text,
+                        sportId: opt.getAttribute('data-sport-id'),
+                        selected: opt.selected
+                    });
+                }
+            });
+        }
+
+        var currentlySelectedValue = teamSelect.value;
+        teamSelect.innerHTML = '';
+
+        var defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.text = 'No team assignment';
+        teamSelect.appendChild(defaultOpt);
+
+        var hasTeams = false;
+        var matchFoundForCurrent = false;
+
+        originalTeamOptions.forEach(function(optData) {
+            if (!dbSportId || optData.sportId === dbSportId) {
+                hasTeams = true;
+                var opt = document.createElement('option');
+                opt.value = optData.value;
+                opt.text = optData.text;
+                opt.setAttribute('data-sport-id', optData.sportId);
+                
+                if (optData.value === currentlySelectedValue) {
+                    opt.selected = true;
+                    matchFoundForCurrent = true;
+                }
+                teamSelect.appendChild(opt);
+            }
+        });
+
+        if (!hasTeams && sportId) {
+            defaultOpt.text = 'No teams available for this sport';
+        }
+
+        if (!matchFoundForCurrent) {
+            teamSelect.value = '';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        filterTeamsBySport();
+    });
+</script>
 
 <?php
 $slot = ob_get_clean();

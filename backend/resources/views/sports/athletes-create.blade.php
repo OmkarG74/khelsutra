@@ -3,11 +3,7 @@ $activePage = 'athletes';
 $title = 'Add Athlete — KhelSutra';
 
 $orgId = current_organization_id();
-$pdo = \App\Services\BaseService::getDatabaseConnection();
-$sportsList = $pdo->query("SELECT id, name FROM sports WHERE status = 'active' ORDER BY name ASC")->fetchAll(PDO::FETCH_ASSOC);
-$stmt = $pdo->prepare("SELECT id, name, team_code, sport_id FROM teams WHERE organization_id = :org_id AND deleted_at IS NULL ORDER BY name ASC");
-$stmt->execute([':org_id' => $orgId]);
-$teamsList = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    // Data ($sportsList, $sportMap, $teamsList) is injected by the router
 
 // Check for one-time success message in session
 $successData = $_SESSION['athlete_created_success'] ?? null;
@@ -563,23 +559,65 @@ ob_start();
         }
     }
 
-    function filterTeamsBySport() {
-        var sportId = document.getElementById('sportSelect').value;
-        var teamSelect = document.getElementById('teamSelect');
-        var options = teamSelect.querySelectorAll('option');
+    var originalTeamOptions = null;
+    var sportMap = <?= json_encode($sportMap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
-        options.forEach(function(opt) {
-            if (!opt.value) {
-                opt.style.display = 'block';
-                return;
-            }
-            var teamSportId = opt.getAttribute('data-sport-id');
-            if (!sportId || !teamSportId || teamSportId === sportId) {
-                opt.style.display = 'block';
-            } else {
-                opt.style.display = 'none';
+    function filterTeamsBySport() {
+        var sportSelect = document.getElementById('sportSelect');
+        var teamSelect = document.getElementById('teamSelect');
+        if (!sportSelect || !teamSelect) return;
+
+        var sportId = sportSelect.value;
+        var dbSportId = sportMap[sportId] ? sportMap[sportId].toString() : sportId;
+
+        if (originalTeamOptions === null) {
+            originalTeamOptions = [];
+            teamSelect.querySelectorAll('option').forEach(function(opt) {
+                if (opt.value) {
+                    originalTeamOptions.push({
+                        value: opt.value,
+                        text: opt.text,
+                        sportId: opt.getAttribute('data-sport-id'),
+                        selected: opt.selected
+                    });
+                }
+            });
+        }
+
+        var currentlySelectedValue = teamSelect.value;
+        teamSelect.innerHTML = '';
+
+        var defaultOpt = document.createElement('option');
+        defaultOpt.value = '';
+        defaultOpt.text = 'No Team (Individual Athlete)';
+        teamSelect.appendChild(defaultOpt);
+
+        var hasTeams = false;
+        var matchFoundForCurrent = false;
+
+        originalTeamOptions.forEach(function(optData) {
+            if (!dbSportId || optData.sportId === dbSportId) {
+                hasTeams = true;
+                var opt = document.createElement('option');
+                opt.value = optData.value;
+                opt.text = optData.text;
+                opt.setAttribute('data-sport-id', optData.sportId);
+                
+                if (optData.value === currentlySelectedValue) {
+                    opt.selected = true;
+                    matchFoundForCurrent = true;
+                }
+                teamSelect.appendChild(opt);
             }
         });
+
+        if (!hasTeams && sportId) {
+            defaultOpt.text = 'No teams available for this sport';
+        }
+
+        if (!matchFoundForCurrent) {
+            teamSelect.value = '';
+        }
     }
 
     // Initialize initial state on load

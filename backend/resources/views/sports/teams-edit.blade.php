@@ -6,9 +6,16 @@ $team = $teamService->getTeam($orgId, $teamId);
 
 $db = \App\Services\BaseService::getDatabaseConnection();
 
-// Sports
-$sportsStmt = $db->query("SELECT id, name FROM sports ORDER BY name ASC");
-$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+// Sports from config
+$sportService = new \App\Services\Sport\SportService();
+$sports = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sports[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sports, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 
 // Active Coaches
 $coachStmt = $db->prepare("

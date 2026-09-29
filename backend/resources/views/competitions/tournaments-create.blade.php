@@ -6,8 +6,15 @@ $orgId = current_organization_id();
 $db = \App\Services\BaseService::getDatabaseConnection();
 
 // Sports
-$sportsStmt = $db->query("SELECT id, name FROM sports ORDER BY name ASC");
-$sports = $sportsStmt ? $sportsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$sportService = new \App\Services\Sport\SportService();
+$sports = [];
+foreach (config('sports.catalog') ?? [] as $key => $name) {
+    $dbId = $sportService->resolveSportId($key);
+    $sports[] = ['id' => $dbId, 'name' => $name];
+}
+usort($sports, function($a, $b) {
+    return strcmp($a['name'], $b['name']);
+});
 
 // Levels
 $lvlStmt = $db->query("SELECT id, name FROM tournament_levels ORDER BY id ASC");
@@ -22,8 +29,8 @@ $venueStmt = $db->prepare("SELECT v.id, v.name, GROUP_CONCAT(vs.sport_id) as spo
 $venueStmt->execute([':org_id' => $orgId]);
 $venues = $venueStmt ? $venueStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
-// Teams
-$teamStmt = $db->prepare("SELECT id, name, team_code FROM teams WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
+// Teams (with sport_id for filtering)
+$teamStmt = $db->prepare("SELECT id, name, team_code, sport_id FROM teams WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
 $teamStmt->execute([':org_id' => $orgId]);
 $teams = $teamStmt ? $teamStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
@@ -148,9 +155,9 @@ ob_start();
             </h5>
             <p class="text-muted small mb-3">Select teams to enroll into this tournament. Standings will be initialized automatically.</p>
 
-            <div class="row g-2" style="max-height: 200px; overflow-y: auto;">
+            <div class="row g-2" id="teamSquadContainer" style="max-height: 200px; overflow-y: auto;">
                 <?php foreach ($teams as $tm): ?>
-                    <div class="col-md-4 col-sm-6">
+                    <div class="col-md-4 col-sm-6 team-squad-item" data-sport="<?= (int)($tm['sport_id'] ?? 0) ?>">
                         <div class="form-check p-2 border rounded" style="background: var(--ks-page-bg);">
                             <input class="form-check-input ms-0 me-2" type="checkbox" name="team_ids[]" value="<?= (int)$tm['id'] ?>" id="tm_<?= (int)$tm['id'] ?>">
                             <label class="form-check-label small fw-medium text-dark" for="tm_<?= (int)$tm['id'] ?>">
@@ -161,6 +168,7 @@ ob_start();
                     </div>
                 <?php endforeach; ?>
             </div>
+            <p class="text-muted small mb-0 mt-2" id="noTeamsForSport" style="display: none;">No teams available for this sport.</p>
         </div>
 
         <!-- Section 4: Rules & Guidelines -->
@@ -231,6 +239,26 @@ document.addEventListener('DOMContentLoaded', function() {
                 venueSelect.value = currentSelectedVenue;
             } else {
                 venueSelect.value = '';
+            }
+
+            // Filter participating team checkboxes by sport
+            const teamItems = document.querySelectorAll('.team-squad-item');
+            const noTeamsMsg = document.getElementById('noTeamsForSport');
+            let visibleCount = 0;
+            teamItems.forEach(function(item) {
+                const teamSport = item.getAttribute('data-sport');
+                if (!selectedSport || teamSport === selectedSport) {
+                    item.style.display = '';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                    // Uncheck hidden teams
+                    const cb = item.querySelector('input[type="checkbox"]');
+                    if (cb) cb.checked = false;
+                }
+            });
+            if (noTeamsMsg) {
+                noTeamsMsg.style.display = (selectedSport && visibleCount === 0) ? '' : 'none';
             }
         });
         
