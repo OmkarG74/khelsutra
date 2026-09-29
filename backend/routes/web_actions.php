@@ -1829,22 +1829,23 @@ if (preg_match('#^/venues/(\d+)/facilities/create$#', $uri, $m)) {
 
 if ($uri === '/venues/bookings/create') {
     $venueId = (int)($_POST['venue_id'] ?? 0);
-    $facilityId = (int)($_POST['facility_id'] ?? 0);
-    $date = trim($_POST['booking_date'] ?? '');
     $purpose = trim($_POST['purpose'] ?? '');
 
-    if (empty($venueId) || empty($facilityId) || empty($date) || empty($purpose)) {
-        header('Location: /venues/bookings/create?error=' . urlencode('Please select Venue, Facility, Date, and Purpose.'));
+    $facilityIds = $_POST['facility_id'] ?? [];
+    $dates = $_POST['booking_date'] ?? [];
+
+    if (empty($venueId) || empty($facilityIds) || !is_array($facilityIds) || empty($dates) || empty($purpose)) {
+        header('Location: /venues/bookings/create?error=' . urlencode('Please select Venue, at least one Facility Slot, Date, and Purpose.'));
         exit;
     }
 
     $venueService = new \App\Services\Venue\VenueService();
     try {
-        $booking = $venueService->createBooking($orgId, $_POST, $userId);
-        header('Location: /venues/' . $venueId . '?success=' . urlencode('Venue facility slot booked successfully.'));
+        $venueService->createBookingsBatch($orgId, $_POST, $userId);
+        header('Location: /venues/' . $venueId . '?success=' . urlencode('Venue facility slot(s) booked successfully.'));
         exit;
     } catch (\Throwable $e) {
-        header('Location: /venues/bookings/create?venue_id=' . $venueId . '&facility_id=' . $facilityId . '&error=' . urlencode($e->getMessage()));
+        header('Location: /venues/bookings/create?venue_id=' . $venueId . '&error=' . urlencode($e->getMessage()));
         exit;
     }
 }
