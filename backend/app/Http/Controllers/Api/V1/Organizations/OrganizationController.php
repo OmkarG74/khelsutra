@@ -38,26 +38,40 @@ class OrganizationController extends Controller
     public function store(array $requestData, ?int $performedBy = null): array
     {
         if (empty($requestData['name'])) {
-            return ApiResponse::error('Organization name is required.', ['name' => ['The name field is required.']], 422);
+            return ApiResponse::error('Organisation name is required.', ['name' => ['The name field is required.']], 422);
         }
 
-        $newOrg = $this->orgService->createOrganization($requestData, $performedBy);
-        if (!$newOrg) {
-            return ApiResponse::error('Failed to create organization.', null, 500);
+        // Normalize administrators array
+        $admins = $requestData['admins'] ?? [];
+        if (empty($admins)) {
+            if (!empty($requestData['admin_email']) && !empty($requestData['admin_first_name'])) {
+                $admins[] = [
+                    'first_name' => $requestData['admin_first_name'],
+                    'last_name' => $requestData['admin_last_name'] ?? '',
+                    'email' => $requestData['admin_email'],
+                    'phone' => $requestData['admin_phone'] ?? null,
+                    'password' => $requestData['admin_password'] ?? 'SecretPassword123',
+                ];
+            }
         }
 
-        // If initial sports admin details were provided, set them up
-        if (!empty($requestData['admin_email']) && !empty($requestData['admin_first_name'])) {
-            $this->orgService->createInitialSportsAdmin((int)$newOrg['id'], [
-                'email' => $requestData['admin_email'],
-                'first_name' => $requestData['admin_first_name'],
-                'last_name' => $requestData['admin_last_name'] ?? '',
-                'password' => $requestData['admin_password'] ?? 'SecretPassword123',
-                'phone' => $requestData['admin_phone'] ?? null,
-            ], $performedBy);
-        }
+        try {
+            if (!empty($admins)) {
+                $newOrg = $this->orgService->createOrganizationWithAdmins($requestData, $admins, $performedBy);
+            } else {
+                $newOrg = $this->orgService->createOrganization($requestData, $performedBy);
+            }
 
-        return ApiResponse::success($newOrg, 'Organization created successfully', 201);
+            if (!$newOrg) {
+                return ApiResponse::error('Failed to create organisation.', null, 500);
+            }
+
+            return ApiResponse::success($newOrg, 'Organisation and administrator(s) created successfully', 201);
+        } catch (\InvalidArgumentException $e) {
+            return ApiResponse::error($e->getMessage(), null, 422);
+        } catch (\Throwable $e) {
+            return ApiResponse::error('Failed to create organisation: ' . $e->getMessage(), null, 409);
+        }
     }
 
     public function update(int $id, array $requestData, ?int $performedBy = null): array

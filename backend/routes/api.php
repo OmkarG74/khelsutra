@@ -50,7 +50,16 @@ return function ($uri, $method, $requestData = []) {
     }
 
     // 3. Resolve Current User Context & Tenant Isolation
-    $currentUser = $tokenUser ?? ($requestData['user'] ?? [
+    $sessionUser = null;
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['auth']['user'])) {
+        $sessionUser = $_SESSION['auth']['user'];
+        $sessionUser['role'] = $_SESSION['auth']['role'] ?? ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'];
+        $sessionUser['role_id'] = (int)($sessionUser['role']['id'] ?? 2);
+        $sessionUser['organization'] = $_SESSION['auth']['organization'] ?? ['id' => 1, 'name' => 'Apex Sports Academy'];
+        $sessionUser['permissions'] = $_SESSION['auth']['permissions'] ?? [];
+    }
+
+    $currentUser = $tokenUser ?? ($requestData['user'] ?? ($sessionUser ?? [
         'id' => 5,
         'first_name' => 'Demo',
         'last_name' => 'Admin',
@@ -59,10 +68,10 @@ return function ($uri, $method, $requestData = []) {
         'role' => ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'],
         'role_id' => 2,
         'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
-    ]);
+    ]));
 
     $currentRoleId = (int)($currentUser['role']['id'] ?? ($currentUser['role_id'] ?? 2));
-    $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin');
+    $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin') || (($currentUser['role']['slug'] ?? '') === 'super_admin');
 
     // Tenant Resolution & Cross-Tenant Rejection
     $requestedOrgId = isset($requestData['headers']['x-organization-id'])
