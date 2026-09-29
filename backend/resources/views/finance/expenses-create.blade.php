@@ -20,7 +20,7 @@ if ($db) {
     $dStmt->execute([':org_id' => $orgId]);
     $departments = $dStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-    $eStmt = $db->prepare("SELECT id, event_name FROM events WHERE organization_id = :org_id ORDER BY id DESC LIMIT 50");
+    $eStmt = $db->prepare("SELECT id, name AS event_name FROM events WHERE organization_id = :org_id ORDER BY id DESC LIMIT 50");
     $eStmt->execute([':org_id' => $orgId]);
     $events = $eStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
@@ -202,5 +202,5 @@ function calcTotal() {
 </script>
 
 <?php
-$content = ob_get_clean();
+$slot = ob_get_clean();
 require __DIR__ . '/../layouts/app.blade.php';

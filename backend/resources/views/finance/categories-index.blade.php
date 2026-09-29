@@ -202,5 +202,5 @@ ob_start();
 </div>
 
 <?php
-$content = ob_get_clean();
+$slot = $content = ob_get_clean();
 require __DIR__ . '/../layouts/app.blade.php';

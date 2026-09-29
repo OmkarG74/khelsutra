@@ -67,7 +67,7 @@
                     </div>
                 <?php endif; ?>
 
-                <?= $slot ?? '' ?>
+                <?= $slot ?? ($content ?? '') ?>
             </main>
         </div>
     </div>
