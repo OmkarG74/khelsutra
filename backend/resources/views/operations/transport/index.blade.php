@@ -61,39 +61,66 @@ ob_start();
     </div>
 </div>
 
-<div class="row g-4">
-    <!-- LEFT COLUMN: Fleet -->
-    <div class="col-lg-6">
+<ul class="nav nav-tabs ks-nav-tabs mb-4" id="transportTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="fleet-tab" data-bs-toggle="tab" data-bs-target="#fleet-pane" type="button" role="tab"><i class="bi bi-truck me-2"></i> Fleet Management</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="trips-tab" data-bs-toggle="tab" data-bs-target="#trips-pane" type="button" role="tab"><i class="bi bi-calendar-range me-2"></i> Trip Schedule <span class="badge bg-secondary ms-1" id="trip-count">0</span></button>
+    </li>
+</ul>
+
+<div class="tab-content" id="transportTabsContent">
+    <!-- Fleet Pane -->
+    <div class="tab-pane fade show active" id="fleet-pane" role="tabpanel" tabindex="0">
         <div class="ks-content-card">
-            <div class="ks-card-header">
-                <div class="ks-header-left">
-                    <i class="bi bi-truck" style="color:var(--ks-primary);font-size:18px;"></i>
-                    <h3 class="ks-header-title">Fleet Management</h3>
-                </div>
-                <button class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#addVehicleModal">
-                    <i class="bi bi-plus-lg"></i> Add Vehicle
-                </button>
+            <div class="ks-card-header d-flex justify-content-between align-items-center" style="border-bottom: 1px solid var(--ks-border);">
+                <h3 class="ks-header-title mb-0">Fleet Vehicles</h3>
+                <button class="ks-btn ks-btn-primary ks-btn-sm" data-bs-toggle="modal" data-bs-target="#addVehicleModal"><i class="bi bi-plus-lg me-1"></i> Add Vehicle</button>
             </div>
-            <div id="fleetContainer" class="d-flex flex-column gap-3 p-3">
-                <!-- Vehicles will be populated here -->
-                <div class="ks-empty-state">Loading fleet...</div>
+            <div>
+                <table class="table table-hover align-middle mb-0 ks-table" style="font-size: 13px;">
+                    <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                        <tr>
+                            <th class="py-3 px-3">Vehicle</th>
+                            <th class="py-3 px-3">Type</th>
+                            <th class="py-3 px-3">Capacity</th>
+                            <th class="py-3 px-3">Alerts</th>
+                            <th class="py-3 px-3">Status</th>
+                            <th class="py-3 px-3 text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fleetContainer">
+                        <!-- Fleet rows injected here -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <!-- RIGHT COLUMN: Trips -->
-    <div class="col-lg-6">
+    <!-- Trips Pane -->
+    <div class="tab-pane fade" id="trips-pane" role="tabpanel" tabindex="0">
         <div class="ks-content-card">
-            <div class="ks-card-header">
-                <div class="ks-header-left">
-                    <i class="bi bi-map" style="color:var(--ks-primary);font-size:18px;"></i>
-                    <h3 class="ks-header-title mb-0">Trip Schedule</h3>
-                    <span class="ks-badge ks-badge-scheduled ms-2" id="trip-count">0</span>
-                </div>
+            <div class="ks-card-header d-flex justify-content-between align-items-center" style="border-bottom: 1px solid var(--ks-border);">
+                <h3 class="ks-header-title mb-0">Scheduled Trips</h3>
+                <button class="ks-btn ks-btn-primary ks-btn-sm" data-bs-toggle="modal" data-bs-target="#planTripModal"><i class="bi bi-plus-lg me-1"></i> Plan Trip</button>
             </div>
-            <div id="tripsContainer" class="d-flex flex-column gap-3 p-3">
-                <!-- Trips will be populated here -->
-                <div class="ks-empty-state">Loading trips...</div>
+            <div>
+                <table class="table table-hover align-middle mb-0 ks-table" style="font-size: 13px;">
+                    <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                        <tr>
+                            <th class="py-3 px-3">Reference</th>
+                            <th class="py-3 px-3">Route</th>
+                            <th class="py-3 px-3">Schedule</th>
+                            <th class="py-3 px-3">Purpose</th>
+                            <th class="py-3 px-3">Status</th>
+                            <th class="py-3 px-3 text-end">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tripsContainer">
+                        <!-- Trips rows injected here -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -349,7 +376,7 @@ async function loadVehicles() {
         select.innerHTML = '<option value="">Select a vehicle...</option>';
 
         if(globalVehicles.length === 0) {
-            container.innerHTML = '<div class="ks-empty-state">No vehicles in fleet.</div>';
+            container.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No vehicles in fleet.</td></tr>';
         } else {
             container.innerHTML = '';
             globalVehicles.forEach(v => {
@@ -374,26 +401,36 @@ async function loadVehicles() {
                 }
 
                 const cardHtml = `
-                    <div class="ks-vehicle-card d-flex flex-column gap-2">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <h5 class="mb-1 fw-bold"><i class="bi bi-truck me-2 text-primary"></i>${ksEscape(v.vehicle_number)}</h5>
-                                <div class="text-muted small">${ksEscape(v.vehicle_type)} • ${ksEscape(v.make || '')} ${ksEscape(v.model || '')} ${v.year || ''}</div>
-                            </div>
-                            <div>
-                                <span class="ks-badge ${getBadgeClassForVehicleStatus(v.status)}">${ksEscape(v.status.toUpperCase())}</span>
-                            </div>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
+                    <tr>
+                        <td class="py-3 px-3">
+                            <div class="fw-bold"><i class="bi bi-truck me-2 text-primary"></i>${ksEscape(v.vehicle_number)}</div>
+                        </td>
+                        <td class="py-3 px-3">
+                            <div>${ksEscape(v.vehicle_type)}</div>
+                            <div class="text-muted small">${ksEscape(v.make || '')} ${ksEscape(v.model || '')} ${v.year || ''}</div>
+                        </td>
+                        <td class="py-3 px-3">
                             <span class="ks-badge bg-light text-dark border"><i class="bi bi-people"></i> ${v.capacity || 0}</span>
-                            ${expiryBadges.join('')}
-                        </div>
-                        <div class="d-flex justify-content-end gap-2 mt-2">
-                            
-                            <button class="ks-btn ks-btn-primary ks-btn-sm" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus me-1"></i> Plan Trip</button>
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash me-1"></i> Delete</button>
-                        </div>
-                    </div>
+                        </td>
+                        <td class="py-3 px-3">
+                            ${expiryBadges.join('<br>')}
+                        </td>
+                        <td class="py-3 px-3">
+                            <span class="ks-badge ${getBadgeClassForVehicleStatus(v.status)}">${ksEscape(v.status.toUpperCase())}</span>
+                        </td>
+                        <td class="py-3 px-3 text-end">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" style="border:none;background:transparent;">
+                                    <i class="bi bi-three-dots-vertical text-dark"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px;">
+                                    <li><button class="dropdown-item py-2 fw-medium text-secondary" onclick="openPlanTrip(${v.id})"><i class="bi bi-calendar-plus me-2"></i> Plan Trip</button></li>
+                                    <li><hr class="dropdown-divider my-1"></li>
+                                    <li><button class="dropdown-item py-2 fw-medium text-danger" onclick="deleteVehicle(${v.id})"><i class="bi bi-trash me-2"></i> Delete</button></li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
                 `;
                 container.insertAdjacentHTML('beforeend', cardHtml);
             });
@@ -428,26 +465,35 @@ async function loadTrips() {
                 const vName = v ? v.vehicle_number : 'Unknown Vehicle';
 
                 const cardHtml = `
-                    <div class="ks-trip-card d-flex flex-column gap-2">
-                        <div class="d-flex justify-content-between">
-                            <span class="badge bg-light text-dark border">REF: ${ksEscape(t.trip_reference || t.id)}</span>
-                            <span class="text-muted small"><i class="bi bi-calendar"></i> ${ksEscape(t.trip_date)}</span>
-                        </div>
-                        <div class="fw-bold my-1">
-                            ${ksEscape(t.origin)} <i class="bi bi-arrow-right text-muted mx-1"></i> ${ksEscape(t.destination)}
-                        </div>
-                        <div class="text-muted small mb-1">
-                            <i class="bi bi-clock"></i> ${ksEscape(t.departure_time || 'TBD')} - ${ksEscape(t.return_time || 'TBD')}
-                            <span class="ms-3"><i class="bi bi-info-circle"></i> ${ksEscape(t.purpose)}</span>
-                        </div>
-                        <div class="d-flex justify-content-between align-items-center mt-2">
-                            <div class="d-flex gap-2 align-items-center">
-                                <span class="ks-badge ${getBadgeClassForTripStatus(t.status)}">${ksEscape(t.status.toUpperCase())}</span>
-                                <span class="ks-badge bg-light text-dark border"><i class="bi bi-people"></i> ${passCount}</span>
+                    <tr>
+                        <td class="py-3 px-3">
+                            <div class="fw-bold">${ksEscape(t.trip_reference)}</div>
+                        </td>
+                        <td class="py-3 px-3">
+                            <div class="fw-semibold">${ksEscape(t.origin)} <i class="bi bi-arrow-right text-muted mx-1"></i> ${ksEscape(t.destination)}</div>
+                        </td>
+                        <td class="py-3 px-3">
+                            <div><i class="bi bi-calendar3 text-muted me-1"></i> ${ksEscape(t.trip_date)}</div>
+                            <div class="small text-muted"><i class="bi bi-clock me-1"></i> ${ksEscape(t.departure_time || '--:--')} - ${ksEscape(t.return_time || '--:--')}</div>
+                        </td>
+                        <td class="py-3 px-3">
+                            ${ksEscape(t.purpose)}
+                        </td>
+                        <td class="py-3 px-3">
+                            <span class="ks-badge ${getBadgeClassForTripStatus(t.status)} mb-1">${ksEscape(t.status.toUpperCase())}</span><br>
+                            <span class="ks-badge bg-light text-dark border"><i class="bi bi-people"></i> ${t.passenger_count || 0}</span>
+                        </td>
+                        <td class="py-3 px-3 text-end">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" style="border:none;background:transparent;">
+                                    <i class="bi bi-three-dots-vertical text-dark"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px;">
+                                    <li><button class="dropdown-item py-2 fw-medium text-secondary" onclick="openTripDrawer(${t.id})"><i class="bi bi-eye me-2"></i> Details</button></li>
+                                </ul>
                             </div>
-                            <button class="ks-btn ks-btn-secondary ks-btn-sm" onclick="openTripDrawer(${t.id})"><i class="bi bi-eye"></i> Details</button>
-                        </div>
-                    </div>
+                        </td>
+                    </tr>
                 `;
                 container.insertAdjacentHTML('beforeend', cardHtml);
             });
