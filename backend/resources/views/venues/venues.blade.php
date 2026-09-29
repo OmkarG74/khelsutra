@@ -36,18 +36,12 @@ ob_start();
                 </ul>
             </div>
 
-            <!-- Venues Dropdown -->
-            <div class="dropdown">
-                <button class="ks-btn ks-btn-primary dropdown-toggle d-inline-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
-                    <i class="bi bi-geo-alt-fill"></i> Venues
-                </button>
-                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: var(--ks-radius-md); font-size: 13px;">
-                    <li><a class="dropdown-item py-2" href="/venues"><i class="bi bi-eye me-2 text-primary"></i> View Venues</a></li>
-                    <?php if (in_array($_SESSION['auth']['role']['slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
-                    <li><a class="dropdown-item py-2" href="/venues/create"><i class="bi bi-plus-lg me-2 text-secondary"></i> Add Venue</a></li>
-                    <?php endif; ?>
-                </ul>
-            </div>
+            <!-- Add Venue Button -->
+            <?php if (in_array($_SESSION['auth']['role']['slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+            <a href="/venues/create" class="ks-btn ks-btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px; text-decoration: none;">
+                <i class="bi bi-plus-lg"></i> Add Venue
+            </a>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -85,7 +79,7 @@ ob_start();
 
     <!-- Venues Table -->
     <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-        <div class="table-responsive" style="overflow: visible;">
+        <div>
             <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
                 <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
                     <tr>
