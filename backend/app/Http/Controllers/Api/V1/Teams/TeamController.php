@@ -16,8 +16,58 @@ class TeamController extends Controller
         $this->teamService = $teamService ?? new TeamService();
     }
 
-    public function index(int $organizationId, int $page = 1, int $limit = 15): array
+    public function index(int $organizationId, int $page = 1, int $limit = 15, array $requestData = []): array
     {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthlete = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+        $isCoach = ($roleSlug === 'coach') || !empty($currentUser['coach_id']);
+        $pdo = $this->teamService->getPdo();
+
+        if ($isAthlete && $pdo) {
+            $athleteId = (int)($currentUser['athlete_id'] ?? 0);
+            $stmt = $pdo->prepare("
+                SELECT t.*, s.name as sport_name 
+                FROM teams t 
+                JOIN team_members tm ON t.id = tm.team_id AND tm.is_current = 1
+                LEFT JOIN sports s ON t.sport_id = s.id
+                WHERE tm.athlete_id = :aid AND t.organization_id = :oid AND t.deleted_at IS NULL
+                ORDER BY t.name ASC
+            ");
+            $stmt->execute([':aid' => $athleteId, ':oid' => $organizationId]);
+            $teams = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+            return ApiResponse::success(['data' => $teams, 'total' => count($teams)], 'Teams retrieved successfully', 200);
+        }
+
+        if ($isCoach && $pdo) {
+            $coachId = (int)($currentUser['coach_id'] ?? 0);
+            if (!$coachId && !empty($currentUser['id'])) {
+                $cStmt = $pdo->prepare("
+                    SELECT cp.id 
+                    FROM coach_profiles cp 
+                    JOIN employees e ON cp.employee_id = e.id 
+                    WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL 
+                    LIMIT 1
+                ");
+                $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $organizationId]);
+                $coachId = (int)($cStmt->fetchColumn() ?: 0);
+            }
+
+            if ($coachId) {
+                $stmt = $pdo->prepare("
+                    SELECT t.*, s.name as sport_name 
+                    FROM teams t 
+                    JOIN team_coaches tc ON t.id = tc.team_id 
+                    LEFT JOIN sports s ON t.sport_id = s.id
+                    WHERE tc.coach_id = :cid AND t.organization_id = :oid AND t.deleted_at IS NULL
+                    ORDER BY t.name ASC
+                ");
+                $stmt->execute([':cid' => $coachId, ':oid' => $organizationId]);
+                $teams = $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
+                return ApiResponse::success(['data' => $teams, 'total' => count($teams)], 'Teams retrieved successfully', 200);
+            }
+        }
+
         $teams = $this->teamService->listTeams($organizationId, $page, $limit);
         return ApiResponse::success($teams, 'Teams retrieved successfully', 200);
     }

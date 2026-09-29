@@ -461,6 +461,9 @@ class InventoryService extends BaseService
             $type = 'adjustment';
             $data['adjustment_action'] = 'decrease';
         }
+        if ($type === 'receive') {
+            $type = 'purchase';
+        }
         $validTypes = ['opening', 'purchase', 'issue', 'return', 'adjustment', 'damage', 'loss', 'disposal'];
         if (!in_array($type, $validTypes, true)) {
             throw new InvalidArgumentException("Invalid transaction type '{$type}'. Allowed types: " . implode(', ', $validTypes));

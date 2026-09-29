@@ -17,7 +17,44 @@ $currentUser = $_SESSION['auth']['user'] ?? [
     'last_name' => 'Sharma'
 ];
 $orgId = current_organization_id();
-$userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+
+// Athlete POST authorization check
+if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
+    $allowedAthletePostPatterns = [
+        '#^/leave/create#',
+        '#^/logout#'
+    ];
+    $allowed = false;
+    foreach ($allowedAthletePostPatterns as $p) {
+        if (preg_match($p, $uri)) { $allowed = true; break; }
+    }
+    if (!$allowed) {
+        http_response_code(403);
+        echo "403 Forbidden: Athletes cannot perform this administrative or operational action.";
+        exit;
+    }
+}
+
+// Coach POST authorization check
+if ($currentRoleSlug === 'coach' || $currentRoleId === 4) {
+    $blockedCoachPostPatterns = [
+        '#^/athletes/create#', '#^/athletes/\d+/delete#', '#^/athletes/\d+/status#',
+        '#^/coaches/create#', '#^/coaches/\d+/edit#', '#^/coaches/\d+/delete#',
+        '#^/teams/create#', '#^/teams/\d+/delete#',
+        '#^/venues/create#', '#^/venues/\d+/edit#',
+        '#^/inventory#', '#^/equipment#', '#^/vendors#', '#^/purchases#',
+        '#^/payroll#', '#^/hr#', '#^/users#', '#^/roles#', '#^/permissions#'
+    ];
+    foreach ($blockedCoachPostPatterns as $p) {
+        if (preg_match($p, $uri)) {
+            http_response_code(403);
+            echo "403 Forbidden: Coaches are not authorized to perform administrative mutations.";
+            exit;
+        }
+    }
+}
 
 // ==========================================
 // 1. ATHLETE ACTIONS

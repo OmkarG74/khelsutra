@@ -16,8 +16,47 @@ class AthleteController extends Controller
         $this->athleteService = $athleteService ?? new AthleteService();
     }
 
-    public function index(int $organizationId, int $page = 1, int $limit = 15): array
+    public function index(int $organizationId, int $page = 1, int $limit = 15, array $requestData = []): array
     {
+        $currentUser = $requestData['user'] ?? null;
+        $roleSlug = $currentUser['role']['slug'] ?? '';
+        $isAthlete = ($roleSlug === 'athlete') || !empty($currentUser['athlete_id']);
+        $isCoach = ($roleSlug === 'coach') || !empty($currentUser['coach_id']);
+
+        if ($isAthlete) {
+            $athleteId = (int)($currentUser['athlete_id'] ?? 0);
+            if ($athleteId) {
+                $athlete = $this->athleteService->getAthlete($organizationId, $athleteId);
+                return ApiResponse::success([
+                    'data' => $athlete ? [$athlete] : [],
+                    'total' => $athlete ? 1 : 0,
+                    'current_page' => 1,
+                    'last_page' => 1,
+                ], 'Athletes retrieved successfully', 200);
+            }
+        }
+
+        if ($isCoach) {
+            $coachId = (int)($currentUser['coach_id'] ?? 0);
+            $pdo = $this->athleteService->getPdo();
+            if (!$coachId && !empty($currentUser['id']) && $pdo) {
+                $cStmt = $pdo->prepare("
+                    SELECT cp.id 
+                    FROM coach_profiles cp 
+                    JOIN employees e ON cp.employee_id = e.id 
+                    WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL 
+                    LIMIT 1
+                ");
+                $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $organizationId]);
+                $coachId = (int)($cStmt->fetchColumn() ?: 0);
+            }
+
+            if ($coachId) {
+                $coachController = new \App\Http\Controllers\Api\V1\Coaches\CoachController();
+                return $coachController->athletes($organizationId, $coachId, $requestData);
+            }
+        }
+
         $athletes = $this->athleteService->listAthletes($organizationId, $page, $limit);
         return ApiResponse::success($athletes, 'Athletes retrieved successfully', 200);
     }
