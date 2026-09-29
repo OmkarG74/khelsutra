@@ -70,7 +70,10 @@ ob_start();
                         <label class="ks-form-label">Role <span class="text-danger">*</span></label>
                         <select name="role_id" class="ks-form-select" required>
                             <?php foreach ($roles as $r): ?>
-                                <option value="<?= $r['id'] ?>"><?= htmlspecialchars($r['name']) ?> — <?= htmlspecialchars($r['description'] ?? '') ?></option>
+                                <?php 
+                                    $rName = ((int)$r['id'] === 2) ? 'Organisation Admin' : $r['name'];
+                                ?>
+                                <option value="<?= $r['id'] ?>"><?= htmlspecialchars($rName) ?> — <?= htmlspecialchars($r['description'] ?? '') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>

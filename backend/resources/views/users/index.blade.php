@@ -3,8 +3,15 @@ $activePage = 'users';
 $title = 'User Management — KhelSutra Platform';
 
 $userService = new \App\Services\User\UserManagementService();
-$orgId = $_SESSION['current_organization_id'] ?? 1;
-$users = $userService->listUsers($orgId);
+
+// Determine Super Admin vs Org-scoped view
+$authRole = $_SESSION['auth']['role'] ?? [];
+$isSuperAdmin = ((int)($authRole['id'] ?? 0) === 1) 
+             || (($authRole['slug'] ?? '') === 'super_admin') 
+             || (($authRole['name'] ?? '') === 'Super Admin');
+
+$orgId = $_SESSION['current_organization_id'] ?? ($_SESSION['auth']['organization']['id'] ?? 1);
+$users = $isSuperAdmin ? $userService->listUsers(null) : $userService->listUsers($orgId);
 
 ob_start();
 ?>
@@ -13,7 +20,9 @@ ob_start();
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">User Management</h1>
-        <p class="ks-page-subtitle">Platform accounts, organisation membership, RBAC roles, and security access controls.</p>
+        <p class="ks-page-subtitle">
+            <?= $isSuperAdmin ? 'Global user directory across all organisations, including Organisation Admins and staff.' : 'Platform accounts, organisation membership, RBAC roles, and security access controls.' ?>
+        </p>
     </div>
     <div class="ks-header-actions">
         <a href="/users/create" class="ks-btn ks-btn-primary">
@@ -37,7 +46,7 @@ ob_start();
                 </div>
             </div>
             <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive">Active in Organisation</span>
+                <span class="ks-trend-text ks-trend-positive"><?= $isSuperAdmin ? 'Platform Wide' : 'In Organisation' ?></span>
             </div>
         </div>
     </div>
@@ -64,12 +73,14 @@ ob_start();
                     <i class="bi bi-person-badge-fill fs-4"></i>
                 </div>
                 <div>
-                    <div class="ks-kpi-label">Assigned Roles</div>
-                    <div class="ks-kpi-value">7 Standard</div>
+                    <div class="ks-kpi-label">Organisation Admins</div>
+                    <div class="ks-kpi-value">
+                        <?= count(array_filter($users, fn($u) => ((int)($u['role_id'] ?? 0) === 2 || ($u['role_name'] ?? '') === 'Sports Administrator'))) ?>
+                    </div>
                 </div>
             </div>
             <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">RBAC Matrix</span>
+                <span class="ks-trend-text">Academy Managers</span>
             </div>
         </div>
     </div>
@@ -80,12 +91,12 @@ ob_start();
                     <i class="bi bi-lock-fill fs-4"></i>
                 </div>
                 <div>
-                    <div class="ks-kpi-label">Tenant Scoped</div>
-                    <div class="ks-kpi-value">Org #<?= htmlspecialchars((string)$orgId) ?></div>
+                    <div class="ks-kpi-label">Scope</div>
+                    <div class="ks-kpi-value"><?= $isSuperAdmin ? 'Global' : 'Org #' . htmlspecialchars((string)$orgId) ?></div>
                 </div>
             </div>
             <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive">Isolated Environment</span>
+                <span class="ks-trend-text ks-trend-positive"><?= $isSuperAdmin ? 'Super Admin Access' : 'Isolated Environment' ?></span>
             </div>
         </div>
     </div>
@@ -99,20 +110,20 @@ ob_start();
             <span class="ks-card-title mb-0">Registered Users</span>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <div class="position-relative" style="width: 260px;">
+            <div class="position-relative" style="width: 280px;">
                 <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
-                <input type="text" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Search user by name, email...">
+                <input type="text" id="userSearchInput" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Search user by name, email, org...">
             </div>
         </div>
     </div>
 
     <div class="table-responsive">
-        <table class="ks-table ks-table-users">
+        <table class="ks-table ks-table-users" id="usersTable">
             <thead>
                 <tr>
                     <th>User</th>
                     <th>Email / Username</th>
-                    <th>Phone</th>
+                    <th>Organisation</th>
                     <th>Role</th>
                     <th>Status</th>
                     <th>Last Login</th>
@@ -122,11 +133,15 @@ ob_start();
             <tbody>
                 <?php if (empty($users)): ?>
                     <tr>
-                        <td colspan="7" class="text-center py-4 text-muted">No users found for this organisation.</td>
+                        <td colspan="7" class="text-center py-4 text-muted">No users found.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($users as $u): ?>
-                        <tr>
+                        <?php 
+                        $isOrgAdmin = ((int)($u['role_id'] ?? 0) === 2 || ($u['role_name'] ?? '') === 'Sports Administrator');
+                        $displayRole = $isOrgAdmin ? 'Organisation Admin' : ($u['role_name'] ?? 'Unassigned');
+                        ?>
+                        <tr class="user-row" data-search="<?= strtolower(htmlspecialchars(($u['first_name'] ?? '') . ' ' . ($u['last_name'] ?? '') . ' ' . ($u['email'] ?? '') . ' ' . ($u['organization_name'] ?? '') . ' ' . $displayRole)) ?>">
                             <td>
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="ks-avatar" style="width: 34px; height: 34px; border-radius: 50%; background: #0E1E3B; color: #FFF; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px;">
@@ -143,10 +158,16 @@ ob_start();
                                 <div class="small text-muted">@<?= htmlspecialchars($u['username'] ?? '') ?></div>
                             </td>
                             <td>
-                                <span class="small text-navy"><?= htmlspecialchars($u['phone'] ?? '—') ?></span>
+                                <span class="small fw-semibold text-navy">
+                                    <?= htmlspecialchars($u['organization_name'] ?? 'Platform Global') ?>
+                                </span>
                             </td>
                             <td>
-                                <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($u['role_name'] ?? 'Unassigned') ?></span>
+                                <?php if ($isOrgAdmin): ?>
+                                    <span class="ks-badge ks-badge-blue" title="Sports Administrator role mapped to Organisation Admin">Organisation Admin</span>
+                                <?php else: ?>
+                                    <span class="ks-badge ks-badge-scheduled"><?= htmlspecialchars($displayRole) ?></span>
+                                <?php endif; ?>
                             </td>
                             <td>
                                 <?php if (($u['status'] ?? '') === 'active'): ?>
@@ -175,6 +196,18 @@ ob_start();
         </table>
     </div>
 </div>
+
+<script>
+// Real-time table filter
+document.getElementById('userSearchInput').addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('.user-row');
+    rows.forEach(r => {
+        const text = r.getAttribute('data-search') || '';
+        r.style.display = (!q || text.includes(q)) ? '' : 'none';
+    });
+});
+</script>
 
 <?php
 $slot = ob_get_clean();

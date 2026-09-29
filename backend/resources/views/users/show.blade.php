@@ -52,7 +52,10 @@ ob_start();
                 <p class="text-muted small mb-3">@<?= htmlspecialchars($user['username']) ?></p>
 
                 <div class="d-flex justify-content-center gap-2 mb-4">
-                    <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($user['role_name'] ?? 'No Role') ?></span>
+                    <?php 
+                        $showRole = ((int)($user['role_id'] ?? 0) === 2 || ($user['role_name'] ?? '') === 'Sports Administrator') ? 'Organisation Admin' : ($user['role_name'] ?? 'No Role');
+                    ?>
+                    <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($showRole) ?></span>
                     <?php if ($user['status'] === 'active'): ?>
                         <span class="ks-badge ks-badge-confirmed">Active</span>
                     <?php else: ?>

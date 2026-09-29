@@ -69,8 +69,11 @@ ob_start();
                             <label class="ks-form-label">Assigned Role</label>
                             <select name="role_id" class="ks-form-select">
                                 <?php foreach ($roles as $r): ?>
+                                    <?php 
+                                        $rName = ((int)$r['id'] === 2) ? 'Organisation Admin' : $r['name'];
+                                    ?>
                                     <option value="<?= $r['id'] ?>" <?= ($user['role_name'] === $r['name']) ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($r['name']) ?>
+                                        <?= htmlspecialchars($rName) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
