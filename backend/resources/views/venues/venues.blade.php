@@ -150,18 +150,20 @@ ob_start();
                                     </form>
                                 </td>
                                 <td class="py-3 px-3 text-end">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="/venues/<?= (int)$venue['id'] ?>" class="ks-btn ks-btn-secondary" style="border-radius: 6px 0 0 6px;" title="View Facilities & Bookings">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <a href="/venues/<?= (int)$venue['id'] ?>/edit" class="ks-btn ks-btn-secondary" style="border-radius: 0;" title="Edit Venue">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form action="/venues/<?= (int)$venue['id'] ?>/delete" method="POST" style="display: contents;" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this venue? This action marks the venue as deleted.');">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" style="border-radius: 0 6px 6px 0; border-left: 0;" title="Delete Venue">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </form>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" title="Actions" style="border: none; background: transparent;">
+                                            <i class="bi bi-three-dots-vertical text-dark"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px; min-width:160px; border-radius: var(--ks-radius-md);">
+                                            <li><a class="dropdown-item py-2 fw-medium text-secondary" href="/venues/<?= (int)$venue['id'] ?>"><i class="bi bi-eye me-2"></i>View Facilities</a></li>
+                                            <li><a class="dropdown-item py-2 fw-medium text-secondary" href="/venues/<?= (int)$venue['id'] ?>/edit"><i class="bi bi-pencil me-2"></i>Edit Venue</a></li>
+                                            <li><hr class="dropdown-divider my-1"></li>
+                                            <li>
+                                                <form action="/venues/<?= (int)$venue['id'] ?>/delete" method="POST" class="m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this venue? This action marks the venue as deleted.');">
+                                                    <button type="submit" class="dropdown-item py-2 fw-medium text-danger" style="background: transparent; border: none; width: 100%; text-align: left;"><i class="bi bi-trash me-2"></i>Delete</button>
+                                                </form>
+                                            </li>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>
