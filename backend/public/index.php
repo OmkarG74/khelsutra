@@ -239,6 +239,7 @@ if ($viewTarget && is_callable($viewTarget)) {
     if (!empty($result['view'])) {
         $viewPath = __DIR__ . '/../resources/views/' . $result['view'] . '.blade.php';
         if (file_exists($viewPath)) {
+            $data = $result['data'] ?? [];
             extract($result['data'] ?? []);
             include $viewPath;
             exit;
