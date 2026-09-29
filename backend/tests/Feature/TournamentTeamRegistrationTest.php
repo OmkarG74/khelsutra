@@ -591,6 +591,178 @@ class TournamentTeamRegistrationTest
     }
 
     /**
+     * Helper to create a tournament with a specific sport_id.
+     */
+    private function createTestTournamentWithSport(int $orgId, int $sportId, string $status = 'ongoing'): int
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO tournaments (
+                organization_id, tournament_reference, name, sport_id, 
+                start_date, end_date, status, created_by, created_at, updated_at
+            ) VALUES (
+                :org_id, :ref, :name, :sport_id, 
+                CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), :status, :user_id, NOW(), NOW()
+            )
+        ");
+        $ref = 'TRN-' . substr(uniqid(), -6);
+        $stmt->execute([
+            ':org_id' => $orgId,
+            ':ref' => $ref,
+            ':name' => 'Sport Filter Test ' . uniqid(),
+            ':sport_id' => $sportId,
+            ':status' => $status,
+            ':user_id' => $this->userId
+        ]);
+        $tournId = (int)$this->pdo->lastInsertId();
+        $this->createdTournamentIds[] = $tournId;
+        return $tournId;
+    }
+
+    /**
+     * Helper to create a team with a specific sport_id.
+     */
+    private function createTestTeamWithSport(int $orgId, int $sportId, string $status = 'active'): int
+    {
+        $stmt = $this->pdo->prepare("
+            INSERT INTO teams (organization_id, sport_id, name, team_code, status, created_at, updated_at)
+            VALUES (:org_id, :sport_id, :name, :code, :status, NOW(), NOW())
+        ");
+        $code = 'TM-' . substr(uniqid(), -6);
+        $stmt->execute([
+            ':org_id' => $orgId,
+            ':sport_id' => $sportId,
+            ':name' => 'Sport Test Squad ' . uniqid(),
+            ':code' => $code,
+            ':status' => $status
+        ]);
+        $teamId = (int)$this->pdo->lastInsertId();
+        $this->createdTeamIds[] = $teamId;
+        return $teamId;
+    }
+
+    /**
+     * Resolve sport IDs from the centralized config.
+     */
+    private function resolveSportIds(): array
+    {
+        $sportService = new \App\Services\Sport\SportService();
+        return [
+            'cricket' => $sportService->resolveSportId('cricket'),
+            'football' => $sportService->resolveSportId('football'),
+            'basketball' => $sportService->resolveSportId('basketball'),
+        ];
+    }
+
+    /**
+     * TEST: Football tournament + Football team = allowed
+     */
+    public function testFootballTournamentAcceptsFootballTeam(): bool
+    {
+        $sports = $this->resolveSportIds();
+        $tournId = $this->createTestTournamentWithSport($this->orgId, $sports['football']);
+        $teamId = $this->createTestTeamWithSport($this->orgId, $sports['football']);
+
+        $this->executeWebAction("/tournaments/{$tournId}/teams/add", ['team_id' => $teamId]);
+
+        $check = $this->pdo->prepare("SELECT COUNT(*) FROM tournament_teams WHERE tournament_id = ? AND team_id = ?");
+        $check->execute([$tournId, $teamId]);
+        return (int)$check->fetchColumn() === 1;
+    }
+
+    /**
+     * TEST: Football tournament + Cricket team = rejected
+     */
+    public function testFootballTournamentRejectsCricketTeam(): bool
+    {
+        $sports = $this->resolveSportIds();
+        $tournId = $this->createTestTournamentWithSport($this->orgId, $sports['football']);
+        $teamId = $this->createTestTeamWithSport($this->orgId, $sports['cricket']);
+
+        $this->executeWebAction("/tournaments/{$tournId}/teams/add", ['team_id' => $teamId]);
+
+        $check = $this->pdo->prepare("SELECT COUNT(*) FROM tournament_teams WHERE tournament_id = ? AND team_id = ?");
+        $check->execute([$tournId, $teamId]);
+        return (int)$check->fetchColumn() === 0;
+    }
+
+    /**
+     * TEST: Cricket tournament + Cricket team = allowed
+     */
+    public function testCricketTournamentAcceptsCricketTeam(): bool
+    {
+        $sports = $this->resolveSportIds();
+        $tournId = $this->createTestTournamentWithSport($this->orgId, $sports['cricket']);
+        $teamId = $this->createTestTeamWithSport($this->orgId, $sports['cricket']);
+
+        $this->executeWebAction("/tournaments/{$tournId}/teams/add", ['team_id' => $teamId]);
+
+        $check = $this->pdo->prepare("SELECT COUNT(*) FROM tournament_teams WHERE tournament_id = ? AND team_id = ?");
+        $check->execute([$tournId, $teamId]);
+        return (int)$check->fetchColumn() === 1;
+    }
+
+    /**
+     * TEST: Cricket tournament + Football team = rejected
+     */
+    public function testCricketTournamentRejectsFootballTeam(): bool
+    {
+        $sports = $this->resolveSportIds();
+        $tournId = $this->createTestTournamentWithSport($this->orgId, $sports['cricket']);
+        $teamId = $this->createTestTeamWithSport($this->orgId, $sports['football']);
+
+        $this->executeWebAction("/tournaments/{$tournId}/teams/add", ['team_id' => $teamId]);
+
+        $check = $this->pdo->prepare("SELECT COUNT(*) FROM tournament_teams WHERE tournament_id = ? AND team_id = ?");
+        $check->execute([$tournId, $teamId]);
+        return (int)$check->fetchColumn() === 0;
+    }
+
+    /**
+     * TEST: Basketball tournament + Basketball team = allowed
+     */
+    public function testBasketballTournamentAcceptsBasketballTeam(): bool
+    {
+        $sports = $this->resolveSportIds();
+        $tournId = $this->createTestTournamentWithSport($this->orgId, $sports['basketball']);
+        $teamId = $this->createTestTeamWithSport($this->orgId, $sports['basketball']);
+
+        $this->executeWebAction("/tournaments/{$tournId}/teams/add", ['team_id' => $teamId]);
+
+        $check = $this->pdo->prepare("SELECT COUNT(*) FROM tournament_teams WHERE tournament_id = ? AND team_id = ?");
+        $check->execute([$tournId, $teamId]);
+        return (int)$check->fetchColumn() === 1;
+    }
+
+    /**
+     * TEST: Sport filter via createTournament with mismatched team_ids
+     */
+    public function testCreateTournamentRejectsMismatchedTeam(): bool
+    {
+        $sports = $this->resolveSportIds();
+        $footballTeam = $this->createTestTeamWithSport($this->orgId, $sports['football']);
+        $cricketTeam = $this->createTestTeamWithSport($this->orgId, $sports['cricket']);
+
+        // Create football tournament with cricket team via web action (POST to /tournaments/create)
+        $exit = $this->executeWebAction("/tournaments/create", [
+            'name' => 'Sport Filter Tournament ' . uniqid(),
+            'sport_id' => $sports['football'],
+            'tournament_level_id' => 1,
+            'tournament_format_id' => 1,
+            'start_date' => date('Y-m-d'),
+            'end_date' => date('Y-m-d', strtotime('+7 days')),
+            'status' => 'draft',
+            'team_ids' => [$cricketTeam],
+        ]);
+
+        // Cricket team must NOT appear in any tournament_teams row
+        $check = $this->pdo->prepare("SELECT COUNT(*) FROM tournament_teams WHERE team_id = ?");
+        $check->execute([$cricketTeam]);
+        $cricketEnrolled = (int)$check->fetchColumn();
+
+        return $cricketEnrolled === 0;
+    }
+
+    /**
      * Run all tests in this suite.
      */
     public function runAll(): bool
@@ -612,6 +784,12 @@ class TournamentTeamRegistrationTest
             'testSuccessfulWithdrawalPreservesRow' => $this->testSuccessfulWithdrawalPreservesRow(),
             'testScheduledFixtureInThisTournamentBlocksWithdrawal' => $this->testScheduledFixtureInThisTournamentBlocksWithdrawal(),
             'testScheduledFixtureInAnotherTournamentDoesNotBlockWithdrawal' => $this->testScheduledFixtureInAnotherTournamentDoesNotBlockWithdrawal(),
+            'testFootballTournamentAcceptsFootballTeam' => $this->testFootballTournamentAcceptsFootballTeam(),
+            'testFootballTournamentRejectsCricketTeam' => $this->testFootballTournamentRejectsCricketTeam(),
+            'testCricketTournamentAcceptsCricketTeam' => $this->testCricketTournamentAcceptsCricketTeam(),
+            'testCricketTournamentRejectsFootballTeam' => $this->testCricketTournamentRejectsFootballTeam(),
+            'testBasketballTournamentAcceptsBasketballTeam' => $this->testBasketballTournamentAcceptsBasketballTeam(),
+            'testCreateTournamentRejectsMismatchedTeam' => $this->testCreateTournamentRejectsMismatchedTeam(),
         ];
 
         $allPassed = true;

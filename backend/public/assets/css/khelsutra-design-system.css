@@ -1057,7 +1057,7 @@ fieldset:disabled .ks-btn {
     border: 1px solid var(--ks-border) !important;
     border-radius: var(--ks-radius-card) !important;
     box-shadow: var(--ks-shadow-card) !important;
-    overflow: hidden;
+    overflow: visible !important;
     margin-bottom: 24px !important;
     width: 100% !important;
     box-sizing: border-box !important;

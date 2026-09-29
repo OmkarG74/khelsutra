@@ -61,12 +61,42 @@ class AthleteService
         if (empty($data['gender'])) {
             throw new \InvalidArgumentException('Gender is required.');
         }
-        $sportId = (int)($data['current_sport_id'] ?? ($data['primary_sport_id'] ?? 0));
-        if ($sportId <= 0) {
+        $sportInput = $data['current_sport_id'] ?? ($data['primary_sport_id'] ?? '');
+        if (!is_numeric($sportInput) && !empty($sportInput)) {
+            $sportService = new \App\Services\Sport\SportService();
+            $sportId = $sportService->resolveSportId((string)$sportInput);
+        } else {
+            $sportId = (int)$sportInput;
+        }
+        
+        if (!$sportId || $sportId <= 0) {
             throw new \InvalidArgumentException('Primary sport selection is required.');
         }
+
+        $data['current_sport_id'] = $sportId;
+        if (isset($data['primary_sport_id'])) {
+            $data['primary_sport_id'] = $sportId;
+        }
+
         if (empty($data['status']) || !in_array($data['status'], ['active', 'inactive', 'injured', 'suspended'], true)) {
             throw new \InvalidArgumentException('Valid athlete status is required.');
+        }
+
+        $teamId = (int)($data['team_id'] ?? 0);
+        if ($teamId > 0) {
+            $stmt = $this->pdo->prepare("SELECT id, sport_id, status FROM teams WHERE id = :team_id AND organization_id = :org_id AND deleted_at IS NULL");
+            $stmt->execute([':team_id' => $teamId, ':org_id' => $organizationId]);
+            $teamRow = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if (!$teamRow) {
+                throw new \InvalidArgumentException('The selected team is invalid or does not belong to your organisation.');
+            }
+            if ($teamRow['status'] !== 'active') {
+                throw new \InvalidArgumentException('The selected team is not active.');
+            }
+            if ((int)$teamRow['sport_id'] !== $sportId) {
+                throw new \InvalidArgumentException('The selected team does not match the chosen primary sport.');
+            }
         }
 
         $data['organization_id'] = $organizationId;
@@ -406,8 +436,18 @@ class AthleteService
         $finalLastName = isset($data['last_name']) ? trim($data['last_name']) : trim($existing['last_name'] ?? '');
         $finalDob = isset($data['date_of_birth']) ? trim($data['date_of_birth']) : trim($existing['date_of_birth'] ?? '');
         $finalGender = isset($data['gender']) ? trim($data['gender']) : trim($existing['gender'] ?? '');
-        $finalSportId = isset($data['current_sport_id']) ? (int)$data['current_sport_id'] : (int)($existing['current_sport_id'] ?? 0);
-        $finalStatus = isset($data['status']) ? trim($data['status']) : trim($existing['status'] ?? '');
+        $sportInput = $data['current_sport_id'] ?? ($data['primary_sport_id'] ?? ($existing['current_sport_id'] ?? ''));
+        if (!is_numeric($sportInput) && !empty($sportInput)) {
+            $sportService = new \App\Services\Sport\SportService();
+            $finalSportId = $sportService->resolveSportId((string)$sportInput);
+        } else {
+            $finalSportId = (int)$sportInput;
+        }
+
+        $data['current_sport_id'] = $finalSportId;
+        if (isset($data['primary_sport_id'])) {
+            $data['primary_sport_id'] = $finalSportId;
+        }
 
         if (empty($finalFirstName)) {
             throw new \InvalidArgumentException('First name is required.');
@@ -421,11 +461,30 @@ class AthleteService
         if (empty($finalGender)) {
             throw new \InvalidArgumentException('Gender is required.');
         }
-        if ($finalSportId <= 0) {
+        if (!$finalSportId || $finalSportId <= 0) {
             throw new \InvalidArgumentException('Primary sport selection is required.');
         }
+        $finalStatus = isset($data['status']) ? trim($data['status']) : trim($existing['status'] ?? '');
+
         if (empty($finalStatus) || !in_array($finalStatus, ['active', 'inactive', 'injured', 'suspended'], true)) {
             throw new \InvalidArgumentException('Valid athlete status is required.');
+        }
+
+        $finalTeamId = array_key_exists('team_id', $data) ? (int)$data['team_id'] : (int)($existing['team_id'] ?? 0);
+        if ($finalTeamId > 0) {
+            $stmt = $this->pdo->prepare("SELECT id, sport_id, status FROM teams WHERE id = :team_id AND organization_id = :org_id AND deleted_at IS NULL");
+            $stmt->execute([':team_id' => $finalTeamId, ':org_id' => $organizationId]);
+            $teamRow = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+            if (!$teamRow) {
+                throw new \InvalidArgumentException('The selected team is invalid or does not belong to your organisation.');
+            }
+            if ($teamRow['status'] !== 'active') {
+                throw new \InvalidArgumentException('The selected team is not active.');
+            }
+            if ((int)$teamRow['sport_id'] !== $finalSportId) {
+                throw new \InvalidArgumentException('The selected team does not match the chosen primary sport.');
+            }
         }
 
         $updated = $this->repository->update($organizationId, $id, $data);

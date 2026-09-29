@@ -16,13 +16,65 @@ return [
         return ['view' => 'sports/athletes'];
     },
     '/athletes/create' => function() {
-        return ['view' => 'sports/athletes-create'];
+        $orgId = current_organization_id();
+        $sportService = new \App\Services\Sport\SportService();
+        $sportsList = [];
+        $sportMap = [];
+        foreach (config('sports.catalog') ?? [] as $key => $name) {
+            $dbId = $sportService->resolveSportId($key);
+            $sportsList[] = ['id' => $key, 'name' => $name, 'db_id' => $dbId];
+            $sportMap[$key] = $dbId;
+        }
+        usort($sportsList, function($a, $b) {
+            return strcmp($a['name'], $b['name']);
+        });
+
+        $teamService = new \App\Services\Team\TeamService();
+        $teamsList = $teamService->getActiveTeams($orgId) ?? [];
+
+        return [
+            'view' => 'sports/athletes-create', 
+            'data' => [
+                'sportsList' => $sportsList, 
+                'sportMap' => $sportMap, 
+                'teamsList' => $teamsList
+            ]
+        ];
     },
     '/athletes/{id}' => function($id) {
         return ['view' => 'sports/athletes-show', 'data' => ['id' => $id]];
     },
     '/athletes/{id}/edit' => function($id) {
-        return ['view' => 'sports/athletes-edit', 'data' => ['id' => $id]];
+        $orgId = current_organization_id();
+        
+        $athleteService = new \App\Services\Athlete\AthleteService();
+        $athlete = $athleteService->getAthlete($orgId, $id);
+
+        $sportService = new \App\Services\Sport\SportService();
+        $sportsList = [];
+        $sportMap = [];
+        foreach (config('sports.catalog') ?? [] as $key => $name) {
+            $dbId = $sportService->resolveSportId($key);
+            $sportsList[] = ['id' => $key, 'name' => $name, 'db_id' => $dbId];
+            $sportMap[$key] = $dbId;
+        }
+        usort($sportsList, function($a, $b) {
+            return strcmp($a['name'], $b['name']);
+        });
+
+        $teamService = new \App\Services\Team\TeamService();
+        $teams = $teamService->getActiveTeams($orgId) ?? [];
+
+        return [
+            'view' => 'sports/athletes-edit', 
+            'data' => [
+                'id' => $id,
+                'athlete' => $athlete,
+                'sportsList' => $sportsList,
+                'sportMap' => $sportMap,
+                'teams' => $teams
+            ]
+        ];
     },
 
     '/coaches' => function() {

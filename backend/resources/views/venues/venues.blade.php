@@ -20,15 +20,29 @@ ob_start();
     <!-- Clean Page Header Standard -->
     <div class="ks-page-header mb-4">
         <div>
-            <h1 class="ks-page-title">Venues</h1>
+            <h1 class="ks-page-title mb-1">Venues</h1>
+            <p class="ks-page-subtitle mb-0">Manage sports grounds, facilities, and physical locations</p>
         </div>
-        <div class="ks-header-actions">
-            <a href="/venues/bookings/create" class="ks-btn ks-btn-secondary">
-                <i class="bi bi-calendar-plus"></i> New Booking
-            </a>
-            <a href="/venues/create" class="ks-btn ks-btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+        <div class="ks-header-actions d-flex gap-2">
+            <!-- Bookings Dropdown -->
+            <div class="dropdown">
+                <button class="ks-btn ks-btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
+                    <i class="bi bi-calendar-plus"></i> Bookings
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="border-radius: var(--ks-radius-md); font-size: 13px;">
+                    <li><a class="dropdown-item py-2" href="/venues/bookings/create"><i class="bi bi-plus-circle me-2 text-primary"></i> New Booking</a></li>
+                    <?php if (in_array($_SESSION['auth']['role']['slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+                    <li><a class="dropdown-item py-2" href="/operations/bookings"><i class="bi bi-eye me-2 text-secondary"></i> View Bookings</a></li>
+                    <?php endif; ?>
+                </ul>
+            </div>
+
+            <!-- Add Venue Button -->
+            <?php if (in_array($_SESSION['auth']['role']['slug'] ?? '', ['super_admin', 'sports_admin', 'venue_manager'])): ?>
+            <a href="/venues/create" class="ks-btn ks-btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px; text-decoration: none;">
                 <i class="bi bi-plus-lg"></i> Add Venue
             </a>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -65,8 +79,8 @@ ob_start();
     </div>
 
     <!-- Venues Table -->
-    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff; overflow: hidden;">
-        <div class="table-responsive">
+    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+        <div>
             <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
                 <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
                     <tr>
@@ -131,18 +145,20 @@ ob_start();
                                     </form>
                                 </td>
                                 <td class="py-3 px-3 text-end">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="/venues/<?= (int)$venue['id'] ?>" class="ks-btn ks-btn-secondary" style="border-radius: 6px 0 0 6px;" title="View Facilities & Bookings">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <a href="/venues/<?= (int)$venue['id'] ?>/edit" class="ks-btn ks-btn-secondary" style="border-radius: 0;" title="Edit Venue">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form action="/venues/<?= (int)$venue['id'] ?>/delete" method="POST" style="display: contents;" class="d-inline m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this venue? This action marks the venue as deleted.');">
-                                            <button type="submit" class="btn btn-outline-danger btn-sm" style="border-radius: 0 6px 6px 0; border-left: 0;" title="Delete Venue">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </form>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown" title="Actions" style="border: none; background: transparent;">
+                                            <i class="bi bi-three-dots-vertical text-dark"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm" style="font-size:13px; min-width:160px; border-radius: var(--ks-radius-md);">
+                                            <li><a class="dropdown-item py-2 fw-medium text-secondary" href="/venues/<?= (int)$venue['id'] ?>"><i class="bi bi-eye me-2"></i>View Facilities</a></li>
+                                            <li><a class="dropdown-item py-2 fw-medium text-secondary" href="/venues/<?= (int)$venue['id'] ?>/edit"><i class="bi bi-pencil me-2"></i>Edit Venue</a></li>
+                                            <li><hr class="dropdown-divider my-1"></li>
+                                            <li>
+                                                <form action="/venues/<?= (int)$venue['id'] ?>/delete" method="POST" class="m-0 p-0" onsubmit="return confirm('Are you sure you want to delete this venue? This action marks the venue as deleted.');">
+                                                    <button type="submit" class="dropdown-item py-2 fw-medium text-danger" style="background: transparent; border: none; width: 100%; text-align: left;"><i class="bi bi-trash me-2"></i>Delete</button>
+                                                </form>
+                                            </li>
+                                        </ul>
                                     </div>
                                 </td>
                             </tr>

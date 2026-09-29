@@ -157,7 +157,16 @@ class TeamService extends BaseService
             FROM team_members tm
             JOIN athletes a ON tm.athlete_id = a.id AND a.deleted_at IS NULL
             WHERE tm.team_id = :team_id AND tm.organization_id = :org_id AND tm.is_current = 1
-            ORDER BY tm.jersey_number ASC, a.first_name ASC
+            ORDER BY 
+                CASE tm.member_role
+                    WHEN 'captain' THEN 1
+                    WHEN 'vice_captain' THEN 2
+                    WHEN 'player' THEN 3
+                    WHEN 'other' THEN 4
+                    ELSE 5
+                END ASC,
+                tm.jersey_number ASC, 
+                a.first_name ASC
         ");
         $athStmt->execute([':team_id' => $id, ':org_id' => $organizationId]);
         $team['current_athletes'] = $athStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -589,7 +598,7 @@ class TeamService extends BaseService
 
         // 2. Verify athlete belongs to organization, is active, and is not deleted
         $aStmt = $this->pdo->prepare("
-            SELECT id, athlete_code, first_name, last_name, status, deleted_at
+            SELECT id, athlete_code, first_name, last_name, status, deleted_at, current_sport_id, gender
             FROM athletes
             WHERE id = :ath_id AND organization_id = :org_id AND deleted_at IS NULL
             LIMIT 1
@@ -602,6 +611,18 @@ class TeamService extends BaseService
         }
         if ($athlete['status'] !== 'active') {
             throw new \InvalidArgumentException("Only active athletes can be added to a team roster.");
+        }
+
+        if (!empty($team['sport_id']) && !empty($athlete['current_sport_id']) && $team['sport_id'] != $athlete['current_sport_id']) {
+            throw new \InvalidArgumentException("Athlete's primary sport does not match the team's sport.");
+        }
+
+        $teamGender = strtolower(trim($team['gender'] ?? 'open'));
+        if (in_array($teamGender, ['male', 'female'], true)) {
+            $athleteGender = strtolower(trim($athlete['gender'] ?? ''));
+            if ($athleteGender !== $teamGender) {
+                throw new \InvalidArgumentException("Athlete's gender does not match the team's gender division.");
+            }
         }
 
         // 3. Prevent duplicate CURRENT membership (safely idempotent)
@@ -621,11 +642,19 @@ class TeamService extends BaseService
         }
 
         $jersey = !empty($data['jersey_number']) ? trim((string)$data['jersey_number']) : null;
-        $position = !empty($data['position']) ? trim((string)$data['position']) : null;
         $role = !empty($data['member_role']) ? trim((string)$data['member_role']) : 'player';
         if (!in_array($role, ['player', 'captain', 'vice_captain', 'other'], true)) {
             $role = 'player';
         }
+        
+        $position = null;
+        if ($role === 'other') {
+            $position = !empty($data['position']) ? trim((string)$data['position']) : null;
+            if (empty($position)) {
+                throw new \InvalidArgumentException("Custom position is required when role is 'Other'.");
+            }
+        }
+        
         $startDate = !empty($data['start_date']) && strtotime($data['start_date']) ? $data['start_date'] : date('Y-m-d');
 
         $this->pdo->beginTransaction();
@@ -670,6 +699,84 @@ class TeamService extends BaseService
                     'member_role' => $role
                 ],
                 "Added athlete #{$athleteId} ({$athlete['first_name']} {$athlete['last_name']}) to team #{$teamId} ({$team['name']})"
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    public function updateAthleteRoster(int $organizationId, int $teamId, int $athleteId, array $data, ?int $performedBy = null): bool
+    {
+        if (!$this->pdo) return false;
+
+        $team = $this->getTeam($organizationId, $teamId);
+        if (!$team) {
+            throw new \InvalidArgumentException("Team not found or access denied.");
+        }
+
+        $checkStmt = $this->pdo->prepare("
+            SELECT id, jersey_number, member_role
+            FROM team_members
+            WHERE team_id = :team_id AND athlete_id = :ath_id AND organization_id = :org_id AND is_current = 1
+            LIMIT 1
+        ");
+        $checkStmt->execute([
+            ':team_id' => $teamId,
+            ':ath_id' => $athleteId,
+            ':org_id' => $organizationId
+        ]);
+        $member = $checkStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$member) {
+            throw new \InvalidArgumentException("Athlete is not currently an active member of this team.");
+        }
+
+        $jersey = isset($data['jersey_number']) && $data['jersey_number'] !== '' ? trim((string)$data['jersey_number']) : null;
+        $role = !empty($data['member_role']) ? trim((string)$data['member_role']) : 'player';
+        if (!in_array($role, ['player', 'captain', 'vice_captain', 'other'], true)) {
+            $role = 'player';
+        }
+
+        $position = null;
+        if ($role === 'other') {
+            $position = !empty($data['position']) ? trim((string)$data['position']) : null;
+            if (empty($position)) {
+                throw new \InvalidArgumentException("Custom position is required when role is 'Other'.");
+            }
+        }
+
+        $this->pdo->beginTransaction();
+        try {
+            $updateStmt = $this->pdo->prepare("
+                UPDATE team_members
+                SET jersey_number = :jersey, member_role = :role, position = :pos, updated_at = NOW()
+                WHERE id = :id AND organization_id = :org_id
+            ");
+            $updateStmt->execute([
+                ':jersey' => $jersey,
+                ':role' => $role,
+                ':pos' => $position,
+                ':id' => $member['id'],
+                ':org_id' => $organizationId
+            ]);
+
+            $this->pdo->commit();
+
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'TEAM_ROSTER_UPDATE',
+                'Teams',
+                'team_members',
+                $member['id'],
+                $member,
+                ['jersey_number' => $jersey, 'member_role' => $role, 'position' => $position],
+                "Updated roster details for athlete #{$athleteId} in team #{$teamId}"
             );
 
             return true;
@@ -843,6 +950,89 @@ class TeamService extends BaseService
         }
     }
 
+    public function updateCoachRole(
+        int $organizationId,
+        int $teamId,
+        int $coachId,
+        string $newRole,
+        ?int $performedBy = null
+    ): bool {
+        if (!$this->pdo) return false;
+
+        // 1. Verify team belongs to organization and is not deleted
+        $team = $this->getTeam($organizationId, $teamId);
+        if (!$team) {
+            throw new \InvalidArgumentException("Team not found or access denied.");
+        }
+
+        // 2. Validate role enum
+        $validRoles = ['head_coach', 'assistant_coach', 'fitness_coach', 'other'];
+        if (!in_array($newRole, $validRoles, true)) {
+            throw new \InvalidArgumentException("Invalid coach role specified. Must be one of: " . implode(', ', $validRoles) . ".");
+        }
+
+        // 3. Find active assignment
+        $checkStmt = $this->pdo->prepare("
+            SELECT id, coach_role, is_primary, start_date, end_date
+            FROM team_coaches
+            WHERE team_id = :team_id AND coach_id = :coach_id AND organization_id = :org_id
+              AND (end_date IS NULL OR end_date > CURDATE())
+            ORDER BY id DESC
+            LIMIT 1
+        ");
+        $checkStmt->execute([
+            ':team_id' => $teamId,
+            ':coach_id' => $coachId,
+            ':org_id' => $organizationId
+        ]);
+        $active = $checkStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$active) {
+            throw new \InvalidArgumentException("Coach is not currently actively assigned to this team.");
+        }
+
+        if ($active['coach_role'] === $newRole) {
+            return true; // No change needed
+        }
+
+        // 4. Update the role
+        $this->pdo->beginTransaction();
+        try {
+            $upStmt = $this->pdo->prepare("
+                UPDATE team_coaches
+                SET coach_role = :role,
+                    updated_at = NOW()
+                WHERE id = :id AND organization_id = :org_id
+            ");
+            $upStmt->execute([
+                ':role' => $newRole,
+                ':id' => (int)$active['id'],
+                ':org_id' => $organizationId
+            ]);
+
+            $this->pdo->commit();
+
+            // 5. Audit Log
+            $this->auditLog->log(
+                $organizationId,
+                $performedBy,
+                'TEAM_COACH_UPDATE_ROLE',
+                'Teams',
+                'team_coaches',
+                (int)$active['id'],
+                $active,
+                ['coach_role' => $newRole],
+                "Updated coach #{$coachId} role from '{$active['coach_role']}' to '{$newRole}' on team #{$teamId} ({$team['name']})"
+            );
+
+            return true;
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     public function getEligibleCoaches(int $organizationId, int $teamId): array
     {
         if (!$this->pdo) return [];
@@ -918,6 +1108,14 @@ class TeamService extends BaseService
             );
         }
 
-        return $ok;
+    }
+
+    public function getActiveTeams(int $organizationId): array
+    {
+        if (!$this->pdo) return [];
+
+        $stmt = $this->pdo->prepare("SELECT id, name, team_code, sport_id FROM teams WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
+        $stmt->execute([':org_id' => $organizationId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 }

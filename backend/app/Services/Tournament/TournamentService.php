@@ -236,14 +236,23 @@ class TournamentService extends BaseService
 
             // 2. Assign Participating Teams & Initialize Standings
             if (!empty($data['team_ids']) && is_array($data['team_ids'])) {
+                $tournamentSportId = (int)($data['sport_id'] ?? 1);
+
                 $ttSql = "INSERT INTO tournament_teams (tournament_id, team_id, status, registered_at) VALUES (:t_id, :tm_id, 'approved', NOW())";
                 $ttStmt = $this->pdo->prepare($ttSql);
 
                 $stdSql = "INSERT INTO tournament_standings (tournament_id, team_id, played, won, drawn, lost, points, scored, conceded, difference, rank_position, updated_at) VALUES (:t_id, :tm_id, 0, 0, 0, 0, 0, 0, 0, 0, 1, NOW())";
                 $stdStmt = $this->pdo->prepare($stdSql);
 
+                $teamCheckStmt = $this->pdo->prepare("SELECT id, sport_id FROM teams WHERE id = :tm_id AND organization_id = :org_id AND status = 'active' AND deleted_at IS NULL LIMIT 1");
+
                 foreach ($data['team_ids'] as $teamId) {
                     if (!empty($teamId)) {
+                        $teamCheckStmt->execute([':tm_id' => (int)$teamId, ':org_id' => $organizationId]);
+                        $teamRow = $teamCheckStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($teamRow && (int)$teamRow['sport_id'] !== $tournamentSportId) {
+                            throw new \InvalidArgumentException("Team #{$teamId} does not belong to the tournament's sport.");
+                        }
                         $ttStmt->execute([':t_id' => $tournamentId, ':tm_id' => (int)$teamId]);
                         $stdStmt->execute([':t_id' => $tournamentId, ':tm_id' => (int)$teamId]);
                     }
@@ -711,7 +720,7 @@ class TournamentService extends BaseService
 
         // 2. Verify team exists, belongs to organization, is active, and is not deleted
         $tmStmt = $this->pdo->prepare("
-            SELECT id, name, team_code, status, organization_id, deleted_at 
+            SELECT id, name, team_code, sport_id, status, organization_id, deleted_at 
             FROM teams 
             WHERE id = :tm_id AND organization_id = :org_id AND deleted_at IS NULL 
             LIMIT 1
@@ -723,6 +732,11 @@ class TournamentService extends BaseService
         }
         if ($team['status'] !== 'active') {
             throw new \InvalidArgumentException("Only active teams can be registered into a tournament.");
+        }
+
+        // 2b. Verify team sport matches tournament sport
+        if (!empty($t['sport_id']) && !empty($team['sport_id']) && (int)$team['sport_id'] !== (int)$t['sport_id']) {
+            throw new \InvalidArgumentException("Team's sport does not match the tournament's sport.");
         }
 
         // 3. Check existing tournament participation & status
