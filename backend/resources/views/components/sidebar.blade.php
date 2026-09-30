@@ -89,11 +89,8 @@ $navMenus = [
         ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'url' => '/dashboard'],
         ['key' => 'organizations', 'label' => 'Organisations', 'icon' => 'bi-building-fill', 'url' => '/super-admin/organizations'],
         ['key' => 'users', 'label' => 'Users', 'icon' => 'bi-people-fill', 'url' => '/users'],
-        ['key' => 'notifications', 'label' => 'Notifications', 'icon' => 'bi-bell-fill', 'url' => '/notifications'],
-        ['key' => 'roles', 'label' => 'Roles & RBAC', 'icon' => 'bi-shield-lock-fill', 'url' => '/roles'],
         ['key' => 'audit', 'label' => 'Audit Logs', 'icon' => 'bi-journal-check', 'url' => '/audit-logs'],
-        ['key' => 'reports', 'label' => 'Reports', 'icon' => 'bi-graph-up', 'url' => '/reports'],
-        ['key' => 'settings', 'label' => 'System Settings', 'icon' => 'bi-sliders', 'url' => '/settings/organization'],
+        ['key' => 'profile', 'label' => 'Account Settings', 'icon' => 'bi-person-circle', 'url' => '/settings'],
     ],
 ];
 

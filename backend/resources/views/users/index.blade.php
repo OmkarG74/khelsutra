@@ -16,91 +16,127 @@ $users = $isSuperAdmin ? $userService->listUsers(null) : $userService->listUsers
 ob_start();
 ?>
 
-<!-- Page Header (Section 19 & 49) -->
+<!-- Page Header (Directory Only) -->
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">User Management</h1>
-        <p class="ks-page-subtitle">
-            <?= $isSuperAdmin ? 'Global user directory across all organisations, including Organisation Admins and staff.' : 'Platform accounts, organisation membership, RBAC roles, and security access controls.' ?>
-        </p>
-    </div>
-    <div class="ks-header-actions">
-        <a href="/users/create" class="ks-btn ks-btn-primary">
-            <i class="bi bi-person-plus-fill"></i>
-            <span>+ Create User</span>
-        </a>
     </div>
 </div>
 
 <!-- KPI Summary Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-xl-3 col-md-6">
+<?php if ($isSuperAdmin): ?>
+    <?php
+        $totalUsersCount = count($users);
+        $activeUsersCount = count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'active'));
+        $inactiveUsersCount = count(array_filter($users, fn($u) => ($u['status'] ?? '') !== 'active'));
+        $orgAdminsCount = count(array_filter($users, fn($u) => ((int)($u['role_id'] ?? 0) === 2 || ($u['role_name'] ?? '') === 'Sports Administrator')));
+    ?>
+    <div class="ks-sa-kpi-grid">
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-blue ks-sa-kpi-icon">
+                    <i class="bi bi-people"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Users</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $totalUsersCount ?></div>
+        </div>
+
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-green ks-sa-kpi-icon">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Active</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $activeUsersCount ?></div>
+        </div>
+
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-amber ks-sa-kpi-icon">
+                    <i class="bi bi-pause-circle-fill"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Inactive</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $inactiveUsersCount ?></div>
+        </div>
+
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-purple ks-sa-kpi-icon">
+                    <i class="bi bi-person-badge-fill"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Organisation Admins</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $orgAdminsCount ?></div>
+        </div>
+    </div>
+<?php else: ?>
+    <div class="ks-kpi-grid">
         <div class="ks-kpi-card">
             <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-blue">
-                    <i class="bi bi-people-fill fs-4"></i>
-                </div>
                 <div>
                     <div class="ks-kpi-label">Total Users</div>
                     <div class="ks-kpi-value"><?= count($users) ?></div>
                 </div>
+                <div class="ks-icon-box ks-icon-blue">
+                    <i class="bi bi-people"></i>
+                </div>
             </div>
             <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive"><?= $isSuperAdmin ? 'Platform Wide' : 'In Organisation' ?></span>
+                <span class="ks-trend-text ks-trend-positive">In Organisation</span>
             </div>
         </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
+
         <div class="ks-kpi-card">
             <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-green">
-                    <i class="bi bi-shield-check fs-4"></i>
-                </div>
                 <div>
                     <div class="ks-kpi-label">Active Accounts</div>
                     <div class="ks-kpi-value"><?= count(array_filter($users, fn($u) => ($u['status'] ?? '') === 'active')) ?></div>
+                </div>
+                <div class="ks-icon-box ks-icon-green">
+                    <i class="bi bi-shield-check"></i>
                 </div>
             </div>
             <div class="ks-kpi-bottom">
                 <span class="ks-trend-text text-success">Authenticated</span>
             </div>
         </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
+
         <div class="ks-kpi-card">
             <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-purple">
-                    <i class="bi bi-person-badge-fill fs-4"></i>
-                </div>
                 <div>
                     <div class="ks-kpi-label">Organisation Admins</div>
                     <div class="ks-kpi-value">
                         <?= count(array_filter($users, fn($u) => ((int)($u['role_id'] ?? 0) === 2 || ($u['role_name'] ?? '') === 'Sports Administrator'))) ?>
                     </div>
                 </div>
+                <div class="ks-icon-box ks-icon-purple">
+                    <i class="bi bi-person-badge"></i>
+                </div>
             </div>
             <div class="ks-kpi-bottom">
                 <span class="ks-trend-text">Academy Managers</span>
             </div>
         </div>
-    </div>
-    <div class="col-xl-3 col-md-6">
+
         <div class="ks-kpi-card">
             <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-amber">
-                    <i class="bi bi-lock-fill fs-4"></i>
-                </div>
                 <div>
-                    <div class="ks-kpi-label">Scope</div>
-                    <div class="ks-kpi-value"><?= $isSuperAdmin ? 'Global' : 'Org #' . htmlspecialchars((string)$orgId) ?></div>
+                    <div class="ks-kpi-label">Environment</div>
+                    <div class="ks-kpi-value"><?= 'Org #' . htmlspecialchars((string)$orgId) ?></div>
+                </div>
+                <div class="ks-icon-box ks-icon-amber">
+                    <i class="bi bi-lock"></i>
                 </div>
             </div>
             <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive"><?= $isSuperAdmin ? 'Super Admin Access' : 'Isolated Environment' ?></span>
+                <span class="ks-trend-text ks-trend-positive">Isolated</span>
             </div>
         </div>
     </div>
-</div>
+<?php endif; ?>
 
 <!-- Users Table Card -->
 <div class="ks-table-card">
@@ -180,14 +216,9 @@ ob_start();
                                 <span class="small text-muted"><?= htmlspecialchars($u['last_login_at'] ?? 'Never') ?></span>
                             </td>
                             <td style="text-align: right;">
-                                <div class="d-flex justify-content-end gap-1">
-                                    <a href="/users/<?= $u['id'] ?>" class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">
-                                        View
-                                    </a>
-                                    <a href="/users/<?= $u['id'] ?>/edit" class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;">
-                                        Edit
-                                    </a>
-                                </div>
+                                <a href="/users/<?= $u['id'] ?>" class="ks-btn ks-btn-secondary" style="height: 30px; padding: 0 14px; font-size: 12px;">
+                                    View
+                                </a>
                             </td>
                         </tr>
                     <?php endforeach; ?>

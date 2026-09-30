@@ -9,7 +9,6 @@ ob_start();
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">Create Organisation</h1>
-        <p class="ks-page-subtitle">Onboard a new multi-tenant sports academy and configure its initial Organisation Administrators.</p>
     </div>
     <div class="ks-header-actions">
         <a href="/super-admin/organizations" class="ks-btn ks-btn-secondary">

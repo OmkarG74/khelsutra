@@ -3,16 +3,25 @@ $activePage = 'organizations';
 $title = 'Organisation Management — KhelSutra Super Admin';
 
 $orgService = new \App\Services\Organization\OrganizationManagementService();
-$organizations = $orgService->listOrganizations();
+$plans = $orgService->getDistinctPlans();
+
+// Overall platform counts for KPI summary
+$allOrgs = $orgService->listOrganizations(1000, 0);
+$totalOrgs = count($allOrgs);
+$activeOrgs = count(array_filter($allOrgs, fn($o) => ($o['status'] ?? '') === 'active'));
+$suspendedOrgs = count(array_filter($allOrgs, fn($o) => ($o['status'] ?? '') === 'suspended'));
+$subscriptionsCount = count(array_filter($allOrgs, fn($o) => !empty($o['plan_name']) || ($o['status'] ?? '') === 'active'));
+
+// Initial render data (first page, no filters)
+$organizations = $orgService->listOrganizations(50, 0);
 
 ob_start();
 ?>
 
-<!-- Page Header (Section 16) -->
+<!-- Page Header -->
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">Organisations</h1>
-        <p class="ks-page-subtitle">Multi-tenant academy directory, access dates, subscription tiers, and tenant isolation control.</p>
     </div>
     <div class="ks-header-actions">
         <a href="/super-admin/organizations/create" class="ks-btn ks-btn-primary">
@@ -22,102 +31,79 @@ ob_start();
     </div>
 </div>
 
-<!-- KPI Summary Cards -->
-<div class="row g-3 mb-4">
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-blue">
-                    <i class="bi bi-building-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Total Academies</div>
-                    <div class="ks-kpi-value"><?= count($organizations) ?></div>
-                </div>
+<!-- Compact KPI Summary Cards -->
+<div class="ks-sa-kpi-grid">
+    <div class="ks-sa-kpi-card">
+        <div class="ks-sa-kpi-left">
+            <div class="ks-icon-box ks-icon-blue ks-sa-kpi-icon">
+                <i class="bi bi-building"></i>
             </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive">Active Multi-Tenant Orgs</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 22C18 20 28 26 44 14C60 2 72 16 88 4" stroke="#0B6EF3" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
+            <span class="ks-sa-kpi-label">Organisations</span>
         </div>
+        <div class="ks-sa-kpi-value" id="kpiTotalOrgs"><?= $totalOrgs ?></div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-green">
-                    <i class="bi bi-patch-check-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Active Subscriptions</div>
-                    <div class="ks-kpi-value">
-                        <?= count(array_filter($organizations, fn($o) => $o['status'] === 'active')) ?>
-                    </div>
-                </div>
+
+    <div class="ks-sa-kpi-card">
+        <div class="ks-sa-kpi-left">
+            <div class="ks-icon-box ks-icon-green ks-sa-kpi-icon">
+                <i class="bi bi-check-circle-fill"></i>
             </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">Access enabled</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 18C20 18 30 24 50 16C70 8 78 4 88 12" stroke="#16A34A" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
+            <span class="ks-sa-kpi-label">Active</span>
         </div>
+        <div class="ks-sa-kpi-value" id="kpiActiveOrgs"><?= $activeOrgs ?></div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-purple">
-                    <i class="bi bi-people-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Rostered Staff & Coaches</div>
-                    <div class="ks-kpi-value">
-                        <?= array_sum(array_column($organizations, 'active_employees_count')) ?>
-                    </div>
-                </div>
+
+    <div class="ks-sa-kpi-card">
+        <div class="ks-sa-kpi-left">
+            <div class="ks-icon-box ks-icon-red ks-sa-kpi-icon">
+                <i class="bi bi-slash-circle-fill"></i>
             </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text">Platform wide</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 14C22 10 42 18 62 12C74 8 82 14 88 6" stroke="#7C3AED" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
+            <span class="ks-sa-kpi-label">Suspended</span>
         </div>
+        <div class="ks-sa-kpi-value" id="kpiSuspendedOrgs"><?= $suspendedOrgs ?></div>
     </div>
-    <div class="col-xl-3 col-md-6">
-        <div class="ks-kpi-card">
-            <div class="ks-kpi-top">
-                <div class="ks-icon-box ks-icon-amber">
-                    <i class="bi bi-shield-lock-fill fs-4"></i>
-                </div>
-                <div>
-                    <div class="ks-kpi-label">Tenant Isolation</div>
-                    <div class="ks-kpi-value">Enforced</div>
-                </div>
+
+    <div class="ks-sa-kpi-card">
+        <div class="ks-sa-kpi-left">
+            <div class="ks-icon-box ks-icon-purple ks-sa-kpi-icon">
+                <i class="bi bi-patch-check-fill"></i>
             </div>
-            <div class="ks-kpi-bottom">
-                <span class="ks-trend-text text-warning">Strict Backend Isolation</span>
-                <svg class="ks-sparkline" viewBox="0 0 90 28" fill="none">
-                    <path d="M2 20C16 16 34 8 52 14C70 20 78 12 88 6" stroke="#F59E0B" stroke-width="2.2" stroke-linecap="round"/>
-                </svg>
-            </div>
+            <span class="ks-sa-kpi-label">Subscriptions</span>
         </div>
+        <div class="ks-sa-kpi-value" id="kpiSubsOrgs"><?= $subscriptionsCount ?></div>
     </div>
 </div>
 
-<!-- Organisations Table Card (Section 22 & 50) -->
+<!-- Organisations Table Card with Compact Search & Filter Toolbar -->
 <div class="ks-table-card">
-    <div class="ks-table-header">
+    <!-- Compact Toolbar (approx 48px high, single horizontal row on desktop) -->
+    <div class="ks-table-header d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-2" style="min-height: 52px; padding: 8px 16px;">
         <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-building" style="color: var(--ks-primary); font-size: 18px;"></i>
-            <span class="ks-card-title mb-0">Platform Organisations</span>
         </div>
-        <div class="d-flex align-items-center gap-2">
-            <div class="position-relative" style="width: 280px;">
-                <i class="bi bi-search position-absolute" style="left: 12px; top: 12px; color: var(--ks-text-muted); font-size: 13px;"></i>
-                <input type="text" id="orgSearchInput" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Search organisation, code...">
+        <div class="d-flex align-items-center gap-2 flex-wrap flex-sm-nowrap w-100 w-lg-auto" style="min-height: 38px;">
+            <!-- Search organisation, code, contact... -->
+            <div class="position-relative flex-grow-1 flex-sm-grow-0" style="min-width: 250px; max-width: 340px;">
+                <i class="bi bi-search position-absolute" style="left: 12px; top: 50%; transform: translateY(-50%); color: var(--ks-text-muted); font-size: 13px; pointer-events: none;"></i>
+                <input type="text" id="orgSearchInput" class="ks-form-control" style="padding-left: 34px; height: 38px; font-size: 13px;" placeholder="Search organisation, code, contact...">
             </div>
+            <!-- Status Filter -->
+            <select id="statusFilter" class="ks-form-select" style="width: 125px; height: 38px; font-size: 13px;">
+                <option value="all">Status: All</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+                <option value="expired">Expired</option>
+            </select>
+            <!-- Plan Filter -->
+            <select id="planFilter" class="ks-form-select" style="width: 165px; height: 38px; font-size: 13px;">
+                <option value="all">Plan: All</option>
+                <?php foreach ($plans as $p): ?>
+                    <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <!-- Clear Filters -->
+            <button type="button" id="btnClearFilters" class="ks-btn ks-btn-secondary" style="height: 38px; padding: 0 12px; font-size: 12.5px; white-space: nowrap;" title="Clear search and filters">
+                <i class="bi bi-x-circle me-1"></i> Clear Filters
+            </button>
         </div>
     </div>
 
@@ -125,72 +111,72 @@ ob_start();
         <table class="ks-table" id="orgsTable">
             <thead>
                 <tr>
-                    <th>Organisation Code</th>
-                    <th>Name</th>
-                    <th>Contact</th>
-                    <th>Plan</th>
-                    <th>Status</th>
-                    <th>Access Window</th>
-                    <th style="text-align: right;">Action</th>
+                    <th style="width: 15%;">Organisation Code</th>
+                    <th style="width: 24%;">Name</th>
+                    <th style="width: 18%;">Contact</th>
+                    <th style="width: 13%;">Plan</th>
+                    <th style="width: 10%;">Status</th>
+                    <th style="width: 10%;">Access Window</th>
+                    <th style="width: 10%; text-align: right;">Action</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="orgsTableBody">
                 <?php if (empty($organizations)): ?>
                     <tr id="emptyRow">
                         <td colspan="7" class="text-center py-4 text-muted">No organisations registered yet.</td>
                     </tr>
                 <?php else: ?>
                     <?php foreach ($organizations as $org): ?>
-                        <tr class="org-row" data-search="<?= strtolower(htmlspecialchars(($org['name'] ?? '') . ' ' . ($org['organization_code'] ?? '') . ' ' . ($org['legal_name'] ?? '') . ' ' . ($org['city'] ?? ''))) ?>">
-                            <td>
-                                <span class="badge" style="background: #EAF3FF; color: #0B6EF3; font-weight: 600; padding: 6px 10px; border-radius: 6px;">
-                                    <?= htmlspecialchars($org['organization_code']) ?>
+                        <tr class="org-row" data-id="<?= (int)$org['id'] ?>">
+                            <td class="align-middle">
+                                <span class="badge" style="background: #EAF3FF; color: #0B6EF3; font-weight: 600; padding: 5px 9px; border-radius: 6px; font-size: 12px; letter-spacing: 0.3px;">
+                                    <?= htmlspecialchars($org['organization_code'] ?? '—') ?>
                                 </span>
                             </td>
-                            <td>
+                            <td class="align-middle">
                                 <div>
-                                    <span class="fw-bold text-navy"><?= htmlspecialchars($org['name']) ?></span>
+                                    <span class="fw-bold text-navy" style="font-size: 13.5px;"><?= htmlspecialchars($org['name'] ?? '') ?></span>
                                     <?php if (!empty($org['legal_name'])): ?>
-                                        <div class="small text-muted"><?= htmlspecialchars($org['legal_name']) ?></div>
+                                        <div class="small text-muted" style="font-size: 11.5px;"><?= htmlspecialchars($org['legal_name']) ?></div>
                                     <?php endif; ?>
                                 </div>
                             </td>
-                            <td>
-                                <div class="small text-navy"><?= htmlspecialchars($org['email'] ?? '—') ?></div>
-                                <div class="small text-muted"><?= htmlspecialchars($org['phone'] ?? '—') ?></div>
+                            <td class="align-middle">
+                                <div class="small text-navy fw-medium" style="font-size: 12.5px;"><?= htmlspecialchars($org['email'] ?? '—') ?></div>
+                                <div class="small text-muted" style="font-size: 11.5px;"><?= htmlspecialchars($org['phone'] ?? '—') ?></div>
                             </td>
-                            <td>
-                                <span class="ks-badge ks-badge-blue"><?= htmlspecialchars($org['plan_name'] ?? 'Standard') ?></span>
+                            <td class="align-middle">
+                                <span class="ks-badge ks-badge-blue" style="font-size: 11.5px;"><?= htmlspecialchars($org['plan_name'] ?? 'Standard') ?></span>
                             </td>
-                            <td>
-                                <?php if ($org['status'] === 'active'): ?>
+                            <td class="align-middle">
+                                <?php if (($org['status'] ?? '') === 'active'): ?>
                                     <span class="ks-badge ks-badge-confirmed">Active</span>
-                                <?php elseif ($org['status'] === 'suspended'): ?>
+                                <?php elseif (($org['status'] ?? '') === 'suspended'): ?>
                                     <span class="ks-badge ks-badge-rejected">Suspended</span>
-                                <?php elseif ($org['status'] === 'expired'): ?>
+                                <?php elseif (($org['status'] ?? '') === 'expired'): ?>
                                     <span class="ks-badge ks-badge-pending">Expired</span>
                                 <?php else: ?>
-                                    <span class="ks-badge ks-badge-scheduled"><?= htmlspecialchars(ucfirst($org['status'])) ?></span>
+                                    <span class="ks-badge ks-badge-scheduled"><?= htmlspecialchars(ucfirst($org['status'] ?? 'Pending')) ?></span>
                                 <?php endif; ?>
                             </td>
-                            <td>
-                                <div class="small text-navy"><?= htmlspecialchars($org['access_start_date'] ?? '2026-01-01') ?></div>
-                                <div class="small text-muted">to <?= htmlspecialchars($org['access_end_date'] ?? '2027-01-01') ?></div>
+                            <td class="align-middle">
+                                <div class="small text-navy" style="font-size: 12px;"><?= htmlspecialchars($org['access_start_date'] ?? '2026-01-01') ?></div>
+                                <div class="small text-muted" style="font-size: 11px;">to <?= htmlspecialchars($org['access_end_date'] ?? '2027-01-01') ?></div>
                             </td>
-                            <td style="text-align: right;">
+                            <td class="align-middle" style="text-align: right;">
                                 <div class="d-flex align-items-center justify-content-end gap-1">
-                                    <a href="/super-admin/organizations/<?= $org['id'] ?>" class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;" title="View Details">
+                                    <a href="/super-admin/organizations/<?= (int)$org['id'] ?>" class="ks-btn ks-btn-secondary" style="height: 30px; padding: 0 9px; font-size: 12px;" title="View Details">
                                         View
                                     </a>
-                                    <a href="/super-admin/organizations/<?= $org['id'] ?>/edit" class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;" title="Edit Organisation">
+                                    <a href="/super-admin/organizations/<?= (int)$org['id'] ?>/edit" class="ks-btn ks-btn-secondary" style="height: 30px; padding: 0 9px; font-size: 12px;" title="Edit Organisation">
                                         Edit
                                     </a>
-                                    <?php if ($org['status'] === 'active'): ?>
-                                        <button type="button" class="ks-btn ks-btn-secondary text-danger" style="height: 32px; padding: 0 10px; font-size: 12px;" onclick="promptStatusChange(<?= $org['id'] ?>, '<?= htmlspecialchars(addslashes($org['name'])) ?>', 'suspended')">
+                                    <?php if (($org['status'] ?? '') === 'active'): ?>
+                                        <button type="button" class="ks-btn ks-btn-secondary text-danger" style="height: 30px; padding: 0 9px; font-size: 12px;" onclick="promptStatusChange(<?= (int)$org['id'] ?>, '<?= htmlspecialchars(addslashes($org['name'] ?? '')) ?>', 'suspended')">
                                             Suspend
                                         </button>
                                     <?php else: ?>
-                                        <button type="button" class="ks-btn ks-btn-secondary text-success" style="height: 32px; padding: 0 10px; font-size: 12px;" onclick="promptStatusChange(<?= $org['id'] ?>, '<?= htmlspecialchars(addslashes($org['name'])) ?>', 'active')">
+                                        <button type="button" class="ks-btn ks-btn-secondary text-success" style="height: 30px; padding: 0 9px; font-size: 12px;" onclick="promptStatusChange(<?= (int)$org['id'] ?>, '<?= htmlspecialchars(addslashes($org['name'] ?? '')) ?>', 'active')">
                                             Activate
                                         </button>
                                     <?php endif; ?>
@@ -201,6 +187,16 @@ ob_start();
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+
+    <!-- Table Pagination / Status Footer -->
+    <div class="d-flex align-items-center justify-content-between p-3 border-top" style="border-color: var(--ks-border-light) !important; font-size: 12.5px;">
+        <span class="text-muted" id="tableSummaryText">
+            Showing <strong id="visibleCount" class="text-navy"><?= count($organizations) ?></strong> organisation(s)
+        </span>
+        <div id="tableSpinner" class="spinner-border spinner-border-sm text-primary d-none" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
     </div>
 </div>
 
@@ -232,34 +228,165 @@ ob_start();
 </div>
 
 <script>
-// Real-time table search filter
-document.getElementById('orgSearchInput').addEventListener('input', function() {
-    const query = this.value.trim().toLowerCase();
-    const rows = document.querySelectorAll('.org-row');
-    let visibleCount = 0;
-    rows.forEach(r => {
-        const text = r.getAttribute('data-search') || '';
-        if (!query || text.includes(query)) {
-            r.style.display = '';
-            visibleCount++;
+let searchDebounceTimer = null;
+
+const searchInput = document.getElementById('orgSearchInput');
+const statusSelect = document.getElementById('statusFilter');
+const planSelect = document.getElementById('planFilter');
+const clearBtn = document.getElementById('btnClearFilters');
+const tableBody = document.getElementById('orgsTableBody');
+const visibleCountEl = document.getElementById('visibleCount');
+const spinnerEl = document.getElementById('tableSpinner');
+
+// Debounced backend search
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+        fetchFilteredOrganizations();
+    }, 300);
+});
+
+statusSelect.addEventListener('change', fetchFilteredOrganizations);
+planSelect.addEventListener('change', fetchFilteredOrganizations);
+
+clearBtn.addEventListener('click', function() {
+    searchInput.value = '';
+    statusSelect.value = 'all';
+    planSelect.value = 'all';
+    fetchFilteredOrganizations();
+});
+
+async function fetchFilteredOrganizations() {
+    const search = searchInput.value.trim();
+    const status = statusSelect.value;
+    const plan = planSelect.value;
+
+    const params = new URLSearchParams();
+    if (search) params.append('search', search);
+    if (status && status !== 'all') params.append('status', status);
+    if (plan && plan !== 'all') params.append('plan', plan);
+    params.append('limit', '100');
+    params.append('offset', '0');
+
+    spinnerEl.classList.remove('d-none');
+
+    try {
+        const res = await fetch('/api/v1/organizations?' + params.toString(), {
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        const json = await res.json();
+
+        if (json.success && Array.isArray(json.data)) {
+            renderTableRows(json.data);
+            visibleCountEl.textContent = json.data.length;
         } else {
-            r.style.display = 'none';
+            tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">Error loading organisations.</td></tr>`;
+            visibleCountEl.textContent = '0';
         }
+    } catch (e) {
+        console.error('Fetch error:', e);
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-danger">Failed to connect to organisations service.</td></tr>`;
+        visibleCountEl.textContent = '0';
+    } finally {
+        spinnerEl.classList.add('d-none');
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function escapeJs(str) {
+    if (!str) return '';
+    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
+
+function renderTableRows(orgs) {
+    if (orgs.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">No organisations match your search/filter criteria.</td></tr>`;
+        return;
+    }
+
+    let html = '';
+    orgs.forEach(org => {
+        const code = escapeHtml(org.organization_code || '—');
+        const name = escapeHtml(org.name || '');
+        const legalName = org.legal_name ? `<div class="small text-muted" style="font-size: 11.5px;">${escapeHtml(org.legal_name)}</div>` : '';
+        const email = escapeHtml(org.email || '—');
+        const phone = escapeHtml(org.phone || '—');
+        const plan = escapeHtml(org.plan_name || 'Standard');
+        const status = org.status || 'pending';
+        const start = escapeHtml(org.access_start_date || '2026-01-01');
+        const end = escapeHtml(org.access_end_date || '2027-01-01');
+
+        let statusBadge = '';
+        if (status === 'active') {
+            statusBadge = '<span class="ks-badge ks-badge-confirmed">Active</span>';
+        } else if (status === 'suspended') {
+            statusBadge = '<span class="ks-badge ks-badge-rejected">Suspended</span>';
+        } else if (status === 'expired') {
+            statusBadge = '<span class="ks-badge ks-badge-pending">Expired</span>';
+        } else {
+            statusBadge = `<span class="ks-badge ks-badge-scheduled">${escapeHtml(status.charAt(0).toUpperCase() + status.slice(1))}</span>`;
+        }
+
+        const safeName = escapeJs(org.name || '');
+        let statusBtn = '';
+        if (status === 'active') {
+            statusBtn = `<button type="button" class="ks-btn ks-btn-secondary text-danger" style="height: 30px; padding: 0 9px; font-size: 12px;" onclick="promptStatusChange(${org.id}, '${safeName}', 'suspended')">Suspend</button>`;
+        } else {
+            statusBtn = `<button type="button" class="ks-btn ks-btn-secondary text-success" style="height: 30px; padding: 0 9px; font-size: 12px;" onclick="promptStatusChange(${org.id}, '${safeName}', 'active')">Activate</button>`;
+        }
+
+        html += `
+            <tr class="org-row" data-id="${org.id}">
+                <td class="align-middle">
+                    <span class="badge" style="background: #EAF3FF; color: #0B6EF3; font-weight: 600; padding: 5px 9px; border-radius: 6px; font-size: 12px; letter-spacing: 0.3px;">
+                        ${code}
+                    </span>
+                </td>
+                <td class="align-middle">
+                    <div>
+                        <span class="fw-bold text-navy" style="font-size: 13.5px;">${name}</span>
+                        ${legalName}
+                    </div>
+                </td>
+                <td class="align-middle">
+                    <div class="small text-navy fw-medium" style="font-size: 12.5px;">${email}</div>
+                    <div class="small text-muted" style="font-size: 11.5px;">${phone}</div>
+                </td>
+                <td class="align-middle">
+                    <span class="ks-badge ks-badge-blue" style="font-size: 11.5px;">${plan}</span>
+                </td>
+                <td class="align-middle">
+                    ${statusBadge}
+                </td>
+                <td class="align-middle">
+                    <div class="small text-navy" style="font-size: 12px;">${start}</div>
+                    <div class="small text-muted" style="font-size: 11px;">to ${end}</div>
+                </td>
+                <td class="align-middle" style="text-align: right;">
+                    <div class="d-flex align-items-center justify-content-end gap-1">
+                        <a href="/super-admin/organizations/${org.id}" class="ks-btn ks-btn-secondary" style="height: 30px; padding: 0 9px; font-size: 12px;" title="View Details">
+                            View
+                        </a>
+                        <a href="/super-admin/organizations/${org.id}/edit" class="ks-btn ks-btn-secondary" style="height: 30px; padding: 0 9px; font-size: 12px;" title="Edit Organisation">
+                            Edit
+                        </a>
+                        ${statusBtn}
+                    </div>
+                </td>
+            </tr>
+        `;
     });
 
-    let emptyRow = document.getElementById('searchEmptyRow');
-    if (visibleCount === 0) {
-        if (!emptyRow) {
-            emptyRow = document.createElement('tr');
-            emptyRow.id = 'searchEmptyRow';
-            emptyRow.innerHTML = '<td colspan="7" class="text-center py-4 text-muted">No organisations match your search query.</td>';
-            document.querySelector('#orgsTable tbody').appendChild(emptyRow);
-        }
-        emptyRow.style.display = '';
-    } else if (emptyRow) {
-        emptyRow.style.display = 'none';
-    }
-});
+    tableBody.innerHTML = html;
+}
 
 let pendingStatusAction = null;
 
@@ -315,16 +442,18 @@ document.getElementById('btnExecuteStatusChange').addEventListener('click', asyn
             if (window.ksToast) {
                 window.ksToast(`Organisation status updated to ${targetStatus}.`, 'success');
             }
-            setTimeout(() => {
-                window.location.reload();
-            }, 500);
+            const modalEl = document.getElementById('statusConfirmModal');
+            const bsModal = bootstrap.Modal.getInstance(modalEl);
+            if (bsModal) bsModal.hide();
+            fetchFilteredOrganizations();
         } else {
             alert('Error: ' + (json.message || 'Status update failed'));
-            this.disabled = false;
         }
     } catch (e) {
         alert('Network request failed');
+    } finally {
         this.disabled = false;
+        this.textContent = 'Confirm';
     }
 });
 </script>

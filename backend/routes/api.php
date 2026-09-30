@@ -78,13 +78,13 @@ return function ($uri, $method, $requestData = []) {
         ? (int)$requestData['headers']['x-organization-id']
         : (isset($requestData['organization_id']) ? (int)$requestData['organization_id'] : null);
 
-    $userOrgId = isset($currentUser['organization']['id']) ? (int)$currentUser['organization']['id'] : 1;
+    $userOrgId = isset($currentUser['organization']['id']) ? (int)$currentUser['organization']['id'] : (\App\Helpers\AuthContext::getOrganizationId() ?: 1);
 
     if (!$isSuperAdmin && $requestedOrgId !== null && $requestedOrgId !== $userOrgId) {
         return ApiResponse::error('Access denied: Unauthorized cross-tenant access.', null, 403);
     }
 
-    $orgId = $isSuperAdmin ? ($requestedOrgId ?: 1) : $userOrgId;
+    $orgId = $isSuperAdmin ? ($requestedOrgId ?: $userOrgId) : $userOrgId;
     $performedBy = (int)($currentUser['id'] ?? 1);
     $userId = $performedBy;
 
@@ -145,6 +145,27 @@ return function ($uri, $method, $requestData = []) {
         return false;
     };
 
+    // 3.5 Global Platform Search Endpoint
+    if ($uri === '/api/v1/search/global' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Search\GlobalSearchController();
+        return $controller->search($requestData, $currentUser, $isSuperAdmin);
+    }
+
+    // 3.6 Organisation Profile & Settings Endpoint (Member 1 Settings)
+    if ($uri === '/api/v1/settings/organization' || $uri === '/api/v1/settings/profile') {
+        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+        if ($method === 'GET') {
+            return $controller->getProfileSettings($orgId);
+        }
+        if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
+            if (!$isSuperAdmin && !$checkPermission(['organization.manage', 'settings.manage'])) {
+                // If Sports Administrator (role_id 2), $checkPermission returns true automatically
+                return ApiResponse::error('Forbidden: Insufficient privileges to update organisation settings.', null, 403);
+            }
+            return $controller->updateProfileSettings($orgId, $requestData, $performedBy);
+        }
+    }
+
     // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
     if (str_starts_with($uri, '/api/v1/organizations')) {
         if (!$isSuperAdmin) {
@@ -174,6 +195,30 @@ return function ($uri, $method, $requestData = []) {
             $targetId = (int)$m[1];
             if ($method === 'GET') return $controller->getSettings($targetId);
             if ($method === 'POST' || $method === 'PUT') return $controller->updateSettings($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/profile-settings$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->getProfileSettings($targetId);
+            if ($method === 'POST' || $method === 'PUT') return $controller->updateProfileSettings($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/admins$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->getAdmins($targetId);
+            if ($method === 'POST') return $controller->storeAdmin($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/admins/(\d+)$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            $adminId = (int)$m[2];
+            if ($method === 'GET') return $controller->showAdmin($targetId, $adminId);
+            if ($method === 'PUT' || $method === 'PATCH') return $controller->updateAdmin($targetId, $adminId, $requestData, $performedBy);
+            if ($method === 'DELETE') return $controller->destroyAdmin($targetId, $adminId, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/admins/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            return $controller->updateAdminStatus((int)$m[1], (int)$m[2], $requestData, $performedBy);
         }
     }
 

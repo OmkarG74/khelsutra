@@ -2853,3 +2853,36 @@ if ($uri === '/notifications/read-all') {
     exit;
 }
 
+// ==========================================
+// 13. ORGANISATION PROFILE & SETTINGS ACTIONS
+// ==========================================
+if ($uri === '/settings/save' || $uri === '/settings') {
+    $rawInput = file_get_contents('php://input');
+    $body = json_decode($rawInput, true) ?? [];
+    $payload = !empty($body) ? array_merge($_POST, $body) : $_POST;
+
+    $userId = (int)($currentUser['id'] ?? 1);
+    $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+    $result = $controller->updateProfileSettings($orgId, $payload, $userId);
+
+    $isAjax = (!empty($_SERVER['HTTP_ACCEPT']) && str_contains($_SERVER['HTTP_ACCEPT'], 'application/json')) || 
+              !empty($body) || 
+              (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest');
+
+    if ($isAjax) {
+        header('Content-Type: application/json');
+        http_response_code($result['code'] ?? 200);
+        echo json_encode($result);
+        exit;
+    }
+
+    if (!empty($result['success'])) {
+        header('Location: /settings?success=' . urlencode('Organisation settings updated successfully.'));
+        exit;
+    } else {
+        header('Location: /settings?error=' . urlencode($result['message'] ?? 'Failed to update organisation settings.'));
+        exit;
+    }
+}
+
+

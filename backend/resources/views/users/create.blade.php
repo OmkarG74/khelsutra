@@ -22,9 +22,9 @@ ob_start();
     </div>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="ks-card p-4">
+<div class="row">
+    <div class="col-lg-10 col-xl-9">
+        <div class="ks-card p-3 p-md-4">
             <form id="createUserForm">
                 <h5 class="fw-bold text-navy mb-3">1. Account Information</h5>
                 <div class="row g-3 mb-4">

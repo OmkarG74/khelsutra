@@ -35,9 +35,37 @@ ob_start();
         <a href="/users" class="ks-btn ks-btn-secondary mt-2">Return to Users</a>
     </div>
 <?php else: ?>
-    <div class="row justify-content-center">
-        <div class="col-lg-8">
-            <div class="ks-card p-4">
+    <?php
+    $isOrgAdmin = ((int)($user['role_id'] ?? 0) === 2 || ($user['role_name'] ?? '') === 'Sports Administrator' || ($user['role_name'] ?? '') === 'Organisation Admin');
+    ?>
+
+    <?php if ($isOrgAdmin): ?>
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="ks-card p-5 text-center">
+                    <div class="ks-icon-box ks-icon-blue mx-auto mb-3" style="width: 52px; height: 52px; border-radius: 12px;">
+                        <i class="bi bi-shield-lock-fill fs-3 text-primary"></i>
+                    </div>
+                    <h5 class="fw-bold text-navy mb-2">Organisation Administrator Management</h5>
+                    <p class="text-muted small mx-auto mb-4" style="max-width: 520px; line-height: 1.6;">
+                        <strong><?= htmlspecialchars(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? '')) ?></strong> holds the <strong>Organisation Admin</strong> role for <strong><?= htmlspecialchars($user['organization_name'] ?? 'their organisation') ?></strong>.
+                        Per platform governance rules, Organisation Administrators can only be edited through the Organisation workflow.
+                    </p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="/users" class="ks-btn ks-btn-secondary">
+                            <i class="bi bi-arrow-left me-1"></i> Back to Users Directory
+                        </a>
+                        <a href="/super-admin/organizations/<?= (int)($user['organization_id'] ?? 1) ?>/edit?edit_admin=<?= (int)$user['id'] ?>#admin-section" class="ks-btn ks-btn-primary">
+                            <i class="bi bi-building me-1"></i> Edit in Organisation
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php else: ?>
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div class="ks-card p-4">
                 <form id="editUserForm">
                     <h5 class="fw-bold text-navy mb-3">1. Personal Information</h5>
                     <div class="row g-3 mb-4">
@@ -132,6 +160,7 @@ ob_start();
         }
     });
     </script>
+    <?php endif; ?>
 <?php endif; ?>
 
 <?php
