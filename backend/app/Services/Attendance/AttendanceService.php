@@ -240,15 +240,18 @@ class AttendanceService extends BaseService
         if (!$this->pdo) return [];
         $sql = "
             SELECT ta.*, 
+                   COALESCE(CONCAT(a.first_name, ' ', a.last_name), CONCAT(e.first_name, ' ', e.last_name)) as participant_name,
                    CONCAT(a.first_name, ' ', a.last_name) as athlete_name, a.athlete_code,
                    cp.coach_code,
                    CONCAT(e.first_name, ' ', e.last_name) as employee_name, e.employee_code,
-                   ts.title as session_title, ts.training_date, ts.start_time, ts.end_time
+                   ts.title as session_title, ts.training_reference, ts.training_date, ts.start_time, ts.end_time,
+                   t.name as team_name
             FROM training_attendance ta
             LEFT JOIN athletes a ON ta.athlete_id = a.id
             LEFT JOIN coach_profiles cp ON ta.coach_id = cp.id
             LEFT JOIN employees e ON ta.employee_id = e.id
             LEFT JOIN training_sessions ts ON ta.training_session_id = ts.id
+            LEFT JOIN teams t ON ts.team_id = t.id
             WHERE ta.organization_id = :org_id
         ";
         $params = [':org_id' => $orgId];

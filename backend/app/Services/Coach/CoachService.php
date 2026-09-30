@@ -16,35 +16,240 @@ class CoachService extends BaseService
         $this->auditLog = $auditLog ?? new AuditLogService($this->pdo);
     }
 
-    public function listCoaches(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?string $specialization = null, ?string $status = null): array
+    /**
+     * Build shared WHERE conditions and bound parameters for both Coach list (paginated) and Coach export (unpaginated).
+     */
+    protected function buildFilterConditions(
+        int $organizationId,
+        ?string $search = null,
+        ?string $specialization = null,
+        ?string $status = null
+    ): array {
+        $conditions = [
+            "cp.organization_id = :org_id",
+            "e.organization_id = :emp_org_id",
+            "cp.deleted_at IS NULL",
+            "e.deleted_at IS NULL",
+        ];
+        $params = [
+            ':org_id'     => $organizationId,
+            ':emp_org_id' => $organizationId,
+        ];
+
+        $searchClean = trim((string)($search ?? ''));
+        if ($searchClean !== '') {
+            $conditions[] = "(
+                e.first_name LIKE :s1
+                OR e.last_name LIKE :s2
+                OR CONCAT(e.first_name, ' ', e.last_name) LIKE :s3
+                OR e.employee_code LIKE :s4
+                OR cp.coach_code LIKE :s5
+                OR cp.specialization LIKE :s6
+                OR e.email LIKE :s7
+                OR e.phone LIKE :s8
+                OR e.designation LIKE :s9
+            )";
+            $like = "%{$searchClean}%";
+            $params[':s1'] = $like;
+            $params[':s2'] = $like;
+            $params[':s3'] = $like;
+            $params[':s4'] = $like;
+            $params[':s5'] = $like;
+            $params[':s6'] = $like;
+            $params[':s7'] = $like;
+            $params[':s8'] = $like;
+            $params[':s9'] = $like;
+        }
+
+        $specClean = trim((string)($specialization ?? ''));
+        if ($specClean !== '') {
+            $conditions[] = "LOWER(TRIM(cp.specialization)) LIKE :spec";
+            $params[':spec'] = '%' . strtolower($specClean) . '%';
+        }
+
+        $statusClean = strtolower(trim((string)($status ?? '')));
+        if ($statusClean !== '') {
+            $conditions[] = "LOWER(cp.status) = :status";
+            $params[':status'] = $statusClean;
+        }
+
+        return [
+            'where'  => implode(' AND ', $conditions),
+            'params' => $params,
+        ];
+    }
+
+    /**
+     * Batch-hydrate active, non-deleted assigned teams for a list of coaches without multiplying coach rows.
+     */
+    protected function attachAssignedTeams(int $organizationId, array $coaches): array
+    {
+        if (empty($coaches) || !$this->pdo) {
+            return $coaches;
+        }
+
+        $coachIds = [];
+        foreach ($coaches as $c) {
+            $cid = (int)($c['coach_profile_id'] ?? ($c['id'] ?? 0));
+            if ($cid > 0) {
+                $coachIds[] = $cid;
+            }
+        }
+        $coachIds = array_values(array_unique($coachIds));
+        if (empty($coachIds)) {
+            return $coaches;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($coachIds), '?'));
+        $sql = "
+            SELECT
+                tc.coach_id,
+                tc.team_id,
+                tc.coach_role,
+                tc.is_primary,
+                tc.start_date,
+                tc.end_date,
+                t.name AS team_name,
+                t.team_code,
+                t.sport_id,
+                s.name AS sport_name
+            FROM team_coaches tc
+            JOIN teams t ON tc.team_id = t.id
+                AND t.deleted_at IS NULL
+                AND t.status = 'active'
+            LEFT JOIN sports s ON t.sport_id = s.id
+            WHERE tc.organization_id = ?
+              AND t.organization_id = ?
+              AND (tc.end_date IS NULL OR tc.end_date >= CURDATE())
+              AND tc.coach_id IN ({$placeholders})
+            ORDER BY tc.is_primary DESC, tc.id DESC, t.name ASC
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        $bindValues = array_merge([$organizationId, $organizationId], $coachIds);
+        $stmt->execute($bindValues);
+        $teamRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $teamsByCoach = [];
+        $seenTeamKeys = [];
+        foreach ($teamRows as $tr) {
+            $cid = (int)$tr['coach_id'];
+            $tid = (int)$tr['team_id'];
+            $normName = strtolower(trim((string)($tr['team_name'] ?? '')));
+            if ($normName === '') {
+                continue;
+            }
+            // Deduplicate by normalized team name per coach so duplicate team records or duplicate assignments don't repeat
+            if (isset($seenTeamKeys[$cid][$normName]) || isset($seenTeamKeys[$cid]['id:' . $tid])) {
+                continue;
+            }
+            $seenTeamKeys[$cid][$normName] = true;
+            $seenTeamKeys[$cid]['id:' . $tid] = true;
+
+            $teamsByCoach[$cid][] = [
+                'id'         => $tid,
+                'team_id'    => $tid,
+                'name'       => $tr['team_name'],
+                'team_name'  => $tr['team_name'],
+                'team_code'  => $tr['team_code'] ?? null,
+                'coach_role' => $tr['coach_role'] ?? 'head_coach',
+                'is_primary' => (int)($tr['is_primary'] ?? 0),
+                'sport_id'   => !empty($tr['sport_id']) ? (int)$tr['sport_id'] : null,
+                'sport_name' => $tr['sport_name'] ?? null,
+                'start_date' => $tr['start_date'] ?? null,
+            ];
+        }
+
+        foreach ($coaches as &$coach) {
+            $cid = (int)($coach['coach_profile_id'] ?? ($coach['id'] ?? 0));
+            $activeTeams = $teamsByCoach[$cid] ?? [];
+            $teamNames = array_column($activeTeams, 'team_name');
+
+            $coach['id'] = $cid;
+            $coach['coach_profile_id'] = $cid;
+            $coach['teams'] = $activeTeams;
+            $coach['team_count'] = count($activeTeams);
+            $coach['primary_team_name'] = $teamNames[0] ?? null;
+            $coach['extra_teams_count'] = max(0, count($teamNames) - 1);
+            $coach['all_teams_label'] = !empty($teamNames) ? implode(', ', $teamNames) : null;
+            $coach['assigned_teams'] = $coach['all_teams_label'];
+        }
+        unset($coach);
+
+        return $coaches;
+    }
+
+    /**
+     * Get distinct non-empty coach specializations for the current organization (excluding soft-deleted coaches).
+     */
+    public function getDistinctSpecializations(int $organizationId): array
     {
         if (!$this->pdo) {
-            return ['data' => [], 'total' => 0, 'page' => 1, 'limit' => $limit, 'total_pages' => 0];
+            return [];
         }
 
-        $conditions = ["e.organization_id = :org_id", "e.deleted_at IS NULL", "cp.deleted_at IS NULL"];
-        $params = [':org_id' => $organizationId];
+        $stmt = $this->pdo->prepare("
+            SELECT cp.specialization
+            FROM coach_profiles cp
+            JOIN employees e ON cp.employee_id = e.id
+            WHERE cp.organization_id = :org_id
+              AND e.organization_id = :emp_org_id
+              AND cp.deleted_at IS NULL
+              AND e.deleted_at IS NULL
+              AND cp.specialization IS NOT NULL
+              AND TRIM(cp.specialization) != ''
+            ORDER BY cp.specialization ASC
+        ");
+        $stmt->execute([
+            ':org_id'     => $organizationId,
+            ':emp_org_id' => $organizationId,
+        ]);
+        $raw = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 
-        if (!empty($search)) {
-            $conditions[] = "(e.first_name LIKE :search OR e.last_name LIKE :search OR e.employee_code LIKE :search OR cp.coach_code LIKE :search OR cp.specialization LIKE :search)";
-            $params[':search'] = "%{$search}%";
+        $unique = [];
+        $seenLower = [];
+        foreach ($raw as $spec) {
+            $trimmed = trim((string)$spec);
+            $lower = strtolower($trimmed);
+            if ($trimmed !== '' && !isset($seenLower[$lower])) {
+                $seenLower[$lower] = true;
+                $unique[] = $trimmed;
+            }
+        }
+        natcasesort($unique);
+        return array_values($unique);
+    }
+
+    public function listCoaches(
+        int $organizationId,
+        int $page = 1,
+        int $limit = 20,
+        ?string $search = null,
+        ?string $specialization = null,
+        ?string $status = null
+    ): array {
+        $limit = max(1, $limit);
+        $page = max(1, $page);
+
+        if (!$this->pdo) {
+            return [
+                'data'        => [],
+                'total'       => 0,
+                'page'        => 1,
+                'limit'       => $limit,
+                'total_pages' => 1,
+                'from'        => 0,
+                'to'          => 0,
+            ];
         }
 
-        if (!empty($specialization)) {
-            $conditions[] = "cp.specialization = :spec";
-            $params[':spec'] = $specialization;
-        }
+        $filter = $this->buildFilterConditions($organizationId, $search, $specialization, $status);
+        $whereClause = $filter['where'];
+        $params = $filter['params'];
 
-        if (!empty($status)) {
-            $conditions[] = "cp.status = :status";
-            $params[':status'] = $status;
-        }
-
-        $whereClause = implode(' AND ', $conditions);
-
-        // Count query
+        // Unique non-deleted coach count
         $countStmt = $this->pdo->prepare("
-            SELECT COUNT(DISTINCT cp.id) 
+            SELECT COUNT(DISTINCT cp.id)
             FROM coach_profiles cp
             JOIN employees e ON cp.employee_id = e.id
             WHERE {$whereClause}
@@ -52,35 +257,45 @@ class CoachService extends BaseService
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
+        $totalPages = max(1, (int)ceil($total / $limit));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
         $offset = ($page - 1) * $limit;
 
-        // Fetch query with assigned teams
+        // One row per coach_profiles.id
         $sql = "
-            SELECT 
-                cp.id as coach_profile_id,
+            SELECT
+                cp.id AS id,
+                cp.id AS coach_profile_id,
+                cp.organization_id,
                 cp.coach_code,
                 cp.specialization,
                 cp.qualification,
+                cp.certifications,
+                cp.license_number,
                 cp.experience_years,
-                cp.status as coach_status,
-                cp.joining_date as coach_joining_date,
-                e.id as employee_id,
+                cp.status AS status,
+                cp.status AS coach_status,
+                COALESCE(e.joining_date, cp.joining_date) AS joining_date,
+                cp.joining_date AS coach_joining_date,
+                cp.created_at,
+                cp.updated_at,
+                e.id AS employee_id,
                 e.employee_code,
                 e.first_name,
+                e.middle_name,
                 e.last_name,
                 e.phone,
                 e.email,
                 e.designation,
-                d.name as department_name,
-                GROUP_CONCAT(DISTINCT t.name SEPARATOR ', ') as assigned_teams,
-                COUNT(DISTINCT tc.team_id) as team_count
+                e.employment_type,
+                e.employment_status,
+                d.name AS department_name
             FROM coach_profiles cp
             JOIN employees e ON cp.employee_id = e.id
             LEFT JOIN departments d ON e.department_id = d.id
-            LEFT JOIN team_coaches tc ON cp.id = tc.coach_id
-            LEFT JOIN teams t ON tc.team_id = t.id AND t.deleted_at IS NULL
             WHERE {$whereClause}
-            GROUP BY cp.id, e.id, d.name
             ORDER BY cp.id DESC
             LIMIT :limit OFFSET :offset
         ";
@@ -94,12 +309,99 @@ class CoachService extends BaseService
         $stmt->execute();
         $coaches = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        $coaches = $this->attachAssignedTeams($organizationId, $coaches);
+
+        $from = $total > 0 ? ($offset + 1) : 0;
+        $to = $total > 0 ? min($total, $offset + count($coaches)) : 0;
+
         return [
-            'data' => $coaches,
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-            'total_pages' => ceil($total / max(1, $limit)),
+            'data'        => $coaches,
+            'total'       => $total,
+            'page'        => $page,
+            'limit'       => $limit,
+            'total_pages' => $totalPages,
+            'from'        => $from,
+            'to'          => $to,
+        ];
+    }
+
+    /**
+     * Fetch all non-deleted coaches matching the active filters without pagination (used by Excel export).
+     */
+    public function listAllFilteredCoaches(
+        int $organizationId,
+        ?string $search = null,
+        ?string $specialization = null,
+        ?string $status = null
+    ): array {
+        if (!$this->pdo) {
+            return [];
+        }
+
+        $filter = $this->buildFilterConditions($organizationId, $search, $specialization, $status);
+        $whereClause = $filter['where'];
+        $params = $filter['params'];
+
+        $sql = "
+            SELECT
+                cp.id AS id,
+                cp.id AS coach_profile_id,
+                cp.organization_id,
+                cp.coach_code,
+                cp.specialization,
+                cp.qualification,
+                cp.certifications,
+                cp.license_number,
+                cp.experience_years,
+                cp.status AS status,
+                cp.status AS coach_status,
+                COALESCE(e.joining_date, cp.joining_date) AS joining_date,
+                cp.joining_date AS coach_joining_date,
+                cp.created_at,
+                cp.updated_at,
+                e.id AS employee_id,
+                e.employee_code,
+                e.first_name,
+                e.middle_name,
+                e.last_name,
+                e.phone,
+                e.email,
+                e.designation,
+                e.employment_type,
+                e.employment_status,
+                d.name AS department_name
+            FROM coach_profiles cp
+            JOIN employees e ON cp.employee_id = e.id
+            LEFT JOIN departments d ON e.department_id = d.id
+            WHERE {$whereClause}
+            ORDER BY cp.id DESC
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+        $coaches = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        return $this->attachAssignedTeams($organizationId, $coaches);
+    }
+
+    /**
+     * Generate a filtered, unpaginated OpenXML (.xlsx) export for Coaches.
+     */
+    public function exportCoachesXlsx(
+        int $organizationId,
+        ?string $search = null,
+        ?string $specialization = null,
+        ?string $status = null
+    ): array {
+        $coaches = $this->listAllFilteredCoaches($organizationId, $search, $specialization, $status);
+        $filename = \App\Services\Export\CoachXlsxExporter::buildFilename($specialization, $status);
+        $binary = \App\Services\Export\CoachXlsxExporter::generateXlsxBinary($coaches);
+
+        return [
+            'filename' => $filename,
+            'binary'   => $binary,
+            'count'    => count($coaches),
+            'rows'     => \App\Services\Export\CoachXlsxExporter::formatRows($coaches),
         ];
     }
 
@@ -108,11 +410,14 @@ class CoachService extends BaseService
         if (!$this->pdo) return null;
 
         $stmt = $this->pdo->prepare("
-            SELECT 
+            SELECT
                 cp.*,
-                cp.id as coach_profile_id,
-                cp.status as coach_status,
-                e.id as employee_id,
+                cp.id AS coach_profile_id,
+                cp.status AS coach_status,
+                COALESCE(e.joining_date, cp.joining_date) AS joining_date,
+                cp.created_at AS created_at,
+                cp.updated_at AS updated_at,
+                e.id AS employee_id,
                 e.employee_code,
                 e.first_name,
                 e.middle_name,
@@ -133,33 +438,33 @@ class CoachService extends BaseService
                 e.emergency_contact_phone,
                 e.emergency_contact_relationship,
                 e.department_id,
-                d.name as department_name
+                d.name AS department_name
             FROM coach_profiles cp
             JOIN employees e ON cp.employee_id = e.id
             LEFT JOIN departments d ON e.department_id = d.id
-            WHERE cp.id = :id AND cp.organization_id = :org_id AND cp.deleted_at IS NULL AND e.deleted_at IS NULL
+            WHERE cp.id = :id
+              AND cp.organization_id = :org_id
+              AND e.organization_id = :emp_org_id
+              AND cp.deleted_at IS NULL
+              AND e.deleted_at IS NULL
             LIMIT 1
         ");
-        $stmt->execute([':id' => $coachProfileId, ':org_id' => $organizationId]);
+        $stmt->execute([
+            ':id'         => $coachProfileId,
+            ':org_id'     => $organizationId,
+            ':emp_org_id' => $organizationId,
+        ]);
         $coach = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$coach) return null;
 
-        // Fetch assigned teams
-        $teamStmt = $this->pdo->prepare("
-            SELECT tc.*, t.name as team_name, t.sport_id, s.name as sport_name
-            FROM team_coaches tc
-            JOIN teams t ON tc.team_id = t.id AND t.deleted_at IS NULL
-            LEFT JOIN sports s ON t.sport_id = s.id
-            WHERE tc.coach_id = :coach_id AND tc.organization_id = :org_id
-            ORDER BY tc.is_primary DESC, t.name ASC
-        ");
-        $teamStmt->execute([':coach_id' => $coachProfileId, ':org_id' => $organizationId]);
-        $coach['teams'] = $teamStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        // Hydrate deduplicated active assigned teams
+        $hydrated = $this->attachAssignedTeams($organizationId, [$coach]);
+        $coach = $hydrated[0];
 
         // Fetch recent training sessions
         $trainStmt = $this->pdo->prepare("
-            SELECT ts.*, t.name as team_name, v.name as venue_name
+            SELECT ts.*, t.name AS team_name, v.name AS venue_name
             FROM training_sessions ts
             LEFT JOIN teams t ON ts.team_id = t.id
             LEFT JOIN venues v ON ts.venue_id = v.id
@@ -207,6 +512,21 @@ class CoachService extends BaseService
         }
 
         if (!$this->pdo) return [];
+
+        // Validate optional team_id before inserting into employees/coach_profiles
+        $validatedTeamId = null;
+        if (!empty($data['team_id'])) {
+            $validatedTeamId = (int)$data['team_id'];
+            $teamCheck = $this->pdo->prepare("
+                SELECT id FROM teams
+                WHERE id = :team_id AND organization_id = :org_id AND deleted_at IS NULL
+                LIMIT 1
+            ");
+            $teamCheck->execute([':team_id' => $validatedTeamId, ':org_id' => $organizationId]);
+            if (!$teamCheck->fetchColumn()) {
+                throw new \InvalidArgumentException('Unauthorized team assignment: team does not exist in this organization.');
+            }
+        }
 
         $this->pdo->beginTransaction();
         try {
@@ -283,7 +603,7 @@ class CoachService extends BaseService
             $coachProfileId = (int)$this->pdo->lastInsertId();
 
             // 3. Optional Team Assignment
-            if (!empty($data['team_id'])) {
+            if ($validatedTeamId !== null) {
                 $tcSql = "
                     INSERT INTO team_coaches (organization_id, team_id, coach_id, coach_role, start_date, is_primary, created_at, updated_at)
                     VALUES (:org_id, :team_id, :coach_id, :role, CURDATE(), 1, NOW(), NOW())
@@ -291,7 +611,7 @@ class CoachService extends BaseService
                 $tcStmt = $this->pdo->prepare($tcSql);
                 $tcStmt->execute([
                     ':org_id' => $organizationId,
-                    ':team_id' => (int)$data['team_id'],
+                    ':team_id' => $validatedTeamId,
                     ':coach_id' => $coachProfileId,
                     ':role' => $data['coach_role'] ?? 'head_coach'
                 ]);
@@ -365,6 +685,21 @@ class CoachService extends BaseService
             throw new \InvalidArgumentException('Valid coach status is required.');
         }
 
+        // Validate optional team_id before updating employee/coach_profiles
+        $validatedTeamId = null;
+        if (!empty($data['team_id'])) {
+            $validatedTeamId = (int)$data['team_id'];
+            $teamCheck = $this->pdo->prepare("
+                SELECT id FROM teams
+                WHERE id = :team_id AND organization_id = :org_id AND deleted_at IS NULL
+                LIMIT 1
+            ");
+            $teamCheck->execute([':team_id' => $validatedTeamId, ':org_id' => $organizationId]);
+            if (!$teamCheck->fetchColumn()) {
+                throw new \InvalidArgumentException('Unauthorized team assignment: team does not exist in this organization.');
+            }
+        }
+
         $this->pdo->beginTransaction();
         try {
             $employeeId = (int)$existing['employee_id'];
@@ -386,6 +721,7 @@ class CoachService extends BaseService
                     postal_code = :zip,
                     department_id = :dept_id,
                     designation = :designation,
+                    joining_date = :joining_date,
                     employment_type = :employment_type,
                     notes = :notes,
                     updated_at = NOW()
@@ -407,6 +743,7 @@ class CoachService extends BaseService
                 ':zip' => $data['postal_code'] ?? $existing['postal_code'],
                 ':dept_id' => !empty($data['department_id']) ? (int)$data['department_id'] : ($existing['department_id'] ?? null),
                 ':designation' => $data['designation'] ?? $existing['designation'],
+                ':joining_date' => !empty($data['joining_date']) ? $data['joining_date'] : ($existing['joining_date'] ?? null),
                 ':employment_type' => $data['employment_type'] ?? $existing['employment_type'],
                 ':notes' => $data['notes'] ?? $existing['notes'],
                 ':emp_id' => $employeeId,
@@ -420,6 +757,7 @@ class CoachService extends BaseService
                     qualification = :qual,
                     certifications = :cert,
                     experience_years = :exp,
+                    joining_date = :joining_date,
                     license_number = :lic_num,
                     status = :status,
                     notes = :notes,
@@ -432,6 +770,7 @@ class CoachService extends BaseService
                 ':qual' => $data['qualification'] ?? $existing['qualification'],
                 ':cert' => $data['certifications'] ?? $existing['certifications'],
                 ':exp' => isset($data['experience_years']) ? (float)$data['experience_years'] : $existing['experience_years'],
+                ':joining_date' => !empty($data['joining_date']) ? $data['joining_date'] : ($existing['joining_date'] ?? null),
                 ':lic_num' => $data['license_number'] ?? $existing['license_number'],
                 ':status' => $data['status'] ?? $existing['coach_status'],
                 ':notes' => $data['notes'] ?? $existing['notes'],
@@ -440,10 +779,9 @@ class CoachService extends BaseService
             ]);
 
             // 3. Update team assignment if provided
-            if (!empty($data['team_id'])) {
-                $teamId = (int)$data['team_id'];
+            if ($validatedTeamId !== null) {
                 $checkStmt = $this->pdo->prepare("SELECT id FROM team_coaches WHERE coach_id = :cch_id AND team_id = :t_id AND organization_id = :org_id");
-                $checkStmt->execute([':cch_id' => $coachProfileId, ':t_id' => $teamId, ':org_id' => $organizationId]);
+                $checkStmt->execute([':cch_id' => $coachProfileId, ':t_id' => $validatedTeamId, ':org_id' => $organizationId]);
                 if (!$checkStmt->fetch()) {
                     $tcStmt = $this->pdo->prepare("
                         INSERT INTO team_coaches (organization_id, team_id, coach_id, coach_role, start_date, is_primary, created_at, updated_at)
@@ -451,7 +789,7 @@ class CoachService extends BaseService
                     ");
                     $tcStmt->execute([
                         ':org_id' => $organizationId,
-                        ':team_id' => $teamId,
+                        ':team_id' => $validatedTeamId,
                         ':coach_id' => $coachProfileId,
                         ':role' => $data['coach_role'] ?? 'head_coach'
                     ]);

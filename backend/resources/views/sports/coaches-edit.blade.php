@@ -1,209 +1,319 @@
 <?php
 $coachId = (int)($id ?? ($_GET['id'] ?? 0));
 $orgId = current_organization_id();
+
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? 2);
+$currentUser = $_SESSION['auth']['user'] ?? [
+    'id' => 102,
+    'email' => 'sportsadmin@khelsutra.local',
+    'role_id' => 2,
+];
+$userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+
+$isAthlete = ($currentRoleSlug === 'athlete') || ($currentRoleId === 5) || !empty($currentUser['athlete_id']);
+$isCoach = ($currentRoleSlug === 'coach') || ($currentRoleId === 4) || !empty($currentUser['coach_id']);
+
+$permissionService = new \App\Services\Rbac\PermissionService();
+$userPayload = array_merge(
+    $_SESSION['auth'] ?? [],
+    $currentUser,
+    [
+        'id' => $userId,
+        'role_id' => $currentRoleId,
+        'role' => $_SESSION['auth']['role'] ?? ['id' => $currentRoleId, 'slug' => $currentRoleSlug],
+        'permissions' => $_SESSION['auth']['permissions'] ?? ($currentUser['permissions'] ?? []),
+    ]
+);
+
+$canEditCoach = !$isCoach && !$isAthlete && (
+    $permissionService->hasPermission($userPayload, 'coach.update', $orgId) ||
+    $permissionService->hasPermission($userPayload, 'coach.manage', $orgId)
+);
+
+if (!$canEditCoach) {
+    if (!headers_sent()) {
+        http_response_code(403);
+    }
+    echo '<div class="p-5 text-center text-danger fw-bold">403 Forbidden: You do not have permission to edit coaching staff records.</div>';
+    return;
+}
+
 $coachService = new \App\Services\Coach\CoachService();
-$coach = $coachService->getCoach($orgId, $coachId);
+$coach = $coachId > 0 ? $coachService->getCoach($orgId, $coachId) : null;
 
-$db = \App\Services\BaseService::getDatabaseConnection();
+if (!$coach && !headers_sent()) {
+    http_response_code(404);
+}
 
-// Fetch departments
-$deptStmt = $db->prepare("SELECT id, name FROM departments WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
-$deptStmt->execute([':org_id' => $orgId]);
-$departments = $deptStmt ? $deptStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$pdo = \App\Services\BaseService::getDatabaseConnection();
+$departments = [];
+$teams = [];
+if ($pdo) {
+    $dStmt = $pdo->prepare("SELECT id, name FROM departments WHERE organization_id = :org_id AND deleted_at IS NULL ORDER BY name ASC");
+    $dStmt->execute([':org_id' => $orgId]);
+    $departments = $dStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
-// Fetch active teams
-$teamsStmt = $db->prepare("SELECT id, name FROM teams WHERE organization_id = :org_id AND deleted_at IS NULL ORDER BY name ASC");
-$teamsStmt->execute([':org_id' => $orgId]);
-$teams = $teamsStmt ? $teamsStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    $tStmt = $pdo->prepare("SELECT id, name, team_code FROM teams WHERE organization_id = :org_id AND deleted_at IS NULL AND status = 'active' ORDER BY id DESC");
+    $tStmt->execute([':org_id' => $orgId]);
+    $rawTeams = $tStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $seenNames = [];
+    foreach ($rawTeams as $rt) {
+        $norm = strtolower(trim((string)($rt['name'] ?? '')));
+        if ($norm !== '' && !isset($seenNames[$norm])) {
+            $seenNames[$norm] = true;
+            $teams[] = $rt;
+        }
+    }
+    usort($teams, fn($a, $b) => strcasecmp($a['name'] ?? '', $b['name'] ?? ''));
+}
 
-$pageTitle = $coach ? 'Edit Coach — ' . htmlspecialchars($coach['first_name'] . ' ' . $coach['last_name']) : 'Edit Coach';
+$fullName = $coach ? trim(($coach['first_name'] ?? '') . ' ' . ($coach['last_name'] ?? '')) : '';
+$title = $coach ? ('Edit ' . $fullName . ' — KhelSutra') : 'Edit Coach — KhelSutra';
+$pageTitle = $title;
 $activePage = 'coaches';
+
+// Format experience value cleanly (e.g. 9.00 -> 9, 18.50 -> 18.5)
+$expVal = '';
+if ($coach && isset($coach['experience_years']) && $coach['experience_years'] !== null && $coach['experience_years'] !== '') {
+    $expNum = (float)$coach['experience_years'];
+    $expVal = ((float)(int)$expNum === $expNum) ? (string)(int)$expNum : rtrim(rtrim(number_format($expNum, 2, '.', ''), '0'), '.');
+}
 
 ob_start();
 ?>
 
-<div class="ks-content">
+<div class="ks-page">
     <?php if (!$coach): ?>
-        <div class="card p-5 text-center" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+        <div class="ks-content-card p-5 text-center my-4">
             <div class="mb-3"><i class="bi bi-person-x fs-1 text-muted"></i></div>
-            <h4 class="fw-bold" style="color: var(--ks-navy);">Coach Not Found</h4>
-            <p class="text-muted small">The requested coach record does not exist or does not belong to your organisation.</p>
+            <h4 class="fw-bold text-dark">Coach Not Found</h4>
+            <p class="text-muted small">The requested coach record does not exist, has been archived, or does not belong to your organisation.</p>
             <div class="mt-3">
-                <a href="/coaches" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-weight: 500;">
+                <a href="/coaches" class="btn btn-outline-secondary" style="border-radius: 8px; font-weight: 500;">
                     <i class="bi bi-arrow-left me-1"></i> Back to Coaches
                 </a>
             </div>
         </div>
     <?php else: ?>
-        <!-- Back Navigation -->
+        <!-- Page Header -->
         <div class="mb-3">
-            <a href="/coaches/<?= (int)$coach['coach_profile_id'] ?>" class="text-decoration-none text-muted small fw-medium">
-                <i class="bi bi-arrow-left me-1"></i> Back to Coach Details
+            <a href="/coaches/<?= (int)$coach['coach_profile_id'] ?>" class="text-decoration-none text-muted small fw-medium d-inline-flex align-items-center gap-1 mb-2" style="font-size: 12.5px;">
+                <i class="bi bi-arrow-left"></i> Back to Coach Profile
             </a>
-        </div>
-
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <div>
-                <h1 class="h4 fw-bold mb-0" style="color: var(--ks-navy);">Edit Coach: <?= htmlspecialchars($coach['first_name'] . ' ' . $coach['last_name'], ENT_QUOTES, 'UTF-8') ?></h1>
-                <div class="text-muted small mt-1">Code: <strong><?= htmlspecialchars($coach['coach_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong> &bull; Employee Code: <strong><?= htmlspecialchars($coach['employee_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div class="ks-page-header mb-0">
+                <div>
+                    <h1 class="ks-page-title mb-1">Edit Coach: <?= htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8') ?></h1>
+                    <p class="text-muted small mb-0">Coach Code: <strong><?= htmlspecialchars($coach['coach_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong> &bull; Employee Code: <strong><?= htmlspecialchars($coach['employee_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong></p>
+                </div>
+                <div class="ks-header-actions">
+                    <a href="/coaches/<?= (int)$coach['coach_profile_id'] ?>" class="btn btn-outline-secondary px-3 py-2" style="border-radius: 8px; font-size: 13px; font-weight: 500;">Cancel</a>
+                    <button type="submit" form="editCoachForm" class="ks-btn ks-btn-primary px-4 py-2">
+                        <i class="bi bi-check-lg"></i>
+                        <span>Save Changes</span>
+                    </button>
+                </div>
             </div>
         </div>
 
-        <?php if (!empty($_GET['error'])): ?>
-            <div class="alert alert-danger mb-4 py-2 px-3 small d-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button);">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                <div><?= htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8') ?></div>
-            </div>
-        <?php endif; ?>
+        <form id="editCoachForm" action="/coaches/<?= (int)$coach['coach_profile_id'] ?>/edit" method="POST">
+            <!-- 1. Personal Information -->
+            <div class="ks-content-card mb-3">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-person-fill text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">1. Personal Information</h3>
+                    </div>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="ks-form-label">First Name <span class="text-danger">*</span></label>
+                            <input type="text" name="first_name" class="ks-form-control" value="<?= htmlspecialchars($coach['first_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Middle Name</label>
+                            <input type="text" name="middle_name" class="ks-form-control" value="<?= htmlspecialchars($coach['middle_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Last Name <span class="text-danger">*</span></label>
+                            <input type="text" name="last_name" class="ks-form-control" value="<?= htmlspecialchars($coach['last_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
 
-        <form action="/coaches/<?= (int)$coach['coach_profile_id'] ?>/edit" method="POST" id="editCoachForm">
-            <!-- Section 1: Personal Details -->
-            <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                    1. Personal Information
-                </h5>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Date of Birth <span class="text-danger">*</span></label>
+                            <input type="date" name="date_of_birth" class="ks-form-control" value="<?= htmlspecialchars($coach['date_of_birth'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Gender <span class="text-danger">*</span></label>
+                            <select name="gender" class="ks-form-select" required>
+                                <option value="male" <?= ($coach['gender'] ?? '') === 'male' ? 'selected' : '' ?>>Male</option>
+                                <option value="female" <?= ($coach['gender'] ?? '') === 'female' ? 'selected' : '' ?>>Female</option>
+                                <option value="other" <?= ($coach['gender'] ?? '') === 'other' ? 'selected' : '' ?>>Other</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Blood Group</label>
+                            <select name="blood_group" class="ks-form-select">
+                                <option value="">Select blood group</option>
+                                <?php foreach (['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'] as $bg): ?>
+                                    <option value="<?= $bg ?>" <?= ($coach['blood_group'] ?? '') === $bg ? 'selected' : '' ?>><?= $bg ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
 
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">First Name <span class="text-danger">*</span></label>
-                        <input type="text" name="first_name" class="form-control" value="<?= htmlspecialchars($coach['first_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Middle Name</label>
-                        <input type="text" name="middle_name" class="form-control" value="<?= htmlspecialchars($coach['middle_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Last Name <span class="text-danger">*</span></label>
-                        <input type="text" name="last_name" class="form-control" value="<?= htmlspecialchars($coach['last_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Phone Number</label>
+                            <input type="tel" name="phone" class="ks-form-control" value="<?= htmlspecialchars($coach['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Email Address</label>
+                            <input type="email" name="email" class="ks-form-control" value="<?= htmlspecialchars($coach['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
 
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Date of Birth <span class="text-danger">*</span></label>
-                        <input type="date" name="date_of_birth" class="form-control" value="<?= htmlspecialchars($coach['date_of_birth'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Gender <span class="text-danger">*</span></label>
-                        <select name="gender" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="male" <?= ($coach['gender'] ?? '') === 'male' ? 'selected' : '' ?>>Male</option>
-                            <option value="female" <?= ($coach['gender'] ?? '') === 'female' ? 'selected' : '' ?>>Female</option>
-                            <option value="other" <?= ($coach['gender'] ?? '') === 'other' ? 'selected' : '' ?>>Other</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Blood Group</label>
-                        <select name="blood_group" class="form-select" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="">Select blood group</option>
-                            <?php foreach (['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as $bg): ?>
-                                <option value="<?= $bg ?>" <?= ($coach['blood_group'] ?? '') === $bg ? 'selected' : '' ?>><?= $bg ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
+                        <div class="col-12">
+                            <label class="ks-form-label">Address Line</label>
+                            <input type="text" name="address_line1" class="ks-form-control" value="<?= htmlspecialchars($coach['address_line1'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Phone Number</label>
-                        <input type="text" name="phone" class="form-control" value="<?= htmlspecialchars($coach['phone'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Email Address</label>
-                        <input type="email" name="email" class="form-control" value="<?= htmlspecialchars($coach['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold text-dark">Address Line</label>
-                        <input type="text" name="address_line1" class="form-control" value="<?= htmlspecialchars($coach['address_line1'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">City</label>
-                        <input type="text" name="city" class="form-control" value="<?= htmlspecialchars($coach['city'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">State</label>
-                        <input type="text" name="state" class="form-control" value="<?= htmlspecialchars($coach['state'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Postal Code</label>
-                        <input type="text" name="postal_code" class="form-control" value="<?= htmlspecialchars($coach['postal_code'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <div class="col-md-4">
+                            <label class="ks-form-label">City</label>
+                            <input type="text" name="city" class="ks-form-control" value="<?= htmlspecialchars($coach['city'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">State</label>
+                            <input type="text" name="state" class="ks-form-control" value="<?= htmlspecialchars($coach['state'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Postal Code</label>
+                            <input type="text" name="postal_code" class="ks-form-control" value="<?= htmlspecialchars($coach['postal_code'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Section 2: Employment & Department -->
-            <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                    2. Employment & Department
-                </h5>
-
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Designation <span class="text-danger">*</span></label>
-                        <input type="text" name="designation" class="form-control" value="<?= htmlspecialchars($coach['designation'] ?? 'Coach', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
+            <!-- 2. Employment & Department -->
+            <div class="ks-content-card mb-3">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-briefcase-fill text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">2. Employment &amp; Department</h3>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Department</label>
-                        <select name="department_id" class="form-select" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="">General Coaching</option>
-                            <?php foreach ($departments as $dept): ?>
-                                <option value="<?= (int)$dept['id'] ?>" <?= ($coach['department_id'] ?? '') == $dept['id'] ? 'selected' : '' ?>><?= htmlspecialchars($dept['name'], ENT_QUOTES, 'UTF-8') ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Employment Type</label>
-                        <select name="employment_type" class="form-select" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="full_time" <?= ($coach['employment_type'] ?? '') === 'full_time' ? 'selected' : '' ?>>Full Time</option>
-                            <option value="part_time" <?= ($coach['employment_type'] ?? '') === 'part_time' ? 'selected' : '' ?>>Part Time</option>
-                            <option value="contract" <?= ($coach['employment_type'] ?? '') === 'contract' ? 'selected' : '' ?>>Contract</option>
-                        </select>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-md-3 col-sm-6">
+                            <label class="ks-form-label">Designation <span class="text-danger">*</span></label>
+                            <input type="text" name="designation" class="ks-form-control" value="<?= htmlspecialchars($coach['designation'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="ks-form-label">Department</label>
+                            <select name="department_id" class="ks-form-select">
+                                <option value="">General Coaching</option>
+                                <?php foreach ($departments as $d): ?>
+                                    <option value="<?= (int)$d['id'] ?>" <?= ($coach['department_id'] ?? '') == $d['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($d['name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="ks-form-label">Employment Type</label>
+                            <select name="employment_type" class="ks-form-select">
+                                <option value="full_time" <?= ($coach['employment_type'] ?? '') === 'full_time' ? 'selected' : '' ?>>Full Time</option>
+                                <option value="part_time" <?= ($coach['employment_type'] ?? '') === 'part_time' ? 'selected' : '' ?>>Part Time</option>
+                                <option value="contract" <?= ($coach['employment_type'] ?? '') === 'contract' ? 'selected' : '' ?>>Contract</option>
+                                <option value="visiting" <?= ($coach['employment_type'] ?? '') === 'visiting' ? 'selected' : '' ?>>Visiting</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="ks-form-label">Joining Date</label>
+                            <input type="date" name="joining_date" class="ks-form-control" value="<?= htmlspecialchars(!empty($coach['joining_date']) ? date('Y-m-d', strtotime($coach['joining_date'])) : '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Section 3: Coaching Credentials & Profile -->
-            <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                    3. Coaching Profile & Credentials
-                </h5>
+            <!-- 3. Coaching Profile & Credentials -->
+            <div class="ks-content-card mb-3">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-award-fill text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">3. Coaching Profile &amp; Credentials</h3>
+                    </div>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Specialization <span class="text-danger">*</span></label>
+                            <input type="text" name="specialization" class="ks-form-control" value="<?= htmlspecialchars($coach['specialization'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="ks-form-label">Experience (Years)</label>
+                            <input type="number" step="0.5" min="0" max="60" name="experience_years" class="ks-form-control" value="<?= htmlspecialchars($expVal, ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-3 col-sm-6">
+                            <label class="ks-form-label">Coach Status <span class="text-danger">*</span></label>
+                            <select name="status" class="ks-form-select" required>
+                                <option value="active" <?= ($coach['coach_status'] ?? 'active') === 'active' ? 'selected' : '' ?>>Active</option>
+                                <option value="inactive" <?= ($coach['coach_status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
+                            </select>
+                        </div>
 
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Specialization <span class="text-danger">*</span></label>
-                        <input type="text" name="specialization" class="form-control" value="<?= htmlspecialchars($coach['specialization'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold text-dark">Experience (Years)</label>
-                        <input type="number" step="0.5" name="experience_years" class="form-control" value="<?= (float)($coach['experience_years'] ?? 0) ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold text-dark">Coach Status <span class="text-danger">*</span></label>
-                        <select name="status" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="active" <?= ($coach['coach_status'] ?? '') === 'active' ? 'selected' : '' ?>>Active</option>
-                            <option value="inactive" <?= ($coach['coach_status'] ?? '') === 'inactive' ? 'selected' : '' ?>>Inactive</option>
-                        </select>
-                    </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Academic Qualifications</label>
+                            <input type="text" name="qualification" class="ks-form-control" value="<?= htmlspecialchars($coach['qualification'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">License / Registration Number</label>
+                            <input type="text" name="license_number" class="ks-form-control" value="<?= htmlspecialchars($coach['license_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Academic Qualifications</label>
-                        <input type="text" name="qualification" class="form-control" value="<?= htmlspecialchars($coach['qualification'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <div class="col-12">
+                            <label class="ks-form-label">Certifications &amp; Badges</label>
+                            <textarea name="certifications" class="ks-form-control" rows="2"><?= htmlspecialchars($coach['certifications'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
                     </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">License / Registration Number</label>
-                        <input type="text" name="license_number" class="form-control" value="<?= htmlspecialchars($coach['license_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
+                </div>
+            </div>
 
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold text-dark">Certifications & Badges</label>
-                        <textarea name="certifications" class="form-control" rows="2" style="font-size: 13px; border-radius: var(--ks-radius-button);"><?= htmlspecialchars($coach['certifications'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+            <!-- 4. Additional Squad Assignment -->
+            <div class="ks-content-card mb-3">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-people-fill text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">4. Assign Additional Squad (Optional)</h3>
+                    </div>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Assign to Team</label>
+                            <select name="team_id" class="ks-form-select">
+                                <option value="">No new team assignment</option>
+                                <?php foreach ($teams as $t): ?>
+                                    <option value="<?= (int)$t['id'] ?>"><?= htmlspecialchars($t['name'], ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Role in Squad</label>
+                            <select name="coach_role" class="ks-form-select">
+                                <option value="head_coach">Head Coach</option>
+                                <option value="assistant_coach">Assistant Coach</option>
+                                <option value="fitness_trainer">Fitness Trainer</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Form Actions -->
-            <div class="d-flex align-items-center justify-content-end gap-3 mb-5">
-                <a href="/coaches/<?= (int)$coach['coach_profile_id'] ?>" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 10px 24px;">
-                    Cancel
-                </a>
-                <button type="submit" class="btn btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 10px 24px;">
-                    <i class="bi bi-check2 me-1"></i> Save Changes
+            <div class="d-flex justify-content-end gap-2 mt-3 mb-4">
+                <a href="/coaches/<?= (int)$coach['coach_profile_id'] ?>" class="btn btn-outline-secondary px-4 py-2" style="border-radius: 8px; font-size: 13px; font-weight: 500;">Cancel</a>
+                <button type="submit" class="ks-btn ks-btn-primary px-4 py-2">
+                    <i class="bi bi-check-lg"></i>
+                    <span>Save Changes</span>
                 </button>
             </div>
         </form>

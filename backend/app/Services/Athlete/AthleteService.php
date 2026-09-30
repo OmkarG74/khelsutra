@@ -33,9 +33,58 @@ class AthleteService
         return $this->pdo;
     }
 
-    public function listAthletes(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?int $sportId = null, ?string $status = null): array
-    {
-        return $this->repository->getPaginated($organizationId, $page, $limit, $search, $sportId, $status);
+    public function listAthletes(
+        int $organizationId,
+        int $page = 1,
+        int $limit = 20,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null
+    ): array {
+        return $this->repository->getPaginated($organizationId, $page, $limit, $search, $sportId, $status, $coachId);
+    }
+
+    public function listAllFilteredAthletes(
+        int $organizationId,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null
+    ): array {
+        return $this->repository->getAllFiltered($organizationId, $search, $sportId, $status, $coachId);
+    }
+
+    /**
+     * Export filtered athletes (ignoring pagination) as a real OpenXML .xlsx binary + metadata.
+     */
+    public function exportAthletesXlsx(
+        int $organizationId,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null
+    ): array {
+        $athletes = $this->repository->getAllFiltered($organizationId, $search, $sportId, $status, $coachId);
+
+        $sportName = null;
+        if (!empty($sportId) && $sportId > 0 && $this->pdo) {
+            $sStmt = $this->pdo->prepare("SELECT name FROM sports WHERE id = :id LIMIT 1");
+            $sStmt->execute([':id' => (int)$sportId]);
+            $sportName = $sStmt->fetchColumn() ?: null;
+        }
+
+        $filename = \App\Services\Export\AthleteXlsxExporter::buildFilename($sportName, $status);
+        $binary = \App\Services\Export\AthleteXlsxExporter::generateXlsxBinary($athletes);
+        $formattedRows = \App\Services\Export\AthleteXlsxExporter::formatRows($athletes);
+
+        return [
+            'filename' => $filename,
+            'binary' => $binary,
+            'rows' => $formattedRows,
+            'athletes' => $athletes,
+            'count' => count($athletes),
+        ];
     }
 
     public function getAthlete(int $organizationId, int $id): ?array

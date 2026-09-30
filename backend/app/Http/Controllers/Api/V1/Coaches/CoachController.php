@@ -19,7 +19,7 @@ class CoachController extends Controller
     public function index(int $organizationId, array $requestData): array
     {
         $page = (int)($requestData['page'] ?? 1);
-        $limit = (int)($requestData['limit'] ?? 15);
+        $limit = (int)($requestData['limit'] ?? 20);
         $search = $requestData['search'] ?? null;
         $specialization = $requestData['specialization'] ?? null;
         $status = $requestData['status'] ?? null;

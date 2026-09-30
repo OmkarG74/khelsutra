@@ -16,18 +16,48 @@ class TeamService extends BaseService
         $this->auditLog = $auditLog ?? new AuditLogService($this->pdo);
     }
 
-    public function listTeams(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?int $sportId = null, ?string $status = null): array
-    {
+    public function listTeams(
+        int $organizationId,
+        int $page = 1,
+        int $limit = 20,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null,
+        ?int $athleteId = null
+    ): array {
         if (!$this->pdo) {
-            return ['data' => [], 'total' => 0, 'page' => 1, 'limit' => $limit, 'total_pages' => 0];
+            return [
+                'data' => [],
+                'total' => 0,
+                'page' => 1,
+                'limit' => $limit,
+                'total_pages' => 0,
+                'from' => 0,
+                'to' => 0,
+            ];
         }
+
+        $page = max(1, $page);
+        $limit = max(1, $limit);
 
         $conditions = ["t.organization_id = :org_id", "t.deleted_at IS NULL"];
         $params = [':org_id' => $organizationId];
 
-        if (!empty($search)) {
-            $conditions[] = "(t.name LIKE :search OR t.team_code LIKE :search OR t.age_group LIKE :search)";
-            $params[':search'] = "%{$search}%";
+        if ($search !== null && trim($search) !== '') {
+            $q = '%' . trim($search) . '%';
+            $conditions[] = "(
+                t.name LIKE :search1
+                OR t.team_code LIKE :search2
+                OR t.age_group LIKE :search3
+                OR t.formation_or_level LIKE :search4
+                OR s.name LIKE :search5
+            )";
+            $params[':search1'] = $q;
+            $params[':search2'] = $q;
+            $params[':search3'] = $q;
+            $params[':search4'] = $q;
+            $params[':search5'] = $q;
         }
 
         if (!empty($sportId)) {
@@ -40,30 +70,59 @@ class TeamService extends BaseService
             $params[':status'] = $status;
         }
 
+        if (!empty($coachId)) {
+            $conditions[] = "EXISTS (
+                SELECT 1 FROM team_coaches tc_f
+                WHERE tc_f.team_id = t.id
+                  AND tc_f.organization_id = t.organization_id
+                  AND tc_f.coach_id = :filter_coach_id
+                  AND (tc_f.end_date IS NULL OR tc_f.end_date > CURDATE())
+            )";
+            $params[':filter_coach_id'] = $coachId;
+        }
+
+        if (!empty($athleteId)) {
+            $conditions[] = "EXISTS (
+                SELECT 1 FROM team_members tm_f
+                WHERE tm_f.team_id = t.id
+                  AND tm_f.organization_id = t.organization_id
+                  AND tm_f.athlete_id = :filter_athlete_id
+                  AND tm_f.is_current = 1
+            )";
+            $params[':filter_athlete_id'] = $athleteId;
+        }
+
         $whereClause = implode(' AND ', $conditions);
 
-        // Count total
-        $countStmt = $this->pdo->prepare("SELECT COUNT(*) FROM teams t WHERE {$whereClause}");
+        // Count distinct teams matching filters
+        $countSql = "
+            SELECT COUNT(DISTINCT t.id)
+            FROM teams t
+            LEFT JOIN sports s ON t.sport_id = s.id
+            WHERE {$whereClause}
+        ";
+        $countStmt = $this->pdo->prepare($countSql);
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
+        $totalPages = $total > 0 ? (int)ceil($total / $limit) : 1;
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
         $offset = ($page - 1) * $limit;
 
+        // ONE TEAM = ONE ROW (strictly grouped by t.id)
         $sql = "
             SELECT 
                 t.*,
                 s.name as sport_name,
-                COUNT(DISTINCT tm.athlete_id) as athlete_count,
-                CONCAT(e.first_name, ' ', e.last_name) as head_coach_name,
-                cp.id as head_coach_id
+                COUNT(DISTINCT a.id) as athlete_count
             FROM teams t
             LEFT JOIN sports s ON t.sport_id = s.id
-            LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.is_current = 1
-            LEFT JOIN team_coaches tc ON t.id = tc.team_id AND tc.is_primary = 1 AND (tc.end_date IS NULL OR tc.end_date > CURDATE())
-            LEFT JOIN coach_profiles cp ON tc.coach_id = cp.id
-            LEFT JOIN employees e ON cp.employee_id = e.id
+            LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.organization_id = t.organization_id AND tm.is_current = 1
+            LEFT JOIN athletes a ON tm.athlete_id = a.id AND a.deleted_at IS NULL
             WHERE {$whereClause}
-            GROUP BY t.id, s.name, e.first_name, e.last_name, cp.id
+            GROUP BY t.id
             ORDER BY t.id DESC
             LIMIT :limit OFFSET :offset
         ";
@@ -77,13 +136,97 @@ class TeamService extends BaseService
         $stmt->execute();
         $teams = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        $teams = $this->attachTeamCoaches($organizationId, $teams);
+
+        $rowCount = count($teams);
+        $from = ($total > 0 && $rowCount > 0) ? ($offset + 1) : 0;
+        $to = ($total > 0 && $rowCount > 0) ? min($total, $offset + $rowCount) : 0;
+
         return [
             'data' => $teams,
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
-            'total_pages' => ceil($total / max(1, $limit)),
+            'total_pages' => $total > 0 ? (int)ceil($total / $limit) : 0,
+            'from' => $from,
+            'to' => $to,
         ];
+    }
+
+    /**
+     * Attach active coaches to each team row without causing SQL row duplication.
+     */
+    protected function attachTeamCoaches(int $organizationId, array $teams): array
+    {
+        if (!$this->pdo || empty($teams)) {
+            return $teams;
+        }
+
+        $teamIds = [];
+        foreach ($teams as $t) {
+            $tid = (int)($t['id'] ?? 0);
+            if ($tid > 0) {
+                $teamIds[] = $tid;
+            }
+        }
+        $teamIds = array_values(array_unique($teamIds));
+        if (empty($teamIds)) {
+            return $teams;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($teamIds), '?'));
+        $sql = "
+            SELECT
+                tc.team_id,
+                tc.coach_id,
+                tc.coach_role,
+                tc.is_primary,
+                cp.coach_code,
+                cp.specialization,
+                e.first_name,
+                e.last_name
+            FROM team_coaches tc
+            JOIN coach_profiles cp ON tc.coach_id = cp.id AND cp.deleted_at IS NULL
+            JOIN employees e ON cp.employee_id = e.id AND e.deleted_at IS NULL
+            WHERE tc.organization_id = ?
+              AND tc.team_id IN ({$placeholders})
+              AND (tc.end_date IS NULL OR tc.end_date > CURDATE())
+            ORDER BY tc.is_primary DESC, tc.id ASC
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(array_merge([$organizationId], $teamIds));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $coachesByTeam = [];
+        foreach ($rows as $r) {
+            $tid = (int)$r['team_id'];
+            $cid = (int)$r['coach_id'];
+            if (!isset($coachesByTeam[$tid][$cid])) {
+                $fullName = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+                $r['full_name'] = $fullName;
+                $coachesByTeam[$tid][$cid] = $r;
+            }
+        }
+
+        foreach ($teams as &$team) {
+            $tid = (int)($team['id'] ?? 0);
+            $activeCoaches = isset($coachesByTeam[$tid]) ? array_values($coachesByTeam[$tid]) : [];
+            $primaryCoach = $activeCoaches[0] ?? null;
+
+            $team['coaches'] = $activeCoaches;
+            $team['coach_count'] = count($activeCoaches);
+            $team['head_coach_name'] = $primaryCoach ? $primaryCoach['full_name'] : null;
+            $team['head_coach_id'] = $primaryCoach ? (int)$primaryCoach['coach_id'] : null;
+            $team['head_coach_role'] = $primaryCoach ? ($primaryCoach['coach_role'] ?? 'head_coach') : null;
+            $team['extra_coaches_count'] = max(0, count($activeCoaches) - 1);
+            $team['all_coaches_label'] = !empty($activeCoaches)
+                ? implode(', ', array_map(fn($c) => $c['full_name'], $activeCoaches))
+                : '';
+        }
+        unset($team);
+
+        return $teams;
     }
 
     public function getTeam(int $organizationId, int $id): ?array
@@ -114,8 +257,8 @@ class TeamService extends BaseService
                 e.phone,
                 e.email
             FROM team_coaches tc
-            JOIN coach_profiles cp ON tc.coach_id = cp.id
-            JOIN employees e ON cp.employee_id = e.id
+            JOIN coach_profiles cp ON tc.coach_id = cp.id AND cp.deleted_at IS NULL
+            JOIN employees e ON cp.employee_id = e.id AND e.deleted_at IS NULL
             WHERE tc.team_id = :team_id AND tc.organization_id = :org_id AND (tc.end_date IS NULL OR tc.end_date > CURDATE())
             ORDER BY tc.is_primary DESC, tc.id ASC
         ");
@@ -153,9 +296,12 @@ class TeamService extends BaseService
                 a.last_name,
                 a.gender,
                 a.date_of_birth,
+                a.current_sport_id,
+                s.name as sport_name,
                 a.status as athlete_status
             FROM team_members tm
             JOIN athletes a ON tm.athlete_id = a.id AND a.deleted_at IS NULL
+            LEFT JOIN sports s ON a.current_sport_id = s.id
             WHERE tm.team_id = :team_id AND tm.organization_id = :org_id AND tm.is_current = 1
             ORDER BY 
                 CASE tm.member_role
@@ -223,6 +369,24 @@ class TeamService extends BaseService
     {
         if (!$this->pdo) return [];
 
+        $teamName = trim($data['name'] ?? '');
+        if ($teamName === '') {
+            throw new \InvalidArgumentException("Team Name is required.");
+        }
+        $sportId = (int)($data['sport_id'] ?? 0);
+        if ($sportId <= 0) {
+            throw new \InvalidArgumentException("Sport is required.");
+        }
+
+        $teamGender = strtolower(trim($data['gender'] ?? 'open'));
+        if (!in_array($teamGender, ['male', 'female', 'mixed', 'open', 'not_specified'], true)) {
+            $teamGender = 'open';
+        }
+        $teamStatus = strtolower(trim($data['status'] ?? 'active'));
+        if (!in_array($teamStatus, ['active', 'inactive'], true)) {
+            $teamStatus = 'active';
+        }
+
         $this->pdo->beginTransaction();
         try {
             $teamCode = $data['team_code'] ?? ('TM-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)));
@@ -243,53 +407,127 @@ class TeamService extends BaseService
             $stmt->execute([
                 ':org_id' => $organizationId,
                 ':team_code' => $teamCode,
-                ':name' => trim($data['name'] ?? ''),
-                ':sport_id' => (int)($data['sport_id'] ?? 1),
+                ':name' => $teamName,
+                ':sport_id' => $sportId,
                 ':cat_id' => !empty($data['category_id']) ? (int)$data['category_id'] : null,
-                ':gender' => $data['gender'] ?? 'open',
-                ':age_group' => $data['age_group'] ?? 'Open',
-                ':formation' => $data['formation_or_level'] ?? null,
-                ':desc' => $data['description'] ?? null,
-                ':status' => $data['status'] ?? 'active',
+                ':gender' => $teamGender,
+                ':age_group' => trim($data['age_group'] ?? 'Open') ?: 'Open',
+                ':formation' => !empty($data['formation_or_level']) ? trim($data['formation_or_level']) : null,
+                ':desc' => !empty($data['description']) ? trim($data['description']) : null,
+                ':status' => $teamStatus,
             ]);
 
             $teamId = (int)$this->pdo->lastInsertId();
 
-            // 1. Assign Primary Coach
-            if (!empty($data['coach_id'])) {
-                $tcSql = "
-                    INSERT INTO team_coaches (organization_id, team_id, coach_id, coach_role, start_date, is_primary, created_at, updated_at)
-                    VALUES (:org_id, :team_id, :coach_id, 'head_coach', CURDATE(), 1, NOW(), NOW())
-                ";
-                $tcStmt = $this->pdo->prepare($tcSql);
+            // 1. Normalize and Assign Coaches (supports multiple coaches via coach_ids[] or coaches[] + legacy coach_id)
+            $coachAssignments = $this->normalizeCoachAssignmentsFromInput($data);
+            $chkCoach = $this->pdo->prepare("
+                SELECT cp.id, cp.status, cp.deleted_at, e.deleted_at as emp_deleted_at, e.first_name, e.last_name
+                FROM coach_profiles cp
+                JOIN employees e ON cp.employee_id = e.id
+                WHERE cp.id = :cid AND cp.organization_id = :org_id
+                LIMIT 1
+            ");
+            $tcStmt = $this->pdo->prepare("
+                INSERT INTO team_coaches (organization_id, team_id, coach_id, coach_role, start_date, is_primary, created_at, updated_at)
+                VALUES (:org_id, :team_id, :coach_id, :role, CURDATE(), :is_primary, NOW(), NOW())
+            ");
+
+            foreach ($coachAssignments as $ca) {
+                $cid = (int)$ca['coach_id'];
+                $chkCoach->execute([':cid' => $cid, ':org_id' => $organizationId]);
+                $coachRow = $chkCoach->fetch(PDO::FETCH_ASSOC);
+                if (!$coachRow || $coachRow['deleted_at'] !== null || $coachRow['emp_deleted_at'] !== null) {
+                    throw new \InvalidArgumentException("Coach #{$cid} not found or does not belong to your organization.");
+                }
+                if ($coachRow['status'] !== 'active') {
+                    throw new \InvalidArgumentException("Coach {$coachRow['first_name']} {$coachRow['last_name']} is not active.");
+                }
+
                 $tcStmt->execute([
                     ':org_id' => $organizationId,
                     ':team_id' => $teamId,
-                    ':coach_id' => (int)$data['coach_id']
+                    ':coach_id' => $cid,
+                    ':role' => $ca['coach_role'],
+                    ':is_primary' => $ca['is_primary'] ? 1 : 0,
                 ]);
+                $tcId = (int)$this->pdo->lastInsertId();
+
+                $this->auditLog->log(
+                    $organizationId,
+                    $performedBy,
+                    'TEAM_COACH_ASSIGN',
+                    'Teams',
+                    'team_coaches',
+                    $tcId,
+                    null,
+                    ['team_id' => $teamId, 'coach_id' => $cid, 'coach_role' => $ca['coach_role'], 'is_primary' => $ca['is_primary'] ? 1 : 0],
+                    "Assigned coach #{$cid} ({$coachRow['first_name']} {$coachRow['last_name']}) to team #{$teamId} ({$teamName}) as {$ca['coach_role']}"
+                );
             }
 
-            // 2. Assign Initial Athletes
+            // 2. Assign Registered Athletes (strictly validate organization, active status, and sport compatibility)
             if (!empty($data['athlete_ids']) && is_array($data['athlete_ids'])) {
-                $tmSql = "
+                $chkAth = $this->pdo->prepare("
+                    SELECT id, athlete_code, first_name, last_name, status, deleted_at, current_sport_id, gender
+                    FROM athletes
+                    WHERE id = :ath_id AND organization_id = :org_id AND deleted_at IS NULL
+                    LIMIT 1
+                ");
+                $tmStmt = $this->pdo->prepare("
                     INSERT INTO team_members (organization_id, team_id, athlete_id, start_date, is_current, member_role, created_at, updated_at)
                     VALUES (:org_id, :team_id, :ath_id, CURDATE(), 1, 'player', NOW(), NOW())
-                ";
-                $tmStmt = $this->pdo->prepare($tmSql);
+                ");
+                $seenAth = [];
                 foreach ($data['athlete_ids'] as $athId) {
-                    if (!empty($athId)) {
-                        $tmStmt->execute([
-                            ':org_id' => $organizationId,
-                            ':team_id' => $teamId,
-                            ':ath_id' => (int)$athId
-                        ]);
+                    $aid = (int)$athId;
+                    if ($aid <= 0 || isset($seenAth[$aid])) {
+                        continue;
                     }
+                    $seenAth[$aid] = true;
+
+                    $chkAth->execute([':ath_id' => $aid, ':org_id' => $organizationId]);
+                    $athlete = $chkAth->fetch(PDO::FETCH_ASSOC);
+                    if (!$athlete) {
+                        throw new \InvalidArgumentException("Athlete #{$aid} not found or does not belong to your organization.");
+                    }
+                    if ($athlete['status'] !== 'active') {
+                        throw new \InvalidArgumentException("Only active registered athletes can be added to a team roster.");
+                    }
+                    if (!empty($sportId) && (int)($athlete['current_sport_id'] ?? 0) !== $sportId) {
+                        throw new \InvalidArgumentException("Athlete {$athlete['first_name']} {$athlete['last_name']}'s primary sport does not match the team's sport.");
+                    }
+                    if (in_array($teamGender, ['male', 'female'], true)) {
+                        $athGender = strtolower(trim($athlete['gender'] ?? ''));
+                        if ($athGender !== '' && $athGender !== 'not_specified' && $athGender !== $teamGender) {
+                            throw new \InvalidArgumentException("Athlete {$athlete['first_name']} {$athlete['last_name']}'s gender does not match the team's gender division.");
+                        }
+                    }
+
+                    $tmStmt->execute([
+                        ':org_id' => $organizationId,
+                        ':team_id' => $teamId,
+                        ':ath_id' => $aid,
+                    ]);
+                    $tmId = (int)$this->pdo->lastInsertId();
+
+                    $this->auditLog->log(
+                        $organizationId,
+                        $performedBy,
+                        'TEAM_MEMBER_ADD',
+                        'Teams',
+                        'team_members',
+                        $tmId,
+                        null,
+                        ['team_id' => $teamId, 'athlete_id' => $aid, 'member_role' => 'player'],
+                        "Added athlete #{$aid} ({$athlete['first_name']} {$athlete['last_name']}) to team #{$teamId} ({$teamName})"
+                    );
                 }
             }
 
             $this->pdo->commit();
 
-            // 3. Audit Log
+            // 3. Audit Log for Team Creation
             $this->auditLog->log(
                 $organizationId,
                 $performedBy,
@@ -298,14 +536,16 @@ class TeamService extends BaseService
                 'teams',
                 $teamId,
                 null,
-                ['team_code' => $teamCode, 'name' => $data['name'] ?? ''],
-                "Created team {$data['name']} ({$teamCode})"
+                ['team_code' => $teamCode, 'name' => $teamName, 'sport_id' => $sportId],
+                "Created team {$teamName} ({$teamCode})"
             );
 
             return [
                 'id' => $teamId,
                 'team_code' => $teamCode,
-                'name' => $data['name'] ?? ''
+                'name' => $teamName,
+                'sport_id' => $sportId,
+                'status' => $teamStatus,
             ];
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -315,12 +555,113 @@ class TeamService extends BaseService
         }
     }
 
+    /**
+     * Normalize multi-coach or single-coach input into a deduplicated list with at most one primary coach.
+     */
+    protected function normalizeCoachAssignmentsFromInput(array $data): array
+    {
+        $validRoles = ['head_coach', 'assistant_coach', 'fitness_coach', 'other'];
+        $rawList = [];
+
+        if (!empty($data['coaches']) && is_array($data['coaches'])) {
+            foreach ($data['coaches'] as $item) {
+                if (is_array($item) && !empty($item['coach_id'])) {
+                    $rawList[] = [
+                        'coach_id' => (int)$item['coach_id'],
+                        'coach_role' => in_array($item['coach_role'] ?? '', $validRoles, true) ? $item['coach_role'] : 'head_coach',
+                        'is_primary' => !empty($item['is_primary']),
+                    ];
+                }
+            }
+        } elseif (!empty($data['coach_ids']) && is_array($data['coach_ids'])) {
+            $roles = isset($data['coach_roles']) && is_array($data['coach_roles']) ? $data['coach_roles'] : [];
+            $primaryId = !empty($data['primary_coach_id']) ? (int)$data['primary_coach_id'] : 0;
+            foreach ($data['coach_ids'] as $idx => $cidVal) {
+                $cid = (int)$cidVal;
+                if ($cid <= 0) continue;
+                $role = $roles[$cid] ?? ($roles[$idx] ?? 'assistant_coach');
+                if (!in_array($role, $validRoles, true)) {
+                    $role = 'assistant_coach';
+                }
+                $isPrim = ($primaryId > 0) ? ($cid === $primaryId) : ($role === 'head_coach');
+                $rawList[] = [
+                    'coach_id' => $cid,
+                    'coach_role' => $role,
+                    'is_primary' => $isPrim,
+                ];
+            }
+        } elseif (!empty($data['coach_id'])) {
+            $cid = (int)$data['coach_id'];
+            if ($cid > 0) {
+                $role = in_array($data['coach_role'] ?? '', $validRoles, true) ? $data['coach_role'] : 'head_coach';
+                $rawList[] = [
+                    'coach_id' => $cid,
+                    'coach_role' => $role,
+                    'is_primary' => true,
+                ];
+            }
+        }
+
+        // Deduplicate by coach_id and enforce at most ONE primary coach
+        $deduped = [];
+        $hasPrimary = false;
+        foreach ($rawList as $item) {
+            $cid = (int)$item['coach_id'];
+            if ($cid <= 0 || isset($deduped[$cid])) {
+                continue;
+            }
+            $isPrimary = (bool)$item['is_primary'];
+            if ($isPrimary) {
+                if ($hasPrimary) {
+                    $isPrimary = false;
+                    if ($item['coach_role'] === 'head_coach') {
+                        $item['coach_role'] = 'assistant_coach';
+                    }
+                } else {
+                    $hasPrimary = true;
+                }
+            }
+            $item['is_primary'] = $isPrimary;
+            $deduped[$cid] = $item;
+        }
+
+        // If coaches exist and none was marked primary, promote the first head_coach (or first coach) as primary
+        if (!empty($deduped) && !$hasPrimary) {
+            $promoted = false;
+            foreach ($deduped as &$cItem) {
+                if ($cItem['coach_role'] === 'head_coach') {
+                    $cItem['is_primary'] = true;
+                    $promoted = true;
+                    break;
+                }
+            }
+            unset($cItem);
+            if (!$promoted) {
+                $firstKey = array_key_first($deduped);
+                $deduped[$firstKey]['is_primary'] = true;
+            }
+        }
+
+        return array_values($deduped);
+    }
+
     public function updateTeam(int $organizationId, int $id, array $data, ?int $performedBy = null): bool
     {
         if (!$this->pdo) return false;
 
         $existing = $this->getTeam($organizationId, $id);
         if (!$existing) return false;
+
+        $newName = trim($data['name'] ?? $existing['name']);
+        $newSportId = (int)($data['sport_id'] ?? $existing['sport_id']);
+        $newGender = strtolower(trim($data['gender'] ?? $existing['gender']));
+        if (!in_array($newGender, ['male', 'female', 'mixed', 'open', 'not_specified'], true)) {
+            $newGender = $existing['gender'] ?? 'open';
+        }
+        $newStatus = strtolower(trim($data['status'] ?? $existing['status']));
+        if (!in_array($newStatus, ['active', 'inactive'], true)) {
+            $newStatus = $existing['status'] ?? 'active';
+        }
 
         $this->pdo->beginTransaction();
         try {
@@ -338,34 +679,218 @@ class TeamService extends BaseService
             ";
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
-                ':name' => trim($data['name'] ?? $existing['name']),
-                ':sport_id' => (int)($data['sport_id'] ?? $existing['sport_id']),
-                ':gender' => $data['gender'] ?? $existing['gender'],
+                ':name' => $newName,
+                ':sport_id' => $newSportId,
+                ':gender' => $newGender,
                 ':age_group' => $data['age_group'] ?? $existing['age_group'],
                 ':formation' => $data['formation_or_level'] ?? $existing['formation_or_level'],
                 ':desc' => $data['description'] ?? $existing['description'],
-                ':status' => $data['status'] ?? $existing['status'],
+                ':status' => $newStatus,
                 ':id' => $id,
                 ':org_id' => $organizationId,
             ]);
 
-            // Update Primary Coach if changed
-            if (isset($data['coach_id'])) {
+            // Sync multi-coach staff if sync_coaches or coach_ids / coaches array is passed
+            if (!empty($data['sync_coaches']) || isset($data['coach_ids']) || isset($data['coaches'])) {
+                $desiredCoaches = $this->normalizeCoachAssignmentsFromInput($data);
+                $desiredById = [];
+                foreach ($desiredCoaches as $dc) {
+                    $desiredById[(int)$dc['coach_id']] = $dc;
+                }
+
+                // Validate all desired coaches first
+                $chkCoach = $this->pdo->prepare("
+                    SELECT cp.id, cp.status, cp.deleted_at, e.deleted_at as emp_deleted_at, e.first_name, e.last_name
+                    FROM coach_profiles cp
+                    JOIN employees e ON cp.employee_id = e.id
+                    WHERE cp.id = :cid AND cp.organization_id = :org_id
+                    LIMIT 1
+                ");
+                foreach ($desiredById as $cid => $dc) {
+                    $chkCoach->execute([':cid' => $cid, ':org_id' => $organizationId]);
+                    $cRow = $chkCoach->fetch(PDO::FETCH_ASSOC);
+                    if (!$cRow || $cRow['deleted_at'] !== null || $cRow['emp_deleted_at'] !== null) {
+                        throw new \InvalidArgumentException("Coach #{$cid} not found or does not belong to your organization.");
+                    }
+                    if ($cRow['status'] !== 'active') {
+                        throw new \InvalidArgumentException("Coach {$cRow['first_name']} {$cRow['last_name']} is not active.");
+                    }
+                }
+
+                // Fetch current active coaches for this team
+                $currStmt = $this->pdo->prepare("
+                    SELECT id, coach_id, coach_role, is_primary
+                    FROM team_coaches
+                    WHERE team_id = :team_id AND organization_id = :org_id
+                      AND (end_date IS NULL OR end_date > CURDATE())
+                ");
+                $currStmt->execute([':team_id' => $id, ':org_id' => $organizationId]);
+                $currRows = $currStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                $currByCoachId = [];
+                foreach ($currRows as $cr) {
+                    $currByCoachId[(int)$cr['coach_id']] = $cr;
+                }
+
+                // Soft-close coaches removed from selection
+                $closeCoachStmt = $this->pdo->prepare("
+                    UPDATE team_coaches
+                    SET is_primary = 0, end_date = CURDATE(), updated_at = NOW()
+                    WHERE id = :id AND organization_id = :org_id
+                ");
+                foreach ($currByCoachId as $cid => $cr) {
+                    if (!isset($desiredById[$cid])) {
+                        $closeCoachStmt->execute([':id' => (int)$cr['id'], ':org_id' => $organizationId]);
+                    }
+                }
+
+                // Reset primary flag before applying desired primary state
+                $unsetStmt = $this->pdo->prepare("
+                    UPDATE team_coaches
+                    SET is_primary = 0, updated_at = NOW()
+                    WHERE team_id = :team_id AND organization_id = :org_id
+                      AND (end_date IS NULL OR end_date > CURDATE())
+                ");
+                $unsetStmt->execute([':team_id' => $id, ':org_id' => $organizationId]);
+
+                $upCoachStmt = $this->pdo->prepare("
+                    UPDATE team_coaches
+                    SET coach_role = :role, is_primary = :is_primary, updated_at = NOW()
+                    WHERE id = :id AND organization_id = :org_id
+                ");
+                $insCoachStmt = $this->pdo->prepare("
+                    INSERT INTO team_coaches (organization_id, team_id, coach_id, coach_role, start_date, is_primary, created_at, updated_at)
+                    VALUES (:org_id, :team_id, :coach_id, :role, CURDATE(), :is_primary, NOW(), NOW())
+                ");
+
+                foreach ($desiredById as $cid => $dc) {
+                    if (isset($currByCoachId[$cid])) {
+                        $upCoachStmt->execute([
+                            ':role' => $dc['coach_role'],
+                            ':is_primary' => $dc['is_primary'] ? 1 : 0,
+                            ':id' => (int)$currByCoachId[$cid]['id'],
+                            ':org_id' => $organizationId,
+                        ]);
+                    } else {
+                        $insCoachStmt->execute([
+                            ':org_id' => $organizationId,
+                            ':team_id' => $id,
+                            ':coach_id' => $cid,
+                            ':role' => $dc['coach_role'],
+                            ':is_primary' => $dc['is_primary'] ? 1 : 0,
+                        ]);
+                    }
+                }
+            } elseif (isset($data['coach_id'])) {
+                // Legacy single primary coach update
                 $coachId = (int)$data['coach_id'];
                 if ($coachId > 0) {
-                    // Set all existing coaches as not primary
+                    $chkCoach = $this->pdo->prepare("
+                        SELECT cp.id FROM coach_profiles cp
+                        JOIN employees e ON cp.employee_id = e.id
+                        WHERE cp.id = :cid AND cp.organization_id = :org_id AND cp.deleted_at IS NULL AND e.deleted_at IS NULL
+                        LIMIT 1
+                    ");
+                    $chkCoach->execute([':cid' => $coachId, ':org_id' => $organizationId]);
+                    if (!$chkCoach->fetchColumn()) {
+                        throw new \InvalidArgumentException("Coach not found or does not belong to your organization.");
+                    }
+
                     $unsetStmt = $this->pdo->prepare("UPDATE team_coaches SET is_primary = 0 WHERE team_id = :team_id AND organization_id = :org_id");
                     $unsetStmt->execute([':team_id' => $id, ':org_id' => $organizationId]);
 
-                    // Check if coach already linked
-                    $checkStmt = $this->pdo->prepare("SELECT id FROM team_coaches WHERE team_id = :team_id AND coach_id = :coach_id AND organization_id = :org_id");
+                    $checkStmt = $this->pdo->prepare("
+                        SELECT id FROM team_coaches
+                        WHERE team_id = :team_id AND coach_id = :coach_id AND organization_id = :org_id
+                          AND (end_date IS NULL OR end_date > CURDATE())
+                        ORDER BY id DESC LIMIT 1
+                    ");
                     $checkStmt->execute([':team_id' => $id, ':coach_id' => $coachId, ':org_id' => $organizationId]);
-                    if ($checkStmt->fetch()) {
-                        $upCoach = $this->pdo->prepare("UPDATE team_coaches SET is_primary = 1 WHERE team_id = :team_id AND coach_id = :coach_id AND organization_id = :org_id");
-                        $upCoach->execute([':team_id' => $id, ':coach_id' => $coachId, ':org_id' => $organizationId]);
+                    $activeRow = $checkStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($activeRow) {
+                        $upCoach = $this->pdo->prepare("UPDATE team_coaches SET is_primary = 1, updated_at = NOW() WHERE id = :id AND organization_id = :org_id");
+                        $upCoach->execute([':id' => (int)$activeRow['id'], ':org_id' => $organizationId]);
                     } else {
                         $insCoach = $this->pdo->prepare("INSERT INTO team_coaches (organization_id, team_id, coach_id, coach_role, start_date, is_primary, created_at, updated_at) VALUES (:org_id, :team_id, :coach_id, 'head_coach', CURDATE(), 1, NOW(), NOW())");
                         $insCoach->execute([':org_id' => $organizationId, ':team_id' => $id, ':coach_id' => $coachId]);
+                    }
+                }
+            }
+
+            // Sync registered athlete roster if sync_roster or athlete_ids is passed
+            if (!empty($data['sync_roster']) || isset($data['athlete_ids'])) {
+                $rawAthIds = isset($data['athlete_ids']) && is_array($data['athlete_ids']) ? $data['athlete_ids'] : [];
+                $desiredAthIds = [];
+                foreach ($rawAthIds as $aidVal) {
+                    $aid = (int)$aidVal;
+                    if ($aid > 0) {
+                        $desiredAthIds[$aid] = $aid;
+                    }
+                }
+
+                // Validate all desired athletes belong to org, are active, and match sport
+                $chkAth = $this->pdo->prepare("
+                    SELECT id, athlete_code, first_name, last_name, status, deleted_at, current_sport_id, gender
+                    FROM athletes
+                    WHERE id = :ath_id AND organization_id = :org_id AND deleted_at IS NULL
+                    LIMIT 1
+                ");
+                foreach ($desiredAthIds as $aid) {
+                    $chkAth->execute([':ath_id' => $aid, ':org_id' => $organizationId]);
+                    $aRow = $chkAth->fetch(PDO::FETCH_ASSOC);
+                    if (!$aRow) {
+                        throw new \InvalidArgumentException("Athlete #{$aid} not found or does not belong to your organization.");
+                    }
+                    if ($aRow['status'] !== 'active') {
+                        throw new \InvalidArgumentException("Only active registered athletes can be assigned to a team roster.");
+                    }
+                    if (!empty($newSportId) && (int)($aRow['current_sport_id'] ?? 0) !== $newSportId) {
+                        throw new \InvalidArgumentException("Athlete {$aRow['first_name']} {$aRow['last_name']}'s primary sport does not match the team's sport.");
+                    }
+                    if (in_array($newGender, ['male', 'female'], true)) {
+                        $athGender = strtolower(trim($aRow['gender'] ?? ''));
+                        if ($athGender !== '' && $athGender !== 'not_specified' && $athGender !== $newGender) {
+                            throw new \InvalidArgumentException("Athlete {$aRow['first_name']} {$aRow['last_name']}'s gender does not match the team's gender division.");
+                        }
+                    }
+                }
+
+                // Fetch current active members
+                $currMemStmt = $this->pdo->prepare("
+                    SELECT id, athlete_id
+                    FROM team_members
+                    WHERE team_id = :team_id AND organization_id = :org_id AND is_current = 1
+                ");
+                $currMemStmt->execute([':team_id' => $id, ':org_id' => $organizationId]);
+                $currMemRows = $currMemStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                $currByAthId = [];
+                foreach ($currMemRows as $mr) {
+                    $currByAthId[(int)$mr['athlete_id']] = (int)$mr['id'];
+                }
+
+                // Soft-close removed members (preserving historical membership)
+                $closeMemStmt = $this->pdo->prepare("
+                    UPDATE team_members
+                    SET is_current = 0, end_date = CURDATE(), updated_at = NOW()
+                    WHERE id = :id AND organization_id = :org_id
+                ");
+                foreach ($currByAthId as $aid => $memRowId) {
+                    if (!isset($desiredAthIds[$aid])) {
+                        $closeMemStmt->execute([':id' => $memRowId, ':org_id' => $organizationId]);
+                    }
+                }
+
+                // Insert newly added members (skip already active members to prevent duplicates)
+                $insMemStmt = $this->pdo->prepare("
+                    INSERT INTO team_members (organization_id, team_id, athlete_id, start_date, is_current, member_role, created_at, updated_at)
+                    VALUES (:org_id, :team_id, :ath_id, CURDATE(), 1, 'player', NOW(), NOW())
+                ");
+                foreach ($desiredAthIds as $aid) {
+                    if (!isset($currByAthId[$aid])) {
+                        $insMemStmt->execute([
+                            ':org_id' => $organizationId,
+                            ':team_id' => $id,
+                            ':ath_id' => $aid,
+                        ]);
                     }
                 }
             }
@@ -381,7 +906,7 @@ class TeamService extends BaseService
                 $id,
                 $existing,
                 $data,
-                "Updated team #{$id} ({$existing['name']})"
+                "Updated team #{$id} ({$newName})"
             );
 
             return true;
@@ -482,42 +1007,11 @@ class TeamService extends BaseService
             $existing = $checkStmt->fetch(PDO::FETCH_ASSOC);
 
             if ($existing) {
-                // If role and primary state are identical, return idempotently
-                if ($existing['coach_role'] === $role && (int)$existing['is_primary'] === ($effectivePrimary ? 1 : 0)) {
-                    $this->pdo->commit();
-                    return true;
-                }
+                $this->pdo->rollBack();
+                throw new \InvalidArgumentException("Coach is already assigned to this team.");
+            }
 
-                // If role/primary changed, update the active assignment
-                if ($effectivePrimary) {
-                    $unsetStmt = $this->pdo->prepare("
-                        UPDATE team_coaches
-                        SET is_primary = 0, updated_at = NOW()
-                        WHERE team_id = :team_id AND organization_id = :org_id AND id != :current_id
-                          AND (end_date IS NULL OR end_date > CURDATE())
-                    ");
-                    $unsetStmt->execute([
-                        ':team_id' => $teamId,
-                        ':org_id' => $organizationId,
-                        ':current_id' => (int)$existing['id']
-                    ]);
-                }
-
-                $upStmt = $this->pdo->prepare("
-                    UPDATE team_coaches
-                    SET coach_role = :role, is_primary = :is_primary, updated_at = NOW()
-                    WHERE id = :id AND organization_id = :org_id
-                ");
-                $upStmt->execute([
-                    ':role' => $role,
-                    ':is_primary' => $effectivePrimary ? 1 : 0,
-                    ':id' => (int)$existing['id'],
-                    ':org_id' => $organizationId
-                ]);
-
-                $assignmentId = (int)$existing['id'];
-            } else {
-                // Not actively assigned: if setting primary, unset other coaches' primary state first
+            // Not actively assigned: if setting primary, unset other coaches' primary state first
                 if ($effectivePrimary) {
                     $unsetStmt = $this->pdo->prepare("
                         UPDATE team_coaches
@@ -547,7 +1041,6 @@ class TeamService extends BaseService
                 ]);
 
                 $assignmentId = (int)$this->pdo->lastInsertId();
-            }
 
             $this->pdo->commit();
 
@@ -638,7 +1131,7 @@ class TeamService extends BaseService
             ':org_id' => $organizationId
         ]);
         if ($checkStmt->fetch()) {
-            return true; // Already an active current member; safely idempotent
+            throw new \InvalidArgumentException("Athlete is already an active member of this team.");
         }
 
         $jersey = !empty($data['jersey_number']) ? trim((string)$data['jersey_number']) : null;
@@ -955,7 +1448,8 @@ class TeamService extends BaseService
         int $teamId,
         int $coachId,
         string $newRole,
-        ?int $performedBy = null
+        ?int $performedBy = null,
+        ?bool $isPrimary = null
     ): bool {
         if (!$this->pdo) return false;
 
@@ -990,21 +1484,39 @@ class TeamService extends BaseService
             throw new \InvalidArgumentException("Coach is not currently actively assigned to this team.");
         }
 
-        if ($active['coach_role'] === $newRole) {
+        $targetPrimary = $isPrimary !== null ? ($isPrimary ? 1 : 0) : (int)$active['is_primary'];
+
+        if ($active['coach_role'] === $newRole && (int)$active['is_primary'] === $targetPrimary) {
             return true; // No change needed
         }
 
-        // 4. Update the role
+        // 4. Update the role and primary designation safely
         $this->pdo->beginTransaction();
         try {
+            if ($targetPrimary === 1) {
+                $unsetStmt = $this->pdo->prepare("
+                    UPDATE team_coaches
+                    SET is_primary = 0, updated_at = NOW()
+                    WHERE team_id = :team_id AND organization_id = :org_id AND id != :current_id
+                      AND (end_date IS NULL OR end_date > CURDATE())
+                ");
+                $unsetStmt->execute([
+                    ':team_id' => $teamId,
+                    ':org_id' => $organizationId,
+                    ':current_id' => (int)$active['id']
+                ]);
+            }
+
             $upStmt = $this->pdo->prepare("
                 UPDATE team_coaches
                 SET coach_role = :role,
+                    is_primary = :is_primary,
                     updated_at = NOW()
                 WHERE id = :id AND organization_id = :org_id
             ");
             $upStmt->execute([
                 ':role' => $newRole,
+                ':is_primary' => $targetPrimary,
                 ':id' => (int)$active['id'],
                 ':org_id' => $organizationId
             ]);
@@ -1020,7 +1532,7 @@ class TeamService extends BaseService
                 'team_coaches',
                 (int)$active['id'],
                 $active,
-                ['coach_role' => $newRole],
+                ['coach_role' => $newRole, 'is_primary' => $targetPrimary],
                 "Updated coach #{$coachId} role from '{$active['coach_role']}' to '{$newRole}' on team #{$teamId} ({$team['name']})"
             );
 
@@ -1031,6 +1543,241 @@ class TeamService extends BaseService
             }
             throw $e;
         }
+    }
+
+    /**
+     * Server-side organization-scoped and sport-scoped registered athlete search for team roster selection.
+     */
+    public function searchEligibleAthletes(
+        int $organizationId,
+        int $sportId,
+        ?string $search = null,
+        ?string $gender = null,
+        ?int $excludeTeamId = null,
+        int $limit = 30
+    ): array {
+        if (!$this->pdo || $sportId <= 0) {
+            return [];
+        }
+
+        $limit = max(1, min(100, $limit));
+        $conditions = [
+            "a.organization_id = :org_id",
+            "a.deleted_at IS NULL",
+            "a.status = 'active'",
+            "a.current_sport_id = :sport_id"
+        ];
+        $params = [
+            ':org_id' => $organizationId,
+            ':sport_id' => $sportId,
+        ];
+
+        $genderClean = strtolower(trim((string)($gender ?? '')));
+        if (in_array($genderClean, ['male', 'female'], true)) {
+            $conditions[] = "(a.gender = :gender OR a.gender = 'not_specified')";
+            $params[':gender'] = $genderClean;
+        }
+
+        $q = trim((string)($search ?? ''));
+        if ($q !== '') {
+            $conditions[] = "(
+                a.first_name LIKE :s1
+                OR a.last_name LIKE :s2
+                OR CONCAT(COALESCE(a.first_name, ''), ' ', COALESCE(a.last_name, '')) LIKE :s3
+                OR a.athlete_code LIKE :s4
+            )";
+            $like = "%{$q}%";
+            $params[':s1'] = $like;
+            $params[':s2'] = $like;
+            $params[':s3'] = $like;
+            $params[':s4'] = $like;
+        }
+
+        $whereClause = implode(' AND ', $conditions);
+        $sql = "
+            SELECT
+                a.id,
+                a.athlete_code,
+                a.first_name,
+                a.last_name,
+                a.gender,
+                a.date_of_birth,
+                a.status,
+                a.current_sport_id,
+                s.name AS sport_name
+            FROM athletes a
+            LEFT JOIN sports s ON a.current_sport_id = s.id
+            WHERE {$whereClause}
+            ORDER BY a.first_name ASC, a.last_name ASC
+            LIMIT :limit
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $athletes = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        if (empty($athletes)) {
+            return [];
+        }
+
+        // Hydrate active teams for these athletes so the UI displays current team memberships and prevents duplicate enrollment
+        $athIds = array_values(array_unique(array_map(fn($r) => (int)$r['id'], $athletes)));
+        $placeholders = implode(',', array_fill(0, count($athIds), '?'));
+        $tmStmt = $this->pdo->prepare("
+            SELECT tm.athlete_id, t.id AS team_id, t.name AS team_name
+            FROM team_members tm
+            JOIN teams t ON tm.team_id = t.id AND t.deleted_at IS NULL AND t.status = 'active'
+            WHERE tm.organization_id = ?
+              AND tm.is_current = 1
+              AND tm.athlete_id IN ({$placeholders})
+            ORDER BY tm.id DESC
+        ");
+        $tmStmt->execute(array_merge([$organizationId], $athIds));
+        $tmRows = $tmStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $teamsByAth = [];
+        foreach ($tmRows as $tr) {
+            $aid = (int)$tr['athlete_id'];
+            $tid = (int)$tr['team_id'];
+            $teamsByAth[$aid][$tid] = $tr['team_name'];
+        }
+
+        foreach ($athletes as &$a) {
+            $aid = (int)$a['id'];
+            $currTeams = $teamsByAth[$aid] ?? [];
+            $a['full_name'] = trim(($a['first_name'] ?? '') . ' ' . ($a['last_name'] ?? ''));
+            $a['current_team_ids'] = array_keys($currTeams);
+            $a['current_teams'] = array_values($currTeams);
+            $a['current_teams_label'] = !empty($currTeams) ? implode(', ', array_values($currTeams)) : '—';
+            $a['already_in_team'] = ($excludeTeamId && isset($currTeams[$excludeTeamId])) ? true : false;
+        }
+        unset($a);
+
+        return $athletes;
+    }
+
+    /**
+     * Server-side organization-scoped coach search for team coaching staff selection.
+     */
+    public function searchAvailableCoaches(
+        int $organizationId,
+        ?string $search = null,
+        ?string $sportName = null,
+        ?int $excludeTeamId = null,
+        int $limit = 30
+    ): array {
+        if (!$this->pdo) {
+            return [];
+        }
+
+        $limit = max(1, min(100, $limit));
+        $conditions = [
+            "cp.organization_id = :org_id",
+            "e.organization_id = :emp_org_id",
+            "cp.status = 'active'",
+            "cp.deleted_at IS NULL",
+            "e.deleted_at IS NULL"
+        ];
+        $params = [
+            ':org_id' => $organizationId,
+            ':emp_org_id' => $organizationId,
+        ];
+
+        $q = trim((string)($search ?? ''));
+        if ($q !== '') {
+            $conditions[] = "(
+                e.first_name LIKE :s1
+                OR e.last_name LIKE :s2
+                OR CONCAT(COALESCE(e.first_name, ''), ' ', COALESCE(e.last_name, '')) LIKE :s3
+                OR cp.coach_code LIKE :s4
+                OR cp.specialization LIKE :s5
+            )";
+            $like = "%{$q}%";
+            $params[':s1'] = $like;
+            $params[':s2'] = $like;
+            $params[':s3'] = $like;
+            $params[':s4'] = $like;
+            $params[':s5'] = $like;
+        }
+
+        $whereClause = implode(' AND ', $conditions);
+        $sql = "
+            SELECT
+                cp.id AS coach_id,
+                cp.coach_code,
+                cp.specialization,
+                e.first_name,
+                e.last_name,
+                e.designation
+            FROM coach_profiles cp
+            JOIN employees e ON cp.employee_id = e.id
+            WHERE {$whereClause}
+            ORDER BY e.first_name ASC, e.last_name ASC
+            LIMIT :limit
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
+        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+        $stmt->execute();
+        $coaches = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        if (empty($coaches)) {
+            return [];
+        }
+
+        $coachIds = array_values(array_unique(array_map(fn($c) => (int)$c['coach_id'], $coaches)));
+        $placeholders = implode(',', array_fill(0, count($coachIds), '?'));
+        $tcStmt = $this->pdo->prepare("
+            SELECT tc.coach_id, t.id AS team_id, t.name AS team_name
+            FROM team_coaches tc
+            JOIN teams t ON tc.team_id = t.id AND t.deleted_at IS NULL AND t.status = 'active'
+            WHERE tc.organization_id = ?
+              AND (tc.end_date IS NULL OR tc.end_date > CURDATE())
+              AND tc.coach_id IN ({$placeholders})
+            ORDER BY tc.is_primary DESC, tc.id DESC
+        ");
+        $tcStmt->execute(array_merge([$organizationId], $coachIds));
+        $tcRows = $tcStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $teamsByCoach = [];
+        foreach ($tcRows as $tr) {
+            $cid = (int)$tr['coach_id'];
+            $tid = (int)$tr['team_id'];
+            $teamsByCoach[$cid][$tid] = $tr['team_name'];
+        }
+
+        $sportLower = strtolower(trim((string)($sportName ?? '')));
+        foreach ($coaches as &$c) {
+            $cid = (int)$c['coach_id'];
+            $currTeams = $teamsByCoach[$cid] ?? [];
+            $spec = trim((string)($c['specialization'] ?? ''));
+            $c['full_name'] = trim(($c['first_name'] ?? '') . ' ' . ($c['last_name'] ?? ''));
+            $c['current_team_ids'] = array_keys($currTeams);
+            $c['current_teams'] = array_values($currTeams);
+            $c['current_teams_label'] = !empty($currTeams) ? implode(', ', array_values($currTeams)) : '—';
+            $c['already_in_team'] = ($excludeTeamId && isset($currTeams[$excludeTeamId])) ? true : false;
+            $c['sport_match'] = ($sportLower !== '' && $spec !== '' && str_contains(strtolower($spec), $sportLower));
+        }
+        unset($c);
+
+        // Sort coaches whose specialization matches the selected sport first
+        if ($sportLower !== '') {
+            usort($coaches, function ($a, $b) {
+                if ($a['sport_match'] !== $b['sport_match']) {
+                    return $a['sport_match'] ? -1 : 1;
+                }
+                return strcmp($a['full_name'], $b['full_name']);
+            });
+        }
+
+        return $coaches;
     }
 
     public function getEligibleCoaches(int $organizationId, int $teamId): array
@@ -1108,6 +1855,7 @@ class TeamService extends BaseService
             );
         }
 
+        return $ok;
     }
 
     public function getActiveTeams(int $organizationId): array
