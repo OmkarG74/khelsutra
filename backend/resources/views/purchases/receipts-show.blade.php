@@ -24,15 +24,15 @@ ob_start();
         </div>
     <?php else: ?>
         <!-- Header -->
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div class="ks-page-header mb-4">
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <a href="/purchases?tab=receipts" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Goods Receipts</a>
+                    <a href="/purchases?tab=receipts" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchases & Orders</a>
                     <span class="text-muted small">/</span>
                     <span class="text-dark small fw-semibold"><?= htmlspecialchars($receipt['receipt_number'], ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
-                <div class="d-flex align-items-center gap-3">
-                    <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <h1 class="ks-page-title mb-0">
                         <?= htmlspecialchars($receipt['receipt_number'], ENT_QUOTES, 'UTF-8') ?>
                     </h1>
                     <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2 fw-semibold" style="font-size: 12px;">
@@ -40,19 +40,22 @@ ob_start();
                     </span>
                 </div>
             </div>
-            <div>
-                <a href="/purchases/orders/<?= (int)$receipt['purchase_order_id'] ?>" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                    <i class="bi bi-cart-check"></i> View Linked Order (<?= htmlspecialchars($receipt['po_number'], ENT_QUOTES, 'UTF-8') ?>)
+            <div class="ks-header-actions">
+                <a href="/purchases/orders/<?= (int)$receipt['purchase_order_id'] ?>" class="ks-btn ks-btn-secondary">
+                    <i class="bi bi-cart-check me-1"></i> View Linked Order (<?= htmlspecialchars($receipt['po_number'], ENT_QUOTES, 'UTF-8') ?>)
                 </a>
             </div>
         </div>
 
         <div class="row g-4 mb-4">
             <div class="col-md-6">
-                <div class="card h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card h-100 border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-blue" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-box-arrow-in-down"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-box-arrow-in-down me-2 text-primary"></i> Receipt Information
+                            Receipt Information
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -73,10 +76,13 @@ ob_start();
             </div>
 
             <div class="col-md-6">
-                <div class="card h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card h-100 border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-purple" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-building"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-building me-2 text-primary"></i> Supplier & Order Reference
+                            Supplier & Order Reference
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -105,21 +111,27 @@ ob_start();
         </div>
 
         <!-- Line Items Received -->
-        <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-            <div class="card-header bg-white border-bottom p-3">
-                <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                    <i class="bi bi-boxes me-2 text-primary"></i> Order Items & Current Quantities
-                </h6>
+        <div class="ks-table-card">
+            <div class="ks-table-header">
+                <div class="ks-header-left">
+                    <div class="ks-icon-box ks-icon-green" style="width: 28px; height: 28px; font-size: 13px;">
+                        <i class="bi bi-boxes"></i>
+                    </div>
+                    <h3 class="ks-header-title">Order Items & Current Quantities</h3>
+                    <span class="badge bg-light text-secondary border ms-2 fw-medium" style="font-size: 11px;">
+                        <?= count($receipt['po_items']) ?> items
+                    </span>
+                </div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                    <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+            <div class="ks-table-responsive">
+                <table class="table ks-table align-middle mb-0">
+                    <thead>
                         <tr>
-                            <th class="py-2 px-3 text-muted fw-semibold">Item Name</th>
-                            <th class="py-2 px-3 text-muted fw-semibold">Inventory Code</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-center">Ordered Quantity</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-center">Total Received Quantity</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-end">Unit Cost</th>
+                            <th style="min-width: 200px;">Item Name</th>
+                            <th style="min-width: 170px;">Inventory Code</th>
+                            <th style="min-width: 120px; text-align: center;">Ordered Quantity</th>
+                            <th style="min-width: 140px; text-align: center;">Total Received Quantity</th>
+                            <th class="ks-col-money" style="min-width: 130px;">Unit Cost</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -130,7 +142,7 @@ ob_start();
                                 </td>
                                 <td class="py-3 px-3">
                                     <?php if (!empty($item['item_code'])): ?>
-                                        <a href="/inventory/<?= (int)$item['inventory_item_id'] ?>" class="text-decoration-none">
+                                        <a href="/inventory/<?= (int)$item['inventory_item_id'] ?>" class="text-decoration-none fw-medium">
                                             <?= htmlspecialchars($item['item_code'], ENT_QUOTES, 'UTF-8') ?>
                                         </a>
                                     <?php else: ?>
@@ -143,7 +155,7 @@ ob_start();
                                 <td class="py-3 px-3 text-center font-monospace fw-bold text-success">
                                     <?= number_format((float)$item['received_quantity'], 2) ?>
                                 </td>
-                                <td class="py-3 px-3 text-end font-monospace text-muted">
+                                <td class="py-3 px-3 ks-col-money font-monospace text-muted">
                                     ₹<?= number_format((float)$item['unit_cost'], 2) ?>
                                 </td>
                             </tr>

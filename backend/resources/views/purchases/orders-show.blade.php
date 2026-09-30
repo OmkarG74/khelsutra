@@ -40,15 +40,15 @@ ob_start();
         </div>
     <?php else: ?>
         <!-- Header -->
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div class="ks-page-header mb-4">
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <a href="/purchases?tab=orders" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchase Orders</a>
+                    <a href="/purchases?tab=orders" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchases & Orders</a>
                     <span class="text-muted small">/</span>
                     <span class="text-dark small fw-semibold"><?= htmlspecialchars($po['po_number'], ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
-                <div class="d-flex align-items-center gap-3">
-                    <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <h1 class="ks-page-title mb-0">
                         <?= htmlspecialchars($po['po_number'], ENT_QUOTES, 'UTF-8') ?>
                     </h1>
                     <?php
@@ -69,38 +69,38 @@ ob_start();
             </div>
 
             <!-- Action Buttons -->
-            <div class="d-flex gap-2">
+            <div class="ks-header-actions d-flex gap-2">
                 <?php if ($po['status'] === 'draft'): ?>
                     <form method="POST" action="/purchases/orders/<?= (int)$po['id'] ?>/status" class="d-inline">
                         <input type="hidden" name="status" value="sent">
-                        <button type="submit" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                            <i class="bi bi-send"></i> Mark as Sent
+                        <button type="submit" class="ks-btn ks-btn-primary">
+                            <i class="bi bi-send me-1"></i> Mark as Sent
                         </button>
                     </form>
                     <form method="POST" action="/purchases/orders/<?= (int)$po['id'] ?>/status" class="d-inline" onsubmit="return confirm('Cancel this purchase order?');">
                         <input type="hidden" name="status" value="cancelled">
-                        <button type="submit" class="btn btn-outline-danger" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                            Cancel PO
+                        <button type="submit" class="ks-btn ks-btn-danger">
+                            <i class="bi bi-x-circle me-1"></i> Cancel PO
                         </button>
                     </form>
                 <?php elseif ($po['status'] === 'sent'): ?>
                     <form method="POST" action="/purchases/orders/<?= (int)$po['id'] ?>/status" class="d-inline">
                         <input type="hidden" name="status" value="confirmed">
-                        <button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-size: 13px;">
-                            <i class="bi bi-check2-circle"></i> Confirm Order
+                        <button type="submit" class="ks-btn ks-btn-primary">
+                            <i class="bi bi-check2-circle me-1"></i> Confirm Order
                         </button>
                     </form>
                     <form method="POST" action="/purchases/orders/<?= (int)$po['id'] ?>/status" class="d-inline" onsubmit="return confirm('Cancel this purchase order?');">
                         <input type="hidden" name="status" value="cancelled">
-                        <button type="submit" class="btn btn-outline-danger" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                            Cancel PO
+                        <button type="submit" class="ks-btn ks-btn-danger">
+                            <i class="bi bi-x-circle me-1"></i> Cancel PO
                         </button>
                     </form>
                 <?php endif; ?>
 
                 <?php if (in_array($po['status'], ['sent', 'confirmed', 'partially_received'], true)): ?>
-                    <button type="button" class="btn btn-success d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#receiveGoodsModal" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px;">
-                        <i class="bi bi-box-arrow-in-down"></i> Receive Goods
+                    <button type="button" class="ks-btn ks-btn-success" data-bs-toggle="modal" data-bs-target="#receiveGoodsModal">
+                        <i class="bi bi-box-arrow-in-down me-1"></i> Receive Goods
                     </button>
                 <?php endif; ?>
             </div>
@@ -110,10 +110,13 @@ ob_start();
         <div class="row g-4 mb-4">
             <!-- Supplier Card -->
             <div class="col-md-6 col-xl-4">
-                <div class="card h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card h-100 border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-blue" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-building"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-building me-2 text-primary"></i> Supplier Information
+                            Supplier Information
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -142,10 +145,13 @@ ob_start();
 
             <!-- Dates & Notes Card -->
             <div class="col-md-6 col-xl-4">
-                <div class="card h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card h-100 border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-amber" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-calendar-check"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-calendar-check me-2 text-primary"></i> Dates & References
+                            Dates & References
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -179,10 +185,13 @@ ob_start();
 
             <!-- Financial Total Card -->
             <div class="col-xl-4">
-                <div class="card h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card h-100 border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-purple" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-cash-stack"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-cash-stack me-2 text-primary"></i> Financial Commitment
+                            Financial Commitment
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -208,28 +217,34 @@ ob_start();
         </div>
 
         <!-- Ordered Items Table with Receiving Progress -->
-        <div class="card mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-            <div class="card-header bg-white border-bottom p-3 d-flex justify-content-between align-items-center">
-                <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                    <i class="bi bi-box-seam me-2 text-primary"></i> Order Items & Fulfillment Status (<?= count($po['items']) ?>)
-                </h6>
+        <div class="ks-table-card mb-4">
+            <div class="ks-table-header">
+                <div class="ks-header-left">
+                    <div class="ks-icon-box ks-icon-blue" style="width: 28px; height: 28px; font-size: 13px;">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <h3 class="ks-header-title">Order Items & Fulfillment Status</h3>
+                    <span class="badge bg-light text-secondary border ms-2 fw-medium" style="font-size: 11px;">
+                        <?= count($po['items']) ?> items
+                    </span>
+                </div>
                 <?php if (in_array($po['status'], ['sent', 'confirmed', 'partially_received'], true)): ?>
-                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#receiveGoodsModal">
-                        <i class="bi bi-plus-lg"></i> Receive Shipment
+                    <button type="button" class="ks-btn ks-btn-success" data-bs-toggle="modal" data-bs-target="#receiveGoodsModal">
+                        <i class="bi bi-plus-lg me-1"></i> Receive Shipment
                     </button>
                 <?php endif; ?>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                    <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+            <div class="ks-table-responsive">
+                <table class="table ks-table align-middle mb-0">
+                    <thead>
                         <tr>
-                            <th class="py-2 px-3 text-muted fw-semibold">Item Name</th>
-                            <th class="py-2 px-3 text-muted fw-semibold">Stock Item</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-center">Ordered</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-center">Received</th>
-                            <th class="py-2 px-3 text-muted fw-semibold" style="width: 140px;">Fulfillment</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-end">Unit Cost</th>
-                            <th class="py-2 px-3 text-muted fw-semibold text-end">Total Amount</th>
+                            <th style="min-width: 200px;">Item Name</th>
+                            <th style="min-width: 170px;">Stock Item</th>
+                            <th style="min-width: 100px; text-align: center;">Ordered</th>
+                            <th style="min-width: 100px; text-align: center;">Received</th>
+                            <th style="min-width: 150px;">Fulfillment</th>
+                            <th class="ks-col-money" style="min-width: 120px;">Unit Cost</th>
+                            <th class="ks-col-money" style="min-width: 130px;">Total Amount</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -248,7 +263,7 @@ ob_start();
                                 </td>
                                 <td class="py-3 px-3">
                                     <?php if (!empty($item['item_code'])): ?>
-                                        <a href="/inventory/<?= (int)$item['inventory_item_id'] ?>" class="text-decoration-none">
+                                        <a href="/inventory/<?= (int)$item['inventory_item_id'] ?>" class="text-decoration-none fw-medium">
                                             <?= htmlspecialchars($item['stock_item_name'] ?? $item['item_code'], ENT_QUOTES, 'UTF-8') ?>
                                             <span class="badge bg-light text-dark border ms-1" style="font-size: 10px;">In Stock: <?= (float)($item['current_stock'] ?? 0) ?></span>
                                         </a>
@@ -270,10 +285,10 @@ ob_start();
                                         <span class="text-muted small" style="font-size: 11px;"><?= $pct ?>%</span>
                                     </div>
                                 </td>
-                                <td class="py-3 px-3 text-end font-monospace text-muted">
+                                <td class="py-3 px-3 ks-col-money font-monospace text-muted">
                                     ₹<?= number_format((float)$item['unit_cost'], 2) ?>
                                 </td>
-                                <td class="py-3 px-3 text-end font-monospace fw-bold text-dark">
+                                <td class="py-3 px-3 ks-col-money font-monospace fw-bold text-dark">
                                     ₹<?= number_format((float)$item['total_amount'], 2) ?>
                                 </td>
                             </tr>
@@ -284,9 +299,9 @@ ob_start();
         </div>
 
         <!-- History Tabs: Goods Receipts & Linked Invoices -->
-        <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-            <div class="card-header bg-white border-bottom p-3">
-                <ul class="nav nav-pills card-header-pills" id="poHistoryTabs" role="tablist">
+        <div class="ks-table-card mb-4">
+            <div class="p-3 border-bottom bg-white">
+                <ul class="nav ks-nav-tabs mb-0 border-0" id="poHistoryTabs" role="tablist">
                     <li class="nav-item">
                         <button class="nav-link active fw-semibold small" id="grn-tab" data-bs-toggle="tab" data-bs-target="#grn-pane" type="button" role="tab">
                             <i class="bi bi-box-arrow-in-down me-1"></i> Goods Receipts (<?= count($po['receipts']) ?>)
@@ -303,15 +318,15 @@ ob_start();
                 <div class="tab-content" id="poHistoryContent">
                     <!-- Receipts Pane -->
                     <div class="tab-pane fade show active" id="grn-pane" role="tabpanel">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                        <div class="ks-table-responsive">
+                            <table class="table ks-table align-middle mb-0">
+                                <thead>
                                     <tr>
-                                        <th class="py-2 px-3 text-muted fw-semibold">Receipt Number (GRN)</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold">Receipt Date</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold">Received By</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold">Remarks</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold text-end">Action</th>
+                                        <th style="min-width: 170px;">Receipt Number (GRN)</th>
+                                        <th style="min-width: 130px;">Receipt Date</th>
+                                        <th style="min-width: 160px;">Received By</th>
+                                        <th style="min-width: 200px;">Remarks</th>
+                                        <th class="ks-col-actions" style="min-width: 110px; text-align: right;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -319,30 +334,38 @@ ob_start();
                                         <?php foreach ($po['receipts'] as $gr): ?>
                                             <tr>
                                                 <td class="py-3 px-3">
-                                                    <a href="/purchases/receipts/<?= (int)$gr['id'] ?>" class="fw-bold font-monospace text-success text-decoration-none">
+                                                    <a href="/purchases/receipts/<?= (int)$gr['id'] ?>" class="fw-bold font-monospace text-primary text-decoration-none">
                                                         <?= htmlspecialchars($gr['receipt_number'], ENT_QUOTES, 'UTF-8') ?>
                                                     </a>
                                                 </td>
-                                                <td class="py-3 px-3 text-muted">
+                                                <td class="py-3 px-3 text-secondary small">
                                                     <?= !empty($gr['receipt_date']) ? date('d M Y', strtotime($gr['receipt_date'])) : '—' ?>
                                                 </td>
                                                 <td class="py-3 px-3 text-dark">
                                                     <?= htmlspecialchars($gr['received_by_name'] ?? 'Warehouse Staff', ENT_QUOTES, 'UTF-8') ?>
                                                 </td>
-                                                <td class="py-3 px-3 text-muted text-truncate" style="max-width: 250px;">
+                                                <td class="py-3 px-3 text-muted text-truncate small" style="max-width: 250px;">
                                                     <?= htmlspecialchars($gr['remarks'] ?? '—', ENT_QUOTES, 'UTF-8') ?>
                                                 </td>
-                                                <td class="py-3 px-3 text-end">
-                                                    <a href="/purchases/receipts/<?= (int)$gr['id'] ?>" class="btn btn-sm btn-outline-secondary">
-                                                        <i class="bi bi-eye"></i> View GRN
-                                                    </a>
+                                                <td class="py-3 px-3 ks-col-actions text-end">
+                                                    <div class="btn-group btn-group-sm">
+                                                        <a href="/purchases/receipts/<?= (int)$gr['id'] ?>" class="btn btn-outline-secondary" title="View GRN">
+                                                            <i class="bi bi-eye"></i> View GRN
+                                                        </a>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="5" class="text-center py-4 text-muted">
-                                                No goods receipt notes recorded for this purchase order yet.
+                                            <td colspan="5">
+                                                <div class="ks-empty-state py-4">
+                                                    <div class="ks-empty-icon" style="width: 44px; height: 44px; font-size: 20px;">
+                                                        <i class="bi bi-box-seam"></i>
+                                                    </div>
+                                                    <div class="ks-empty-title">No goods receipts processed yet</div>
+                                                    <p class="ks-empty-desc">When this shipment arrives at the warehouse, receive goods to generate Goods Receipt Notes.</p>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
@@ -353,28 +376,28 @@ ob_start();
 
                     <!-- Invoices Pane -->
                     <div class="tab-pane fade" id="inv-pane" role="tabpanel">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                                <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                        <div class="ks-table-responsive">
+                            <table class="table ks-table align-middle mb-0">
+                                <thead>
                                     <tr>
-                                        <th class="py-2 px-3 text-muted fw-semibold">Invoice Number</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold">Invoice Date</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold text-end">Total Amount</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold text-center">Status</th>
-                                        <th class="py-2 px-3 text-muted fw-semibold text-end">Action</th>
+                                        <th style="min-width: 170px;">Invoice Number</th>
+                                        <th style="min-width: 130px;">Invoice Date</th>
+                                        <th class="ks-col-money" style="min-width: 140px;">Total Amount</th>
+                                        <th style="min-width: 120px; text-align: center;">Status</th>
+                                        <th class="ks-col-actions" style="min-width: 110px; text-align: right;">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <?php if (!empty($po['invoices'])): ?>
                                         <?php foreach ($po['invoices'] as $inv): ?>
                                             <tr>
-                                                <td class="py-3 px-3 fw-bold text-dark">
+                                                <td class="py-3 px-3 fw-bold text-dark font-monospace">
                                                     <?= htmlspecialchars($inv['invoice_number'], ENT_QUOTES, 'UTF-8') ?>
                                                 </td>
-                                                <td class="py-3 px-3 text-muted">
+                                                <td class="py-3 px-3 text-secondary small">
                                                     <?= !empty($inv['invoice_date']) ? date('d M Y', strtotime($inv['invoice_date'])) : '—' ?>
                                                 </td>
-                                                <td class="py-3 px-3 text-end fw-bold font-monospace text-dark">
+                                                <td class="py-3 px-3 ks-col-money font-monospace fw-bold text-dark">
                                                     ₹<?= number_format((float)$inv['total_amount'], 2) ?>
                                                 </td>
                                                 <td class="py-3 px-3 text-center">
@@ -382,17 +405,25 @@ ob_start();
                                                         <?= htmlspecialchars(ucfirst(str_replace('_', ' ', $inv['payment_status'])), ENT_QUOTES, 'UTF-8') ?>
                                                     </span>
                                                 </td>
-                                                <td class="py-3 px-3 text-end">
-                                                    <a href="/vendors/<?= (int)$po['vendor_id'] ?>" class="btn btn-sm btn-outline-secondary">
-                                                        <i class="bi bi-box-arrow-up-right"></i> View Bill
-                                                    </a>
+                                                <td class="py-3 px-3 ks-col-actions text-end">
+                                                    <div class="btn-group btn-group-sm">
+                                                        <a href="/vendors/<?= (int)$po['vendor_id'] ?>" class="btn btn-outline-secondary" title="View Vendor Details">
+                                                            <i class="bi bi-box-arrow-up-right"></i> View Bill
+                                                        </a>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
                                     <?php else: ?>
                                         <tr>
-                                            <td colspan="5" class="text-center py-4 text-muted">
-                                                No vendor bills or invoices linked to this purchase order.
+                                            <td colspan="5">
+                                                <div class="ks-empty-state py-4">
+                                                    <div class="ks-empty-icon" style="width: 44px; height: 44px; font-size: 20px;">
+                                                        <i class="bi bi-receipt"></i>
+                                                    </div>
+                                                    <div class="ks-empty-title">No vendor bills or invoices linked</div>
+                                                    <p class="ks-empty-desc">No invoices recorded yet for this purchase order.</p>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php endif; ?>
@@ -407,11 +438,11 @@ ob_start();
         <!-- Receive Goods Modal -->
         <div class="modal fade" id="receiveGoodsModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog modal-lg">
-                <div class="modal-content" style="border-radius: var(--ks-radius-card);">
+                <div class="modal-content border-0 shadow" style="border-radius: var(--ks-radius-card);">
                     <form method="POST" action="/purchases/orders/<?= (int)$po['id'] ?>/receive">
-                        <div class="modal-header">
-                            <h5 class="modal-title fw-bold" style="font-size: 16px;">
-                                <i class="bi bi-box-arrow-in-down text-success me-2"></i> Receive Shipment for <?= htmlspecialchars($po['po_number'], ENT_QUOTES, 'UTF-8') ?>
+                        <div class="modal-header border-bottom px-4 py-3">
+                            <h5 class="modal-title fw-bold d-flex align-items-center gap-2" style="font-size: 16px; color: var(--ks-navy);">
+                                <i class="bi bi-box-arrow-in-down text-success"></i> Receive Shipment for <?= htmlspecialchars($po['po_number'], ENT_QUOTES, 'UTF-8') ?>
                             </h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
@@ -419,16 +450,16 @@ ob_start();
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label small fw-semibold text-dark">Receipt Date <span class="text-danger">*</span></label>
-                                    <input type="date" name="receipt_date" class="form-control" value="<?= date('Y-m-d') ?>" required style="font-size: 13px;">
+                                    <input type="date" name="receipt_date" class="form-control ks-form-control" value="<?= date('Y-m-d') ?>" required>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label small fw-semibold text-dark">Receipt Reference (GRN)</label>
-                                    <input type="text" name="receipt_number" class="form-control" placeholder="Leave blank to auto-generate" style="font-size: 13px;">
+                                    <input type="text" name="receipt_number" class="form-control ks-form-control" placeholder="Leave blank to auto-generate">
                                     <span class="text-muted" style="font-size: 11px;">e.g. GRN-20260923-0001</span>
                                 </div>
                                 <div class="col-12">
                                     <label class="form-label small fw-semibold text-dark">Delivery / Inspection Remarks</label>
-                                    <input type="text" name="remarks" class="form-control" placeholder="e.g. Shipment received in intact condition, batch inspected by store manager" style="font-size: 13px;">
+                                    <input type="text" name="remarks" class="form-control ks-form-control" placeholder="e.g. Shipment received in intact condition, batch inspected by store manager">
                                 </div>
                             </div>
 
@@ -467,7 +498,7 @@ ob_start();
                                                 <td class="text-center font-monospace text-muted"><?= number_format($rec, 2) ?></td>
                                                 <td class="text-center font-monospace fw-bold text-primary"><?= number_format($rem, 2) ?></td>
                                                 <td>
-                                                    <input type="number" step="0.01" min="0" max="<?= $rem ?>" name="items[<?= (int)$item['id'] ?>]" class="form-control font-monospace rec-input" data-remaining="<?= $rem ?>" value="<?= $rem > 0 ? $rem : 0 ?>" <?= $rem <= 0 ? 'readonly' : '' ?> style="font-size: 13px;">
+                                                    <input type="number" step="0.01" min="0" max="<?= $rem ?>" name="items[<?= (int)$item['id'] ?>]" class="form-control ks-form-control font-monospace rec-input" data-remaining="<?= $rem ?>" value="<?= $rem > 0 ? $rem : 0 ?>" <?= $rem <= 0 ? 'readonly' : '' ?>>
                                                 </td>
                                             </tr>
                                         <?php endforeach; ?>
@@ -475,10 +506,10 @@ ob_start();
                                 </table>
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-success" style="font-weight: 600;">
-                                <i class="bi bi-check-circle"></i> Confirm & Update Inventory
+                        <div class="modal-footer px-4 py-3 border-top">
+                            <button type="button" class="ks-btn ks-btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="ks-btn ks-btn-success">
+                                <i class="bi bi-check-circle me-1"></i> Confirm & Update Inventory
                             </button>
                         </div>
                     </form>
