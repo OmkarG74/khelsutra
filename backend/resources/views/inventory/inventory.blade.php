@@ -20,7 +20,7 @@ $db = \App\Services\BaseService::getDatabaseConnection();
 $catService = new \App\Services\Inventory\InventoryCategoryService($db);
 $catService->provisionSportCategories($orgId);
 
-$catStmt = $db->prepare("SELECT id, name FROM inventory_categories WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
+$catStmt = $db->prepare("SELECT id, name FROM inventory_categories WHERE organization_id = :org_id AND name IN ('Athletics', 'Badminton', 'Basketball', 'Cricket', 'Football', 'Swimming') AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
 $catStmt->execute([':org_id' => $orgId]);
 $categories = $catStmt ? $catStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 

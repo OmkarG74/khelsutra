@@ -42,13 +42,18 @@ class InventoryCategoryService extends BaseService
         $existingNames = $stmt->fetchAll(\PDO::FETCH_COLUMN);
         $existingLower = array_map('strtolower', $existingNames);
 
+        $allowedInventorySports = ['athletics', 'badminton', 'basketball', 'cricket', 'football', 'swimming'];
+
         foreach ($sports as $sport) {
-            if (!in_array(strtolower($sport['name']), $existingLower, true)) {
-                $this->createCategory($orgId, [
-                    'name' => $sport['name'],
-                    'description' => $sport['name'] . ' Equipment',
-                    'status' => 'active'
-                ], $performedBy);
+            $sportNameLower = strtolower($sport['name']);
+            if (in_array($sportNameLower, $allowedInventorySports, true)) {
+                if (!in_array($sportNameLower, $existingLower, true)) {
+                    $this->createCategory($orgId, [
+                        'name' => $sport['name'],
+                        'description' => $sport['name'] . ' Equipment',
+                        'status' => 'active'
+                    ], $performedBy);
+                }
             }
         }
     }
