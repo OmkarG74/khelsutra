@@ -233,7 +233,7 @@ return [
         return ['view' => 'reports/reports'];
     },
     '/settings' => function() {
-        return ['view' => 'settings/settings'];
+        return ['view' => 'settings/organization'];
     },
     '/notifications' => function() {
         return ['view' => 'notifications/index'];

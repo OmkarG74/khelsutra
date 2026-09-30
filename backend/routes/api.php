@@ -222,6 +222,69 @@ return function ($uri, $method, $requestData = []) {
         }
     }
 
+    // 4b. Tenant-Scoped Organisation Settings & Profile (Sports Admin & Super Admin)
+    if ($uri === '/api/v1/settings/organization') {
+        if (!$checkPermission(['settings.manage', 'organization.manage'])) {
+            return ApiResponse::error('Forbidden: Insufficient permissions to manage settings.', null, 403);
+        }
+        $settingsService = new \App\Services\Organization\OrganizationSettingsService();
+        if ($method === 'GET') {
+            $rows = $settingsService->getSettingRows($orgId);
+            return ApiResponse::success($rows, 'Organization settings retrieved', 200);
+        }
+        if ($method === 'POST') {
+            $key = trim($requestData['setting_key'] ?? '');
+            $type = trim($requestData['setting_type'] ?? 'string');
+            $val = $requestData['setting_value'] ?? '';
+            if ($key === '') {
+                return ApiResponse::error('Setting key is required.', ['setting_key' => ['The setting key field is required.']], 422);
+            }
+            $allowedTypes = ['string', 'integer', 'decimal', 'boolean', 'json'];
+            if (!in_array($type, $allowedTypes, true)) {
+                $type = 'string';
+            }
+            $ok = $settingsService->set($orgId, $key, $val, $type, $performedBy);
+            if ($ok) {
+                return ApiResponse::success([
+                    'setting_key' => $key,
+                    'setting_value' => is_scalar($val) ? (string)$val : json_encode($val),
+                    'setting_type' => $type
+                ], 'Setting saved successfully', 200);
+            }
+            return ApiResponse::error('Failed to save setting.', null, 500);
+        }
+    }
+
+    if ($uri === '/api/v1/settings/profile') {
+        if ($method === 'GET') {
+            if (!$checkPermission(['organization.view', 'organization.manage', 'settings.manage'])) {
+                return ApiResponse::error('Forbidden: Insufficient permissions to view organization profile.', null, 403);
+            }
+            $orgService = new \App\Services\Organization\OrganizationManagementService();
+            $org = $orgService->getOrganization($orgId);
+            if (!$org) return ApiResponse::error('Organization not found', null, 404);
+            return ApiResponse::success($org, 'Organization profile retrieved', 200);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission(['organization.update', 'organization.manage', 'settings.manage'])) {
+                return ApiResponse::error('Forbidden: Insufficient permissions to update organization profile.', null, 403);
+            }
+            $orgService = new \App\Services\Organization\OrganizationManagementService();
+            $name = trim($requestData['name'] ?? '');
+            if ($name === '') {
+                return ApiResponse::error('Organization name is required.', ['name' => ['The name field is required.']], 422);
+            }
+            $updated = $orgService->updateOrganization($orgId, $requestData, $performedBy);
+            if ($updated) {
+                if (isset($_SESSION['auth']['organization'])) {
+                    $_SESSION['auth']['organization']['name'] = $updated['name'];
+                }
+                return ApiResponse::success($updated, 'Organization profile updated successfully', 200);
+            }
+            return ApiResponse::error('Failed to update organization profile.', null, 500);
+        }
+    }
+
     // 5. User Management & RBAC
     if ($uri === '/api/v1/users') {
         if ($method === 'GET') {

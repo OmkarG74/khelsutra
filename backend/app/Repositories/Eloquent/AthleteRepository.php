@@ -30,44 +30,181 @@ class AthleteRepository implements AthleteRepositoryInterface
         }
     }
 
-    public function getPaginated(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?int $sportId = null, ?string $status = null): array
-    {
-        if (!$this->pdo) return ['data' => [], 'total' => 0];
-
-        $offset = max(0, ($page - 1) * $limit);
+    /**
+     * Build shared SQL WHERE conditions and bound parameters for athlete list, count, and export.
+     */
+    protected function buildFilterConditions(
+        int $organizationId,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null
+    ): array {
         $where = "a.organization_id = :org_id AND a.deleted_at IS NULL";
         $params = [':org_id' => $organizationId];
 
-        if (!empty($search)) {
-            $where .= " AND (a.first_name LIKE :search OR a.last_name LIKE :search OR a.athlete_code LIKE :search OR a.email LIKE :search)";
-            $params[':search'] = "%{$search}%";
+        $search = $search !== null ? trim($search) : '';
+        if ($search !== '') {
+            $where .= " AND (
+                a.first_name LIKE :search_first
+                OR a.last_name LIKE :search_last
+                OR CONCAT(COALESCE(a.first_name, ''), ' ', COALESCE(a.last_name, '')) LIKE :search_full
+                OR a.athlete_code LIKE :search_code
+                OR a.email LIKE :search_email
+                OR a.phone LIKE :search_phone
+            )";
+            $likeVal = "%{$search}%";
+            $params[':search_first'] = $likeVal;
+            $params[':search_last']  = $likeVal;
+            $params[':search_full']  = $likeVal;
+            $params[':search_code']  = $likeVal;
+            $params[':search_email'] = $likeVal;
+            $params[':search_phone'] = $likeVal;
         }
-        if (!empty($sportId)) {
+
+        if (!empty($sportId) && $sportId > 0) {
             $where .= " AND a.current_sport_id = :sport_id";
-            $params[':sport_id'] = $sportId;
+            $params[':sport_id'] = (int)$sportId;
         }
-        if (!empty($status)) {
+
+        $status = $status !== null ? trim($status) : '';
+        if ($status !== '') {
             $where .= " AND a.status = :status";
             $params[':status'] = $status;
         }
 
-        // Count total
-        $countStmt = $this->pdo->prepare("SELECT COUNT(*) FROM athletes a WHERE {$where}");
+        if (!empty($coachId) && $coachId > 0) {
+            $where .= " AND EXISTS (
+                SELECT 1
+                FROM team_members cm
+                INNER JOIN teams ct ON cm.team_id = ct.id AND ct.deleted_at IS NULL
+                INNER JOIN team_coaches tc ON ct.id = tc.team_id
+                WHERE cm.athlete_id = a.id
+                  AND cm.is_current = 1
+                  AND tc.coach_id = :coach_id
+                  AND tc.organization_id = :coach_org_id
+            )";
+            $params[':coach_id'] = (int)$coachId;
+            $params[':coach_org_id'] = $organizationId;
+        }
+
+        return [$where, $params];
+    }
+
+    /**
+     * Batch-hydrate active current team memberships for a list of athlete rows without multiplying athlete rows.
+     */
+    protected function attachActiveTeams(int $organizationId, array $rows): array
+    {
+        if (empty($rows) || !$this->pdo) {
+            return $rows;
+        }
+
+        $athleteIds = array_values(array_unique(array_filter(array_map(fn($r) => (int)($r['id'] ?? 0), $rows))));
+        if (empty($athleteIds)) {
+            return $rows;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($athleteIds), '?'));
+        $sql = "
+            SELECT mem.athlete_id, tm.id AS team_id, tm.name AS team_name, mem.member_role
+            FROM team_members mem
+            INNER JOIN teams tm ON mem.team_id = tm.id
+            WHERE mem.athlete_id IN ({$placeholders})
+              AND mem.is_current = 1
+              AND tm.deleted_at IS NULL
+              AND tm.status = 'active'
+              AND tm.organization_id = ?
+            ORDER BY mem.id DESC
+        ";
+        $stmt = $this->pdo->prepare($sql);
+        $bindValues = array_merge($athleteIds, [$organizationId]);
+        $stmt->execute($bindValues);
+        $teamRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $teamsByAthlete = [];
+        foreach ($teamRows as $tr) {
+            $aid = (int)$tr['athlete_id'];
+            $tid = (int)$tr['team_id'];
+            $normName = strtolower(trim((string)($tr['team_name'] ?? '')));
+            if ($normName === '') {
+                continue;
+            }
+            if (!isset($teamsByAthlete[$aid])) {
+                $teamsByAthlete[$aid] = [];
+            }
+            // Deduplicate by normalized team name (and team_id) while preserving most recent assignment order
+            if (!isset($teamsByAthlete[$aid][$normName])) {
+                $teamsByAthlete[$aid][$normName] = [
+                    'id' => $tid,
+                    'name' => trim((string)$tr['team_name']),
+                    'member_role' => $tr['member_role'] ?? 'player',
+                ];
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $aid = (int)($row['id'] ?? 0);
+            $activeTeams = isset($teamsByAthlete[$aid]) ? array_values($teamsByAthlete[$aid]) : [];
+            $row['teams'] = $activeTeams;
+            $row['team_id'] = $activeTeams[0]['id'] ?? null;
+            $row['team_name'] = $activeTeams[0]['name'] ?? null;
+            $row['extra_teams_count'] = max(0, count($activeTeams) - 1);
+            $row['all_teams_label'] = !empty($activeTeams)
+                ? implode(', ', array_column($activeTeams, 'name'))
+                : 'Unassigned';
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    public function getPaginated(
+        int $organizationId,
+        int $page = 1,
+        int $limit = 20,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null
+    ): array {
+        if (!$this->pdo) {
+            return [
+                'data' => [],
+                'total' => 0,
+                'page' => 1,
+                'limit' => $limit,
+                'total_pages' => 1,
+                'from' => 0,
+                'to' => 0,
+            ];
+        }
+
+        $page = max(1, $page);
+        $limit = max(1, $limit);
+        [$where, $params] = $this->buildFilterConditions($organizationId, $search, $sportId, $status, $coachId);
+
+        // Count unique non-deleted athletes matching filters
+        $countStmt = $this->pdo->prepare("SELECT COUNT(DISTINCT a.id) FROM athletes a WHERE {$where}");
         foreach ($params as $k => $v) {
             $countStmt->bindValue($k, $v);
         }
         $countStmt->execute();
         $total = (int)$countStmt->fetchColumn();
 
-        // Fetch page
+        $totalPages = max(1, (int)ceil($total / $limit));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = max(0, ($page - 1) * $limit);
+
+        // Fetch unique athlete records (1 row per athlete.id)
         $sql = "
-            SELECT a.*, s.name as sport_name, tm.name as team_name
-            FROM athletes a 
-            LEFT JOIN sports s ON a.current_sport_id = s.id 
-            LEFT JOIN team_members mem ON a.id = mem.athlete_id AND mem.is_current = 1
-            LEFT JOIN teams tm ON mem.team_id = tm.id AND tm.deleted_at IS NULL
-            WHERE {$where} 
-            ORDER BY a.id DESC 
+            SELECT a.*, s.name AS sport_name
+            FROM athletes a
+            LEFT JOIN sports s ON a.current_sport_id = s.id
+            WHERE {$where}
+            ORDER BY a.id DESC
             LIMIT :limit OFFSET :offset
         ";
         $stmt = $this->pdo->prepare($sql);
@@ -79,13 +216,54 @@ class AthleteRepository implements AthleteRepositoryInterface
         $stmt->execute();
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        $rows = $this->attachActiveTeams($organizationId, $rows);
+
+        $from = $total > 0 ? ($offset + 1) : 0;
+        $to = $total > 0 ? min($total, $offset + count($rows)) : 0;
+
         return [
             'data' => $rows,
             'total' => $total,
             'page' => $page,
+            'current_page' => $page,
             'limit' => $limit,
-            'total_pages' => ceil($total / max(1, $limit)),
+            'per_page' => $limit,
+            'total_pages' => $totalPages,
+            'last_page' => $totalPages,
+            'from' => $from,
+            'to' => $to,
         ];
+    }
+
+    /**
+     * Fetch all filtered unique athletes without pagination (for Excel export).
+     */
+    public function getAllFiltered(
+        int $organizationId,
+        ?string $search = null,
+        ?int $sportId = null,
+        ?string $status = null,
+        ?int $coachId = null
+    ): array {
+        if (!$this->pdo) return [];
+
+        [$where, $params] = $this->buildFilterConditions($organizationId, $search, $sportId, $status, $coachId);
+
+        $sql = "
+            SELECT a.*, s.name AS sport_name
+            FROM athletes a
+            LEFT JOIN sports s ON a.current_sport_id = s.id
+            WHERE {$where}
+            ORDER BY a.id DESC
+        ";
+        $stmt = $this->pdo->prepare($sql);
+        foreach ($params as $k => $v) {
+            $stmt->bindValue($k, $v);
+        }
+        $stmt->execute();
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        return $this->attachActiveTeams($organizationId, $rows);
     }
 
     public function findById(int $organizationId, int $id): ?array
@@ -93,12 +271,11 @@ class AthleteRepository implements AthleteRepositoryInterface
         if (!$this->pdo) return null;
 
         $stmt = $this->pdo->prepare("
-            SELECT a.*, s.name as sport_name, tm.name as team_name, tm.id as team_id
-            FROM athletes a 
-            LEFT JOIN sports s ON a.current_sport_id = s.id 
-            LEFT JOIN team_members mem ON a.id = mem.athlete_id AND mem.is_current = 1
-            LEFT JOIN teams tm ON mem.team_id = tm.id AND tm.deleted_at IS NULL
+            SELECT a.*, s.name AS sport_name
+            FROM athletes a
+            LEFT JOIN sports s ON a.current_sport_id = s.id
             WHERE a.organization_id = :org_id AND a.id = :id AND a.deleted_at IS NULL
+            LIMIT 1
         ");
         $stmt->bindValue(':org_id', $organizationId, PDO::PARAM_INT);
         $stmt->bindValue(':id', $id, PDO::PARAM_INT);
@@ -106,6 +283,9 @@ class AthleteRepository implements AthleteRepositoryInterface
         $athlete = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if (!$athlete) return null;
+
+        $hydrated = $this->attachActiveTeams($organizationId, [$athlete]);
+        $athlete = $hydrated[0];
 
         // Fetch guardian info
         $gStmt = $this->pdo->prepare("
@@ -314,18 +494,10 @@ class AthleteRepository implements AthleteRepositoryInterface
     {
         if (!$this->pdo) return false;
 
-        $stmt = $this->pdo->prepare("UPDATE athletes SET deleted_at = NOW() WHERE organization_id = :org_id AND id = :id AND deleted_at IS NULL");
+        // Soft-delete athlete record only; preserve historical records (user account, team history, documents, guardians, medical, attendance)
+        $stmt = $this->pdo->prepare("UPDATE athletes SET deleted_at = NOW(), updated_at = NOW() WHERE organization_id = :org_id AND id = :id AND deleted_at IS NULL");
         $deleted = $stmt->execute([':org_id' => $organizationId, ':id' => $id]);
 
-        if ($deleted && $stmt->rowCount() > 0) {
-            // Soft-delete associated child records
-            $stmtGuardians = $this->pdo->prepare("UPDATE athlete_guardians SET deleted_at = NOW() WHERE organization_id = :org_id AND athlete_id = :id AND deleted_at IS NULL");
-            $stmtGuardians->execute([':org_id' => $organizationId, ':id' => $id]);
-
-            $stmtDocs = $this->pdo->prepare("UPDATE athlete_documents SET deleted_at = NOW() WHERE organization_id = :org_id AND athlete_id = :id AND deleted_at IS NULL");
-            $stmtDocs->execute([':org_id' => $organizationId, ':id' => $id]);
-        }
-
-        return $deleted;
+        return $deleted && $stmt->rowCount() > 0;
     }
 }
