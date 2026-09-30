@@ -296,6 +296,11 @@ $tests = [
         $t = new \Tests\Feature\TrainingSessionModuleComprehensiveTest();
         return $t->runAllTests();
     },
+    'Feature: Organisation Settings Configuration Center (Real Functional Configuration)' => function() {
+        require_once __DIR__ . '/Feature/SettingsConfigurationModuleTest.php';
+        $t = new \Tests\Feature\SettingsConfigurationModuleTest();
+        return $t->runAll();
+    },
 ];
 
 $passed = 0;

@@ -103,12 +103,193 @@ if ($uri === '/logout') {
 // 2. Web Form Actions Dispatcher (POST Submissions)
 require __DIR__ . '/../routes/web_actions.php';
 
+// Athlete Excel Export Handler (Real .xlsx, filtered, unpaginated, organization-scoped)
+if ($uri === '/athletes/export' && $method === 'GET') {
+    $orgId = current_organization_id();
+    $currentUser = $_SESSION['auth']['user'] ?? [
+        'id' => 102,
+        'email' => 'sportsadmin@khelsutra.local',
+        'role_id' => 2,
+    ];
+    $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+    $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+
+    if ($currentRoleSlug === 'athlete' || $currentRoleId === 5 || $currentRoleSlug === 'inventory_manager' || $currentRoleId === 7) {
+        http_response_code(403);
+        echo "403 Forbidden: You do not have permission to export athletes.";
+        exit;
+    }
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $currentRoleId,
+            'role' => $_SESSION['auth']['role'] ?? ['id' => $currentRoleId, 'slug' => $currentRoleSlug],
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($currentUser['permissions'] ?? []),
+        ]
+    );
+
+    if (!$permissionService->hasPermission($userPayload, 'athlete.view', $orgId)) {
+        http_response_code(403);
+        echo "403 Forbidden: Insufficient permissions to export athletes.";
+        exit;
+    }
+
+    $coachId = null;
+    if ($currentRoleSlug === 'coach' || $currentRoleId === 4) {
+        $coachId = (int)($currentUser['coach_id'] ?? 0);
+        $pdo = \App\Services\BaseService::getDatabaseConnection();
+        if (!$coachId && $userId && $pdo) {
+            $cStmt = $pdo->prepare("
+                SELECT cp.id
+                FROM coach_profiles cp
+                JOIN employees e ON cp.employee_id = e.id
+                WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL
+                LIMIT 1
+            ");
+            $cStmt->execute([':uid' => $userId, ':oid' => $orgId]);
+            $coachId = (int)($cStmt->fetchColumn() ?: 0);
+        }
+    }
+
+    $search = isset($_GET['search']) ? trim((string)$_GET['search']) : null;
+    $sportId = !empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null;
+    $status = !empty($_GET['status']) ? trim((string)$_GET['status']) : null;
+
+    $athleteService = new \App\Services\Athlete\AthleteService();
+    $export = $athleteService->exportAthletesXlsx(
+        $orgId,
+        $search !== '' ? $search : null,
+        $sportId,
+        $status !== '' ? $status : null,
+        $coachId
+    );
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $export['filename'] . '"');
+    header('Content-Length: ' . strlen($export['binary']));
+    header('Cache-Control: max-age=0');
+    echo $export['binary'];
+    exit;
+}
+
+// Coach Excel Export Handler (Real .xlsx, filtered, unpaginated, organization-scoped)
+if ($uri === '/coaches/export' && $method === 'GET') {
+    $orgId = current_organization_id();
+    $currentUser = $_SESSION['auth']['user'] ?? [
+        'id' => 102,
+        'email' => 'sportsadmin@khelsutra.local',
+        'role_id' => 2,
+    ];
+    $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+    $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+
+    if (
+        $currentRoleSlug === 'athlete' || $currentRoleId === 5 ||
+        $currentRoleSlug === 'inventory_manager' || $currentRoleId === 7 ||
+        $currentRoleSlug === 'venue_manager' || $currentRoleId === 6
+    ) {
+        http_response_code(403);
+        echo "403 Forbidden: You do not have permission to export coaches.";
+        exit;
+    }
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $currentRoleId,
+            'role' => $_SESSION['auth']['role'] ?? ['id' => $currentRoleId, 'slug' => $currentRoleSlug],
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($currentUser['permissions'] ?? []),
+        ]
+    );
+
+    if (
+        !$permissionService->hasPermission($userPayload, 'coach.view', $orgId) &&
+        !$permissionService->hasPermission($userPayload, 'coach.manage', $orgId)
+    ) {
+        http_response_code(403);
+        echo "403 Forbidden: Insufficient permissions to export coaches.";
+        exit;
+    }
+
+    $search = isset($_GET['search']) ? trim((string)$_GET['search']) : null;
+    $specialization = isset($_GET['specialization']) ? trim((string)$_GET['specialization']) : null;
+    $status = isset($_GET['status']) ? trim((string)$_GET['status']) : null;
+
+    $coachService = new \App\Services\Coach\CoachService();
+    $export = $coachService->exportCoachesXlsx(
+        $orgId,
+        $search !== '' ? $search : null,
+        $specialization !== '' ? $specialization : null,
+        $status !== '' ? $status : null
+    );
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $export['filename'] . '"');
+    header('Content-Length: ' . strlen($export['binary']));
+    header('Cache-Control: max-age=0');
+    echo $export['binary'];
+    exit;
+}
+
 // Secure Document View / Download Handler
 if (preg_match('#^/athletes/(\d+)/documents/(\d+)/(view|download)$#', $uri, $m)) {
     $athId = (int)$m[1];
     $docId = (int)$m[2];
     $action = $m[3]; // 'view' or 'download'
     $orgId = current_organization_id();
+
+    $currentUser = $_SESSION['auth']['user'] ?? null;
+    $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+    $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? 2);
+
+    if ($currentRoleSlug === 'inventory_manager' || $currentRoleId === 7) {
+        http_response_code(403);
+        echo "Access denied.";
+        exit;
+    }
+    if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
+        $myAthId = (int)($currentUser['athlete_id'] ?? 0);
+        if ($myAthId !== $athId) {
+            http_response_code(403);
+            echo "Access denied: Athletes can only access their own documents.";
+            exit;
+        }
+    } elseif ($currentRoleSlug === 'coach' || $currentRoleId === 4) {
+        $coachId = (int)($currentUser['coach_id'] ?? 0);
+        $pdo = \App\Services\BaseService::getDatabaseConnection();
+        if (!$coachId && !empty($currentUser['id']) && $pdo) {
+            $cStmt = $pdo->prepare("
+                SELECT cp.id FROM coach_profiles cp JOIN employees e ON cp.employee_id = e.id
+                WHERE e.user_id = :uid AND cp.organization_id = :oid AND cp.deleted_at IS NULL LIMIT 1
+            ");
+            $cStmt->execute([':uid' => (int)$currentUser['id'], ':oid' => $orgId]);
+            $coachId = (int)($cStmt->fetchColumn() ?: 0);
+        }
+        $authorizedCoach = false;
+        if ($coachId && $pdo) {
+            $tcStmt = $pdo->prepare("
+                SELECT 1 FROM team_coaches tc JOIN team_members tm ON tc.team_id = tm.team_id AND tm.is_current = 1
+                WHERE tc.coach_id = :cid AND tm.athlete_id = :aid AND tc.organization_id = :oid LIMIT 1
+            ");
+            $tcStmt->execute([':cid' => $coachId, ':aid' => $athId, ':oid' => $orgId]);
+            $authorizedCoach = (bool)$tcStmt->fetchColumn();
+        }
+        if (!$authorizedCoach) {
+            http_response_code(403);
+            echo "Access denied: Athlete is not in your assigned squads.";
+            exit;
+        }
+    }
+
     $docService = new \App\Services\Athlete\AthleteDocumentService();
     $doc = $docService->getDocument($orgId, $athId, $docId);
     if (!$doc) {
@@ -131,6 +312,108 @@ if (preg_match('#^/athletes/(\d+)/documents/(\d+)/(view|download)$#', $uri, $m))
     $disposition = ($action === 'download') ? 'attachment' : 'inline';
     header('Content-Disposition: ' . $disposition . '; filename="' . $fileName . '"');
     readfile($fullPath);
+    exit;
+}
+
+// Team Candidates Search Handlers (Organization-scoped & Sport-scoped JSON endpoints)
+if ($uri === '/teams/candidates/athletes' && $method === 'GET') {
+    header('Content-Type: application/json; charset=utf-8');
+    $orgId = current_organization_id();
+    $currentUser = $_SESSION['auth']['user'] ?? [
+        'id' => 102,
+        'email' => 'sportsadmin@khelsutra.local',
+        'role_id' => 2,
+    ];
+    $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+    $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+
+    $isAthlete = ($currentRoleSlug === 'athlete') || ($currentRoleId === 5) || !empty($currentUser['athlete_id']);
+    $isCoach = ($currentRoleSlug === 'coach') || ($currentRoleId === 4) || !empty($currentUser['coach_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $currentRoleId,
+            'role' => $_SESSION['auth']['role'] ?? ['id' => $currentRoleId, 'slug' => $currentRoleSlug],
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($currentUser['permissions'] ?? []),
+        ]
+    );
+
+    $canSearch = !$isAthlete && !$isCoach && (
+        $permissionService->hasPermission($userPayload, 'team.create', $orgId) ||
+        $permissionService->hasPermission($userPayload, 'team.update', $orgId) ||
+        $permissionService->hasPermission($userPayload, 'team.manage', $orgId) ||
+        $permissionService->hasPermission($userPayload, 'team.members.manage', $orgId)
+    );
+
+    if (!$canSearch) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => '403 Forbidden: You do not have permission to search team athletes.']);
+        exit;
+    }
+
+    $sportId = (int)($_GET['sport_id'] ?? 0);
+    $search = isset($_GET['search']) ? trim((string)$_GET['search']) : null;
+    $gender = isset($_GET['gender']) ? trim((string)$_GET['gender']) : null;
+    $excludeTeamId = !empty($_GET['team_id']) ? (int)$_GET['team_id'] : null;
+
+    $teamService = new \App\Services\Team\TeamService();
+    $athletes = $teamService->searchEligibleAthletes($orgId, $sportId, $search, $gender, $excludeTeamId, 30);
+    echo json_encode(['success' => true, 'data' => $athletes]);
+    exit;
+}
+
+if ($uri === '/teams/candidates/coaches' && $method === 'GET') {
+    header('Content-Type: application/json; charset=utf-8');
+    $orgId = current_organization_id();
+    $currentUser = $_SESSION['auth']['user'] ?? [
+        'id' => 102,
+        'email' => 'sportsadmin@khelsutra.local',
+        'role_id' => 2,
+    ];
+    $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+    $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+
+    $isAthlete = ($currentRoleSlug === 'athlete') || ($currentRoleId === 5) || !empty($currentUser['athlete_id']);
+    $isCoach = ($currentRoleSlug === 'coach') || ($currentRoleId === 4) || !empty($currentUser['coach_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $currentRoleId,
+            'role' => $_SESSION['auth']['role'] ?? ['id' => $currentRoleId, 'slug' => $currentRoleSlug],
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($currentUser['permissions'] ?? []),
+        ]
+    );
+
+    $canSearch = !$isAthlete && !$isCoach && (
+        $permissionService->hasPermission($userPayload, 'team.create', $orgId) ||
+        $permissionService->hasPermission($userPayload, 'team.update', $orgId) ||
+        $permissionService->hasPermission($userPayload, 'team.manage', $orgId) ||
+        $permissionService->hasPermission($userPayload, 'team.coaches.manage', $orgId)
+    );
+
+    if (!$canSearch) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'error' => '403 Forbidden: You do not have permission to search team coaches.']);
+        exit;
+    }
+
+    $search = isset($_GET['search']) ? trim((string)$_GET['search']) : null;
+    $sportName = isset($_GET['sport_name']) ? trim((string)$_GET['sport_name']) : null;
+    $excludeTeamId = !empty($_GET['team_id']) ? (int)$_GET['team_id'] : null;
+
+    $teamService = new \App\Services\Team\TeamService();
+    $coaches = $teamService->searchAvailableCoaches($orgId, $search, $sportName, $excludeTeamId, 30);
+    echo json_encode(['success' => true, 'data' => $coaches]);
     exit;
 }
 
@@ -225,7 +508,7 @@ if (isset($_SESSION['auth']['role'])) {
 
     if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
         $blockedPatterns = [
-            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/inventory#', '#^/equipment#', 
+            '#^/settings#', '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/inventory#', '#^/equipment#', 
             '#^/vendors#', '#^/purchases#', '#^/finance#', '#^/users#', '#^/roles#', 
             '#^/permissions#', '#^/audit-logs#', '#^/venues#', '#^/operations#',
             '#^/coaches#', '#^/athletes/create#', '#^/athletes/\d+/edit#',
@@ -239,7 +522,7 @@ if (isset($_SESSION['auth']['role'])) {
         }
     } elseif ($currentRoleSlug === 'coach' || $currentRoleId === 4) {
         $blockedPatterns = [
-            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/inventory#', '#^/equipment#', 
+            '#^/settings#', '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/inventory#', '#^/equipment#', 
             '#^/vendors#', '#^/purchases#', '#^/finance#', '#^/users#', '#^/roles#', 
             '#^/permissions#', '#^/audit-logs#', '#^/venues/create#', '#^/venues/\d+/edit#',
             '#^/coaches/create#', '#^/coaches/\d+/edit#', '#^/athletes/create#', '#^/athletes/\d+/edit#',
@@ -252,7 +535,7 @@ if (isset($_SESSION['auth']['role'])) {
         }
     } elseif ($currentRoleSlug === 'hr_finance' || $currentRoleId === 3) {
         $blockedPatterns = [
-            '#^/users#', '#^/roles#', '#^/permissions#',
+            '#^/settings#', '#^/users#', '#^/roles#', '#^/permissions#',
             '#^/athletes/create#', '#^/athletes/\d+/edit#',
             '#^/coaches/create#', '#^/coaches/\d+/edit#',
             '#^/teams/create#', '#^/teams/\d+/edit#',
@@ -268,7 +551,7 @@ if (isset($_SESSION['auth']['role'])) {
         }
     } elseif ($currentRoleSlug === 'inventory_manager' || $currentRoleId === 7) {
         $blockedPatterns = [
-            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/users#', '#^/roles#', 
+            '#^/settings#', '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/users#', '#^/roles#', 
             '#^/permissions#', '#^/audit-logs#',
             '#^/athletes#', '#^/coaches#', '#^/teams#', '#^/tournaments#',
             '#^/training#', '#^/attendance#', '#^/venues#', '#^/operations#'
@@ -280,7 +563,7 @@ if (isset($_SESSION['auth']['role'])) {
         }
     } elseif ($currentRoleSlug === 'venue_manager' || $currentRoleId === 6) {
         $blockedPatterns = [
-            '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/users#', '#^/roles#', 
+            '#^/settings#', '#^/payroll#', '#^/hr#', '#^/hr-finance#', '#^/users#', '#^/roles#', 
             '#^/permissions#', '#^/audit-logs#',
             '#^/inventory#', '#^/equipment#', '#^/vendors#', '#^/purchases#',
             '#^/athletes/create#', '#^/athletes/\d+/edit#',

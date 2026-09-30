@@ -11,14 +11,16 @@ if ($method !== 'POST') {
 }
 
 $currentUser = $_SESSION['auth']['user'] ?? [
-    'id' => 5,
+    'id' => 102,
     'email' => 'sportsadmin@khelsutra.local',
     'first_name' => 'Rajesh',
-    'last_name' => 'Sharma'
+    'last_name' => 'Sharma',
+    'role_id' => 2,
 ];
 $orgId = current_organization_id();
 $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
 $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
+$userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
 
 // Athlete POST authorization check
 if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
@@ -220,13 +222,28 @@ if (preg_match('#^/athletes/(\d+)/edit$#', $uri, $m)) {
 if (preg_match('#^/athletes/(\d+)/status$#', $uri, $m)) {
     $athleteId = (int)$m[1];
     $orgId = current_organization_id();
-    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
 
     unset($_POST['organization_id']);
 
+    $retSearch = trim($_POST['return_search'] ?? ($_GET['search'] ?? ''));
+    $retSportId = !empty($_POST['return_sport_id']) ? (int)$_POST['return_sport_id'] : (!empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null);
+    $retStatus = trim($_POST['return_status'] ?? ($_GET['status'] ?? ''));
+    $retPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildRedirectUrl = function (array $extraParams) use ($retSearch, $retSportId, $retStatus, $retPage): string {
+        $q = [];
+        if ($retSearch !== '') $q['search'] = $retSearch;
+        if (!empty($retSportId)) $q['sport_id'] = $retSportId;
+        if ($retStatus !== '') $q['status'] = $retStatus;
+        if ($retPage > 1) $q['page'] = $retPage;
+        $q = array_merge($q, $extraParams);
+        return '/athletes' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
+
     $status = trim($_POST['status'] ?? '');
     if (!in_array($status, ['active', 'inactive'], true)) {
-        header('Location: /athletes?error=' . urlencode('Invalid status value.'));
+        header('Location: ' . $buildRedirectUrl(['error' => 'Invalid status value.']));
         exit;
     }
 
@@ -237,7 +254,7 @@ if (preg_match('#^/athletes/(\d+)/status$#', $uri, $m)) {
         [
             'id' => $userId,
             'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
-            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin']),
             'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
         ]
     );
@@ -245,13 +262,7 @@ if (preg_match('#^/athletes/(\d+)/status$#', $uri, $m)) {
               || $permissionService->hasPermission($userPayload, 'athlete.edit', $orgId);
 
     if (!$canUpdate) {
-        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
-        $canUpdate = in_array('athlete.update', $userPermissions, true)
-                  || in_array('athlete.edit', $userPermissions, true);
-    }
-
-    if (!$canUpdate) {
-        header('Location: /athletes?error=' . urlencode('Unauthorized: You do not have permission to update athlete status.'));
+        header('Location: ' . $buildRedirectUrl(['error' => 'Unauthorized: You do not have permission to update athlete status.']));
         exit;
     }
 
@@ -259,13 +270,13 @@ if (preg_match('#^/athletes/(\d+)/status$#', $uri, $m)) {
     try {
         $ok = $athleteService->updateStatus($orgId, $athleteId, $status, $userId);
         if ($ok) {
-            header('Location: /athletes?success=' . urlencode('Athlete status updated to ' . ucfirst($status) . '.'));
+            header('Location: ' . $buildRedirectUrl(['success' => 'Athlete status updated to ' . ucfirst($status) . '.']));
         } else {
-            header('Location: /athletes?error=' . urlencode('Athlete not found or access denied.'));
+            header('Location: ' . $buildRedirectUrl(['error' => 'Athlete not found or access denied.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /athletes?error=' . urlencode('Unable to update athlete status: ' . $e->getMessage()));
+        header('Location: ' . $buildRedirectUrl(['error' => 'Unable to update athlete status: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -273,9 +284,25 @@ if (preg_match('#^/athletes/(\d+)/status$#', $uri, $m)) {
 if (preg_match('#^/athletes/(\d+)/delete$#', $uri, $m)) {
     $athleteId = (int)$m[1];
     $orgId = current_organization_id();
-    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
 
     unset($_POST['organization_id']);
+
+    $retSearch = trim($_POST['return_search'] ?? ($_GET['search'] ?? ''));
+    $retSportId = !empty($_POST['return_sport_id']) ? (int)$_POST['return_sport_id'] : (!empty($_GET['sport_id']) ? (int)$_GET['sport_id'] : null);
+    $retStatus = trim($_POST['return_status'] ?? ($_GET['status'] ?? ''));
+    $retPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildRedirectUrl = function (array $extraParams, ?int $overridePage = null) use ($retSearch, $retSportId, $retStatus, $retPage): string {
+        $q = [];
+        if ($retSearch !== '') $q['search'] = $retSearch;
+        if (!empty($retSportId)) $q['sport_id'] = $retSportId;
+        if ($retStatus !== '') $q['status'] = $retStatus;
+        $targetPage = $overridePage !== null ? $overridePage : $retPage;
+        if ($targetPage > 1) $q['page'] = $targetPage;
+        $q = array_merge($q, $extraParams);
+        return '/athletes' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
 
     $permissionService = new \App\Services\Rbac\PermissionService();
     $userPayload = array_merge(
@@ -284,41 +311,43 @@ if (preg_match('#^/athletes/(\d+)/delete$#', $uri, $m)) {
         [
             'id' => $userId,
             'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
-            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin']),
             'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
         ]
     );
-    $canDelete = $permissionService->hasPermission($userPayload, 'athlete.delete', $orgId)
-              || $permissionService->hasPermission($userPayload, 'athlete.update', $orgId);
+    $canDelete = $permissionService->hasPermission($userPayload, 'athlete.delete', $orgId);
 
     if (!$canDelete) {
-        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
-        $canDelete = in_array('athlete.delete', $userPermissions, true)
-                  || in_array('athlete.update', $userPermissions, true);
-    }
-
-    if (!$canDelete) {
-        header('Location: /athletes?error=' . urlencode('Unauthorized: You do not have permission to delete athletes.'));
+        header('Location: ' . $buildRedirectUrl(['error' => 'Unauthorized: You do not have permission to delete athletes.']));
         exit;
     }
 
     $athleteService = new \App\Services\Athlete\AthleteService();
     $existing = $athleteService->getAthlete($orgId, $athleteId);
     if (!$existing) {
-        header('Location: /athletes?error=' . urlencode('Athlete not found or access denied.'));
+        header('Location: ' . $buildRedirectUrl(['error' => 'Athlete not found or access denied.']));
         exit;
     }
 
     try {
         $ok = $athleteService->deleteAthlete($orgId, $athleteId, $userId);
         if ($ok) {
-            header('Location: /athletes?success=' . urlencode('Athlete record removed successfully.'));
+            // If deleting the last item on a page > 1, move to the previous valid page
+            $finalPage = $retPage;
+            if ($retPage > 1) {
+                $afterList = $athleteService->listAthletes($orgId, 1, 20, $retSearch !== '' ? $retSearch : null, $retSportId, $retStatus !== '' ? $retStatus : null);
+                $maxValidPage = max(1, (int)($afterList['total_pages'] ?? 1));
+                if ($finalPage > $maxValidPage) {
+                    $finalPage = $maxValidPage;
+                }
+            }
+            header('Location: ' . $buildRedirectUrl(['success' => 'Athlete archived successfully.'], $finalPage));
         } else {
-            header('Location: /athletes?error=' . urlencode('Failed to remove athlete.'));
+            header('Location: ' . $buildRedirectUrl(['error' => 'Failed to archive athlete.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /athletes?error=' . urlencode('Unable to delete athlete: ' . $e->getMessage()));
+        header('Location: ' . $buildRedirectUrl(['error' => 'Unable to archive athlete: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -327,6 +356,30 @@ if (preg_match('#^/athletes/(\d+)/delete$#', $uri, $m)) {
 // 2. COACH ACTIONS
 // ==========================================
 if ($uri === '/coaches/create') {
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+
+    $canCreate = $permissionService->hasPermission($userPayload, 'coach.create', $orgId)
+              || $permissionService->hasPermission($userPayload, 'coach.manage', $orgId);
+
+    if (!$canCreate) {
+        header('Location: /coaches?error=' . urlencode('Unauthorized: You do not have permission to register coaches.'));
+        exit;
+    }
+
     $firstName = trim($_POST['first_name'] ?? '');
     $lastName = trim($_POST['last_name'] ?? '');
     $dob = trim($_POST['date_of_birth'] ?? '');
@@ -379,6 +432,30 @@ if ($uri === '/coaches/create') {
 
 if (preg_match('#^/coaches/(\d+)/edit$#', $uri, $m)) {
     $coachId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+
+    $canUpdate = $permissionService->hasPermission($userPayload, 'coach.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'coach.manage', $orgId);
+
+    if (!$canUpdate) {
+        header('Location: /coaches?error=' . urlencode('Unauthorized: You do not have permission to edit coaches.'));
+        exit;
+    }
+
     $firstName = trim($_POST['first_name'] ?? '');
     $lastName = trim($_POST['last_name'] ?? '');
     $dob = trim($_POST['date_of_birth'] ?? '');
@@ -430,9 +507,27 @@ if (preg_match('#^/coaches/(\d+)/edit$#', $uri, $m)) {
 if (preg_match('#^/coaches/(\d+)/delete$#', $uri, $m)) {
     $coachId = (int)$m[1];
     $orgId = current_organization_id();
-    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
 
     unset($_POST['organization_id']);
+
+    $retSearch = trim((string)($_POST['return_search'] ?? ($_GET['search'] ?? '')));
+    $retSpec = trim((string)($_POST['return_specialization'] ?? ($_GET['specialization'] ?? '')));
+    $retStatus = trim((string)($_POST['return_status'] ?? ($_GET['status'] ?? '')));
+    $retPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildCoachRedirectUrl = function (array $flashParams = [], ?int $overridePage = null) use ($retSearch, $retSpec, $retStatus, $retPage): string {
+        $q = [];
+        if ($retSearch !== '') $q['search'] = $retSearch;
+        if ($retSpec !== '') $q['specialization'] = $retSpec;
+        if ($retStatus !== '') $q['status'] = $retStatus;
+        $targetPage = $overridePage ?? $retPage;
+        if ($targetPage > 1) $q['page'] = $targetPage;
+        foreach ($flashParams as $k => $v) {
+            $q[$k] = $v;
+        }
+        return '/coaches' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
 
     $permissionService = new \App\Services\Rbac\PermissionService();
     $userPayload = array_merge(
@@ -446,36 +541,45 @@ if (preg_match('#^/coaches/(\d+)/delete$#', $uri, $m)) {
         ]
     );
     $canDelete = $permissionService->hasPermission($userPayload, 'coach.manage', $orgId)
-              || $permissionService->hasPermission($userPayload, 'coach.update', $orgId);
+              || $permissionService->hasPermission($userPayload, 'coach.delete', $orgId);
 
     if (!$canDelete) {
-        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
-        $canDelete = in_array('coach.manage', $userPermissions, true)
-                  || in_array('coach.update', $userPermissions, true);
-    }
-
-    if (!$canDelete) {
-        header('Location: /coaches?error=' . urlencode('Unauthorized: You do not have permission to delete coaches.'));
+        header('Location: ' . $buildCoachRedirectUrl(['error' => 'Unauthorized: You do not have permission to archive coaches.']));
         exit;
     }
 
     $coachService = new \App\Services\Coach\CoachService();
     $existing = $coachService->getCoach($orgId, $coachId);
     if (!$existing) {
-        header('Location: /coaches?error=' . urlencode('Coach not found or access denied.'));
+        header('Location: ' . $buildCoachRedirectUrl(['error' => 'Coach not found or access denied.']));
         exit;
     }
 
     try {
         $ok = $coachService->deleteCoach($orgId, $coachId, $userId);
         if ($ok) {
-            header('Location: /coaches?success=' . urlencode('Coach record removed successfully.'));
+            $finalPage = $retPage;
+            if ($retPage > 1) {
+                $afterList = $coachService->listCoaches(
+                    $orgId,
+                    1,
+                    20,
+                    $retSearch !== '' ? $retSearch : null,
+                    $retSpec !== '' ? $retSpec : null,
+                    $retStatus !== '' ? $retStatus : null
+                );
+                $maxValidPage = max(1, (int)($afterList['total_pages'] ?? 1));
+                if ($finalPage > $maxValidPage) {
+                    $finalPage = $maxValidPage;
+                }
+            }
+            header('Location: ' . $buildCoachRedirectUrl(['success' => 'Coach archived successfully.'], $finalPage));
         } else {
-            header('Location: /coaches?error=' . urlencode('Failed to remove coach.'));
+            header('Location: ' . $buildCoachRedirectUrl(['error' => 'Failed to archive coach.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /coaches?error=' . urlencode('Unable to delete coach: ' . $e->getMessage()));
+        header('Location: ' . $buildCoachRedirectUrl(['error' => 'Unable to archive coach: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -483,8 +587,26 @@ if (preg_match('#^/coaches/(\d+)/delete$#', $uri, $m)) {
 if (preg_match('#^/coaches/(\d+)/status$#', $uri, $m)) {
     $coachId = (int)$m[1];
     $status = trim($_POST['status'] ?? '');
+
+    $retSearch = trim((string)($_POST['return_search'] ?? ($_GET['search'] ?? '')));
+    $retSpec = trim((string)($_POST['return_specialization'] ?? ($_GET['specialization'] ?? '')));
+    $retStatus = trim((string)($_POST['return_status'] ?? ($_GET['status'] ?? '')));
+    $retPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildCoachStatusRedirect = function (array $flashParams = []) use ($retSearch, $retSpec, $retStatus, $retPage): string {
+        $q = [];
+        if ($retSearch !== '') $q['search'] = $retSearch;
+        if ($retSpec !== '') $q['specialization'] = $retSpec;
+        if ($retStatus !== '') $q['status'] = $retStatus;
+        if ($retPage > 1) $q['page'] = $retPage;
+        foreach ($flashParams as $k => $v) {
+            $q[$k] = $v;
+        }
+        return '/coaches' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
+
     if (!in_array($status, ['active', 'inactive'], true)) {
-        header('Location: /coaches?error=' . urlencode('Invalid status value.'));
+        header('Location: ' . $buildCoachStatusRedirect(['error' => 'Invalid status value.']));
         exit;
     }
 
@@ -504,13 +626,7 @@ if (preg_match('#^/coaches/(\d+)/status$#', $uri, $m)) {
               || $permissionService->hasPermission($userPayload, 'coach.manage', $orgId);
 
     if (!$canUpdate) {
-        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
-        $canUpdate = in_array('coach.update', $userPermissions, true)
-                  || in_array('coach.manage', $userPermissions, true);
-    }
-
-    if (!$canUpdate) {
-        header('Location: /coaches?error=' . urlencode('Unauthorized: You do not have permission to update coach status.'));
+        header('Location: ' . $buildCoachStatusRedirect(['error' => 'Unauthorized: You do not have permission to update coach status.']));
         exit;
     }
 
@@ -518,13 +634,13 @@ if (preg_match('#^/coaches/(\d+)/status$#', $uri, $m)) {
     try {
         $ok = $coachService->updateStatus($orgId, $coachId, $status, $userId);
         if ($ok) {
-            header('Location: /coaches?success=' . urlencode('Coach status updated to ' . ucfirst($status) . '.'));
+            header('Location: ' . $buildCoachStatusRedirect(['success' => 'Coach status updated to ' . ucfirst($status) . '.']));
         } else {
-            header('Location: /coaches?error=' . urlencode('Coach not found or access denied.'));
+            header('Location: ' . $buildCoachStatusRedirect(['error' => 'Coach not found or access denied.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /coaches?error=' . urlencode('Unable to update coach status: ' . $e->getMessage()));
+        header('Location: ' . $buildCoachStatusRedirect(['error' => 'Unable to update coach status: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -533,6 +649,34 @@ if (preg_match('#^/coaches/(\d+)/status$#', $uri, $m)) {
 // 3. TEAM ACTIONS
 // ==========================================
 if ($uri === '/teams/create') {
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canCreate = $permissionService->hasPermission($userPayload, 'team.create', $orgId)
+              || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+    if (!$canCreate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canCreate = in_array('team.create', $userPermissions, true)
+                  || in_array('team.manage', $userPermissions, true);
+    }
+    if (!$canCreate) {
+        header('Location: /teams?error=' . urlencode('Unauthorized: You do not have permission to create teams.'));
+        exit;
+    }
+
+    $name = trim($_POST['name'] ?? '');
     $name = trim($_POST['name'] ?? '');
     $sportId = (int)($_POST['sport_id'] ?? 0);
 
@@ -559,6 +703,33 @@ if ($uri === '/teams/create') {
 
 if (preg_match('#^/teams/(\d+)/edit$#', $uri, $m)) {
     $teamId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canUpdate = $permissionService->hasPermission($userPayload, 'team.update', $orgId)
+              || $permissionService->hasPermission($userPayload, 'team.manage', $orgId);
+    if (!$canUpdate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canUpdate = in_array('team.update', $userPermissions, true)
+                  || in_array('team.manage', $userPermissions, true);
+    }
+    if (!$canUpdate) {
+        header('Location: /teams?error=' . urlencode('Unauthorized: You do not have permission to edit teams.'));
+        exit;
+    }
+
     $name = trim($_POST['name'] ?? '');
 
     if (empty($name)) {
@@ -588,9 +759,26 @@ if (preg_match('#^/teams/(\d+)/status$#', $uri, $m)) {
 
     unset($_POST['organization_id']);
 
+    $returnSearch = trim($_POST['return_search'] ?? ($_GET['search'] ?? ''));
+    $returnSportId = trim($_POST['return_sport_id'] ?? ($_GET['sport_id'] ?? ''));
+    $returnStatus = trim($_POST['return_status'] ?? ($_GET['status'] ?? ''));
+    $returnPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildTeamListRedirect = function (array $flash = []) use ($returnSearch, $returnSportId, $returnStatus, $returnPage): string {
+        $q = [];
+        if ($returnSearch !== '') $q['search'] = $returnSearch;
+        if ($returnSportId !== '') $q['sport_id'] = $returnSportId;
+        if ($returnStatus !== '') $q['status'] = $returnStatus;
+        if ($returnPage > 1) $q['page'] = $returnPage;
+        foreach ($flash as $k => $v) {
+            $q[$k] = $v;
+        }
+        return '/teams' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
+
     $status = trim($_POST['status'] ?? '');
     if (!in_array($status, ['active', 'inactive'], true)) {
-        header('Location: /teams?error=' . urlencode('Invalid status value.'));
+        header('Location: ' . $buildTeamListRedirect(['error' => 'Invalid status value.']));
         exit;
     }
 
@@ -615,7 +803,7 @@ if (preg_match('#^/teams/(\d+)/status$#', $uri, $m)) {
     }
 
     if (!$canUpdate) {
-        header('Location: /teams?error=' . urlencode('Unauthorized: You do not have permission to update team status.'));
+        header('Location: ' . $buildTeamListRedirect(['error' => 'Unauthorized: You do not have permission to update team status.']));
         exit;
     }
 
@@ -623,13 +811,13 @@ if (preg_match('#^/teams/(\d+)/status$#', $uri, $m)) {
     try {
         $ok = $teamService->updateStatus($orgId, $teamId, $status, $userId);
         if ($ok) {
-            header('Location: /teams?success=' . urlencode('Team status updated to ' . ucfirst($status) . '.'));
+            header('Location: ' . $buildTeamListRedirect(['success' => 'Team status updated to ' . ucfirst($status) . '.']));
         } else {
-            header('Location: /teams?error=' . urlencode('Team not found or access denied.'));
+            header('Location: ' . $buildTeamListRedirect(['error' => 'Team not found or access denied.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /teams?error=' . urlencode('Unable to update team status: ' . $e->getMessage()));
+        header('Location: ' . $buildTeamListRedirect(['error' => 'Unable to update team status: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -640,6 +828,23 @@ if (preg_match('#^/teams/(\d+)/delete$#', $uri, $m)) {
     $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
 
     unset($_POST['organization_id']);
+
+    $returnSearch = trim($_POST['return_search'] ?? ($_GET['search'] ?? ''));
+    $returnSportId = trim($_POST['return_sport_id'] ?? ($_GET['sport_id'] ?? ''));
+    $returnStatus = trim($_POST['return_status'] ?? ($_GET['status'] ?? ''));
+    $returnPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildTeamListRedirect = function (array $flash = []) use ($returnSearch, $returnSportId, $returnStatus, $returnPage): string {
+        $q = [];
+        if ($returnSearch !== '') $q['search'] = $returnSearch;
+        if ($returnSportId !== '') $q['sport_id'] = $returnSportId;
+        if ($returnStatus !== '') $q['status'] = $returnStatus;
+        if ($returnPage > 1) $q['page'] = $returnPage;
+        foreach ($flash as $k => $v) {
+            $q[$k] = $v;
+        }
+        return '/teams' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
 
     $permissionService = new \App\Services\Rbac\PermissionService();
     $userPayload = array_merge(
@@ -662,27 +867,27 @@ if (preg_match('#^/teams/(\d+)/delete$#', $uri, $m)) {
     }
 
     if (!$canDelete) {
-        header('Location: /teams?error=' . urlencode('Unauthorized: You do not have permission to delete teams.'));
+        header('Location: ' . $buildTeamListRedirect(['error' => 'Unauthorized: You do not have permission to delete teams.']));
         exit;
     }
 
     $teamService = new \App\Services\Team\TeamService();
     $existing = $teamService->getTeam($orgId, $teamId);
     if (!$existing) {
-        header('Location: /teams?error=' . urlencode('Team not found or access denied.'));
+        header('Location: ' . $buildTeamListRedirect(['error' => 'Team not found or access denied.']));
         exit;
     }
 
     try {
         $ok = $teamService->deleteTeam($orgId, $teamId, $userId);
         if ($ok) {
-            header('Location: /teams?success=' . urlencode('Team record removed successfully.'));
+            header('Location: ' . $buildTeamListRedirect(['success' => 'Team archived successfully.']));
         } else {
-            header('Location: /teams?error=' . urlencode('Failed to remove team.'));
+            header('Location: ' . $buildTeamListRedirect(['error' => 'Failed to archive team.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /teams?error=' . urlencode('Unable to delete team: ' . $e->getMessage()));
+        header('Location: ' . $buildTeamListRedirect(['error' => 'Unable to archive team: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -1009,10 +1214,18 @@ if (preg_match('#^/teams/(\d+)/coaches/(\d+)/edit$#', $uri, $m)) {
     }
     
     $role = trim((string)($_POST['coach_role'] ?? ''));
+    $isPrimary = null;
+    if (isset($_POST['is_primary'])) {
+        $val = $_POST['is_primary'];
+        if (is_array($val)) {
+            $val = end($val);
+        }
+        $isPrimary = in_array((string)$val, ['1', 'true', 'on', 'yes'], true);
+    }
 
     $teamService = new \App\Services\Team\TeamService();
     try {
-        $ok = $teamService->updateCoachRole($orgId, $teamId, $coachId, $role, $userId);
+        $ok = $teamService->updateCoachRole($orgId, $teamId, $coachId, $role, $userId, $isPrimary);
         if ($ok) {
             header('Location: /teams/' . $teamId . '?success=' . urlencode('Coach role updated successfully.'));
         } else {
@@ -1029,6 +1242,33 @@ if (preg_match('#^/teams/(\d+)/coaches/(\d+)/edit$#', $uri, $m)) {
 // 4. TRAINING ACTIONS
 // ==========================================
 if ($uri === '/training/create') {
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canCreate = $permissionService->hasPermission($userPayload, 'training.create', $orgId)
+              || $permissionService->hasPermission($userPayload, 'training.manage', $orgId);
+    if (!$canCreate) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canCreate = in_array('training.create', $userPermissions, true)
+                  || in_array('training.manage', $userPermissions, true);
+    }
+    if (!$canCreate) {
+        header('Location: /training?error=' . urlencode('Unauthorized: You do not have permission to schedule training sessions.'));
+        exit;
+    }
+
     $title = trim($_POST['title'] ?? '');
     $teamId = (int)($_POST['team_id'] ?? 0);
     $venueId = (int)($_POST['venue_id'] ?? 0);
@@ -1057,6 +1297,33 @@ if ($uri === '/training/create') {
 
 if (preg_match('#^/training/(\d+)/edit$#', $uri, $m)) {
     $sessionId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canEdit = $permissionService->hasPermission($userPayload, 'training.update', $orgId)
+            || $permissionService->hasPermission($userPayload, 'training.manage', $orgId);
+    if (!$canEdit) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canEdit = in_array('training.update', $userPermissions, true)
+                || in_array('training.manage', $userPermissions, true);
+    }
+    if (!$canEdit) {
+        header('Location: /training/' . $sessionId . '?error=' . urlencode('Unauthorized: You do not have permission to edit training sessions.'));
+        exit;
+    }
+
     $title = trim($_POST['title'] ?? '');
 
     if (empty($title)) {
@@ -1081,12 +1348,45 @@ if (preg_match('#^/training/(\d+)/edit$#', $uri, $m)) {
 
 if (preg_match('#^/training/(\d+)/attendance$#', $uri, $m)) {
     $sessionId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canRecord = $permissionService->hasPermission($userPayload, 'attendance.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'training.manage', $orgId)
+              || $permissionService->hasPermission($userPayload, 'training.update', $orgId);
+    if (!$canRecord) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canRecord = in_array('attendance.manage', $userPermissions, true)
+                  || in_array('training.manage', $userPermissions, true)
+                  || in_array('training.update', $userPermissions, true);
+    }
+    if (!$canRecord) {
+        header('Location: /training/' . $sessionId . '?error=' . urlencode('Unauthorized: You do not have permission to record attendance.'));
+        exit;
+    }
+
     $attendanceData = $_POST['attendance'] ?? [];
 
     $trainService = new \App\Services\Training\TrainingService();
     try {
         $ok = $trainService->recordAttendance($orgId, $sessionId, $attendanceData, $userId);
-        header('Location: /training/' . $sessionId . '?success=' . urlencode('Attendance records saved successfully.'));
+        if ($ok) {
+            header('Location: /training/' . $sessionId . '?success=' . urlencode('Attendance records saved successfully.'));
+        } else {
+            header('Location: /training/' . $sessionId . '?error=' . urlencode('Training session not found in your organization.'));
+        }
         exit;
     } catch (\Throwable $e) {
         header('Location: /training/' . $sessionId . '?error=' . urlencode('Unable to save attendance: ' . $e->getMessage()));
@@ -1096,13 +1396,54 @@ if (preg_match('#^/training/(\d+)/attendance$#', $uri, $m)) {
 
 if (preg_match('#^/training/(\d+)/delete$#', $uri, $m)) {
     $sessionId = (int)$m[1];
+    $orgId = current_organization_id();
+    $userId = current_user_id() ?? (int)($currentUser['id'] ?? 5);
+    unset($_POST['organization_id']);
+
+    $permissionService = new \App\Services\Rbac\PermissionService();
+    $userPayload = array_merge(
+        $_SESSION['auth'] ?? [],
+        $_SESSION['auth']['user'] ?? $currentUser,
+        [
+            'id' => $userId,
+            'role_id' => $_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2),
+            'role' => $_SESSION['auth']['role'] ?? ($currentUser['role'] ?? ['id' => 2, 'name' => 'Sports Administrator']),
+            'permissions' => $_SESSION['auth']['permissions'] ?? ($_SESSION['auth']['user']['permissions'] ?? []),
+        ]
+    );
+    $canDelete = $permissionService->hasPermission($userPayload, 'training.manage', $orgId);
+    if (!$canDelete) {
+        $userPermissions = $permissionService->getUserPermissions($userId, $orgId);
+        $canDelete = in_array('training.manage', $userPermissions, true);
+    }
+
+    $returnQuery = [];
+    if (!empty($_POST['return_search'])) $returnQuery['search'] = trim((string)$_POST['return_search']);
+    if (!empty($_POST['return_team_id'])) $returnQuery['team_id'] = (int)$_POST['return_team_id'];
+    if (!empty($_POST['return_coach_id'])) $returnQuery['coach_id'] = (int)$_POST['return_coach_id'];
+    if (!empty($_POST['return_date'])) $returnQuery['date'] = trim((string)$_POST['return_date']);
+    if (!empty($_POST['return_status'])) $returnQuery['status'] = trim((string)$_POST['return_status']);
+    if (!empty($_POST['return_page']) && (int)$_POST['return_page'] > 1) $returnQuery['page'] = (int)$_POST['return_page'];
+
+    if (!$canDelete) {
+        $returnQuery['error'] = 'Unauthorized: You do not have permission to archive training sessions.';
+        header('Location: /training?' . http_build_query($returnQuery));
+        exit;
+    }
+
     $trainService = new \App\Services\Training\TrainingService();
     try {
         $ok = $trainService->deleteSession($orgId, $sessionId, $userId);
-        header('Location: /training?success=' . urlencode('Training session removed successfully.'));
+        if ($ok) {
+            $returnQuery['success'] = 'Training session archived successfully.';
+        } else {
+            $returnQuery['error'] = 'Training session not found in your organization.';
+        }
+        header('Location: /training?' . http_build_query($returnQuery));
         exit;
     } catch (\Throwable $e) {
-        header('Location: /training?error=' . urlencode('Unable to delete session: ' . $e->getMessage()));
+        $returnQuery['error'] = 'Unable to archive session: ' . $e->getMessage();
+        header('Location: /training?' . http_build_query($returnQuery));
         exit;
     }
 }
@@ -1629,6 +1970,23 @@ if (preg_match('#^/tournaments/(\d+)/delete$#', $uri, $m)) {
     // Untrusted organization_id defense
     unset($_POST['organization_id']);
 
+    $returnSearch = trim($_POST['return_search'] ?? ($_GET['search'] ?? ''));
+    $returnSportId = trim($_POST['return_sport_id'] ?? ($_GET['sport_id'] ?? ''));
+    $returnStatus = trim($_POST['return_status'] ?? ($_GET['status'] ?? ''));
+    $returnPage = max(1, (int)($_POST['return_page'] ?? ($_GET['page'] ?? 1)));
+
+    $buildTournListRedirect = function (array $flash = []) use ($returnSearch, $returnSportId, $returnStatus, $returnPage): string {
+        $q = [];
+        if ($returnSearch !== '') $q['search'] = $returnSearch;
+        if ($returnSportId !== '') $q['sport_id'] = $returnSportId;
+        if ($returnStatus !== '') $q['status'] = $returnStatus;
+        if ($returnPage > 1) $q['page'] = $returnPage;
+        foreach ($flash as $k => $v) {
+            $q[$k] = $v;
+        }
+        return '/tournaments' . (!empty($q) ? '?' . http_build_query($q) : '');
+    };
+
     // RBAC Authorization using existing PermissionService semantics
     $permissionService = new \App\Services\Rbac\PermissionService();
     $userPayload = array_merge(
@@ -1657,20 +2015,20 @@ if (preg_match('#^/tournaments/(\d+)/delete$#', $uri, $m)) {
     $tournService = new \App\Services\Tournament\TournamentService();
     $existing = $tournService->getTournament($orgId, $tournId);
     if (!$existing) {
-        header('Location: /tournaments?error=' . urlencode('Tournament not found or access denied.'));
+        header('Location: ' . $buildTournListRedirect(['error' => 'Tournament not found or access denied.']));
         exit;
     }
 
     try {
         $ok = $tournService->deleteTournament($orgId, $tournId, $userId);
         if ($ok) {
-            header('Location: /tournaments?success=' . urlencode('Tournament removed successfully.'));
+            header('Location: ' . $buildTournListRedirect(['success' => 'Tournament archived successfully.']));
         } else {
-            header('Location: /tournaments?error=' . urlencode('Failed to remove tournament.'));
+            header('Location: ' . $buildTournListRedirect(['error' => 'Failed to archive tournament.']));
         }
         exit;
     } catch (\Throwable $e) {
-        header('Location: /tournaments?error=' . urlencode('Unable to delete tournament: ' . $e->getMessage()));
+        header('Location: ' . $buildTournListRedirect(['error' => 'Unable to archive tournament: ' . $e->getMessage()]));
         exit;
     }
 }
@@ -2850,6 +3208,90 @@ if ($uri === '/notifications/read-all') {
 
     $referer = $_SERVER['HTTP_REFERER'] ?? '/notifications';
     header('Location: ' . $referer);
+    exit;
+}
+
+// ==========================================
+// 15. SETTINGS & ORGANISATION PROFILE ACTIONS
+// ==========================================
+if ($uri === '/settings/profile' || $uri === '/settings/organization') {
+    if ($currentRoleSlug !== 'super_admin' && $currentRoleSlug !== 'sports_admin' && $currentRoleId !== 1 && $currentRoleId !== 2) {
+        http_response_code(403);
+        echo "403 Forbidden: Insufficient permissions to update organisation settings.";
+        exit;
+    }
+
+    $name = trim($_POST['name'] ?? '');
+    if (empty($name)) {
+        $_SESSION['flash_error'] = 'Organisation name is required.';
+        header('Location: /settings');
+        exit;
+    }
+
+    $data = [
+        'name' => $name,
+        'legal_name' => trim($_POST['legal_name'] ?? '') ?: null,
+        'email' => trim($_POST['email'] ?? '') ?: null,
+        'phone' => trim($_POST['phone'] ?? '') ?: null,
+        'website' => trim($_POST['website'] ?? '') ?: null,
+        'address_line1' => trim($_POST['address_line1'] ?? '') ?: null,
+        'address_line2' => trim($_POST['address_line2'] ?? '') ?: null,
+        'city' => trim($_POST['city'] ?? '') ?: null,
+        'state' => trim($_POST['state'] ?? '') ?: null,
+        'country' => trim($_POST['country'] ?? 'India'),
+        'postal_code' => trim($_POST['postal_code'] ?? '') ?: null,
+        'notes' => trim($_POST['notes'] ?? '') ?: null,
+    ];
+
+    $orgService = new \App\Services\Organization\OrganizationManagementService();
+    try {
+        $updated = $orgService->updateOrganization($orgId, $data, $userId);
+        if ($updated) {
+            if (isset($_SESSION['auth']['organization'])) {
+                $_SESSION['auth']['organization']['name'] = $updated['name'];
+            }
+            $_SESSION['flash_success'] = 'Organisation profile updated successfully.';
+        } else {
+            $_SESSION['flash_error'] = 'Failed to update organisation details.';
+        }
+    } catch (\Throwable $e) {
+        $_SESSION['flash_error'] = 'Error updating organisation: ' . $e->getMessage();
+    }
+
+    header('Location: /settings');
+    exit;
+}
+
+if ($uri === '/settings/keys' || $uri === '/settings/organization/keys') {
+    if ($currentRoleSlug !== 'super_admin' && $currentRoleSlug !== 'sports_admin' && $currentRoleId !== 1 && $currentRoleId !== 2) {
+        http_response_code(403);
+        echo "403 Forbidden: Insufficient permissions to modify configuration keys.";
+        exit;
+    }
+
+    $key = trim($_POST['setting_key'] ?? '');
+    $type = trim($_POST['setting_type'] ?? 'string');
+    $val = $_POST['setting_value'] ?? '';
+
+    if (empty($key)) {
+        $_SESSION['flash_error'] = 'Setting key is required.';
+        header('Location: /settings?tab=advanced');
+        exit;
+    }
+
+    $settingsService = new \App\Services\Organization\OrganizationSettingsService();
+    try {
+        $ok = $settingsService->set($orgId, $key, $val, $type, $userId);
+        if ($ok) {
+            $_SESSION['flash_success'] = "Setting '{$key}' saved successfully.";
+        } else {
+            $_SESSION['flash_error'] = 'Failed to save configuration key.';
+        }
+    } catch (\Throwable $e) {
+        $_SESSION['flash_error'] = 'Error saving setting: ' . $e->getMessage();
+    }
+
+    header('Location: /settings?tab=advanced');
     exit;
 }
 
