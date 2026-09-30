@@ -15,6 +15,11 @@ $total = $result['total'] ?? 0;
 $totalPages = $result['total_pages'] ?? 1;
 
 $db = \App\Services\BaseService::getDatabaseConnection();
+
+// Provision missing sport-specific categories
+$catService = new \App\Services\Inventory\InventoryCategoryService($db);
+$catService->provisionSportCategories($orgId);
+
 $catStmt = $db->prepare("SELECT id, name FROM inventory_categories WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
 $catStmt->execute([':org_id' => $orgId]);
 $categories = $catStmt ? $catStmt->fetchAll(PDO::FETCH_ASSOC) : [];

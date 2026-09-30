@@ -56,8 +56,8 @@ ob_start();
                     </div>
                     <div class="col-md-6">
                         <label class="form-label small fw-semibold text-dark">Category</label>
-                        <select name="category_id" class="form-select" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="">General Sports Gear</option>
+                        <select name="category_id" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                            <option value="">-- Select Category --</option>
                             <?php foreach ($categories as $cat): ?>
                                 <option value="<?= (int)$cat['id'] ?>" <?= ($item['category_id'] ?? '') == $cat['id'] ? 'selected' : '' ?>>
                                     <?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?>
