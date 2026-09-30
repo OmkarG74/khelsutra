@@ -163,6 +163,26 @@ class InventoryService extends BaseService
     }
 
     /**
+     * Get all out-of-stock items for an organization.
+     */
+    public function getOutOfStockItems(int $organizationId): array
+    {
+        if (!$this->pdo) return [];
+
+        $stmt = $this->pdo->prepare("
+            SELECT ii.*, ic.name as category_name
+            FROM inventory_items ii
+            LEFT JOIN inventory_categories ic ON ii.category_id = ic.id
+            WHERE ii.organization_id = :org_id 
+              AND ii.quantity <= 0 
+              AND ii.deleted_at IS NULL
+            ORDER BY ii.item_name ASC
+        ");
+        $stmt->execute([':org_id' => $organizationId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
      * Create a new inventory item with validation, unique item code, and optional opening stock.
      */
     public function createItem(int $organizationId, array $data, ?int $performedBy = null): array

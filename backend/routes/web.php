@@ -7,9 +7,15 @@
 
 return [
     '/' => function() {
+        if (\App\Helpers\AuthContext::getRoleSlug() === 'inventory_manager') {
+            return ['view' => 'dashboard/inventory-manager'];
+        }
         return ['view' => 'dashboard/index'];
     },
     '/dashboard' => function() {
+        if (\App\Helpers\AuthContext::getRoleSlug() === 'inventory_manager') {
+            return ['view' => 'dashboard/inventory-manager'];
+        }
         return ['view' => 'dashboard/index'];
     },
     '/athletes' => function() {
