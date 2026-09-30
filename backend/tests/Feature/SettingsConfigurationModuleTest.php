@@ -41,6 +41,7 @@ class SettingsConfigurationModuleTest
             'testSettingsApiEndpointsBlockedForAthletesAndCoaches',
             'testWebSettingsDirectUrlBlockedForAthletesAndCoaches',
             'testSettingsPageRendersCleanlyWithoutRawDirectives',
+            'testSportsAdminSidebarDoesNotContainUsersOrRbac',
         ];
 
         $allPassed = true;
@@ -253,7 +254,7 @@ class SettingsConfigurationModuleTest
     }
 
     /**
-     * Test 10: Settings page renders cleanly without raw Blade directives
+     * Test 10: Settings page renders cleanly without raw Blade directives and without sports/RBAC cards
      */
     public function testSettingsPageRendersCleanlyWithoutRawDirectives(): bool
     {
@@ -264,10 +265,42 @@ class SettingsConfigurationModuleTest
         $output = ob_get_clean();
 
         $hasProfile = str_contains($output, 'Organisation Settings') && str_contains($output, 'Organisation Profile');
-        $hasSports = str_contains($output, 'Sports Disciplines');
+        $noSportsCard = !str_contains($output, 'Sports Disciplines');
+        $noRbacCard = !str_contains($output, 'Access Control & RBAC');
         $hasKeyValue = str_contains($output, 'Tenant Key-Value Store');
         $noRawDirectives = !str_contains($output, '@if') && !str_contains($output, '@foreach') && !str_contains($output, '@end');
 
-        return !empty($output) && $hasProfile && $hasSports && $hasKeyValue && $noRawDirectives;
+        return !empty($output) && $hasProfile && $noSportsCard && $noRbacCard && $hasKeyValue && $noRawDirectives;
+    }
+
+    /**
+     * Test 11: Sports Admin sidebar does not contain Users & RBAC
+     */
+    public function testSportsAdminSidebarDoesNotContainUsersOrRbac(): bool
+    {
+        $sidebarFile = dirname(__DIR__, 2) . '/resources/views/components/sidebar.blade.php';
+        $content = file_get_contents($sidebarFile);
+
+        // Render sidebar as sports_admin
+        $_SESSION['auth'] = [
+            'user' => ['id' => 102, 'first_name' => 'Rajesh', 'last_name' => 'Sharma', 'role_id' => 2],
+            'role' => ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'],
+            'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
+        ];
+        $activePage = 'dashboard';
+
+        ob_start();
+        include $sidebarFile;
+        $rendered = ob_get_clean();
+
+        // 1. Must NOT contain Users & RBAC link in rendered Sports Admin sidebar
+        $noUsersLink = !str_contains($rendered, 'Users & RBAC') && !str_contains($rendered, 'Users &amp; RBAC') && !str_contains($rendered, 'href="/users"');
+
+        // 2. Must contain Staff & HR, Leave Requests, Payroll
+        $hasStaff = (str_contains($rendered, 'Staff &amp; HR') || str_contains($rendered, 'Staff & HR')) && str_contains($rendered, 'href="/hr/employees"');
+        $hasLeave = str_contains($rendered, 'Leave Requests') && str_contains($rendered, 'href="/leave"');
+        $hasPayroll = str_contains($rendered, 'Payroll') && str_contains($rendered, 'href="/payroll"');
+
+        return $noUsersLink && $hasStaff && $hasLeave && $hasPayroll;
     }
 }

@@ -45,10 +45,6 @@ $org = $orgService->getOrganization($orgId) ?: [
     'notes' => 'Primary academy campus with comprehensive training facilities.'
 ];
 
-// Fetch authoritative platform sports disciplines
-$sportService = new \App\Services\Sport\SportService();
-$sportsMaster = $sportService->getSportsCatalog();
-
 // Flash messages
 $flashSuccess = $_SESSION['flash_success'] ?? null;
 $flashError = $_SESSION['flash_error'] ?? null;
@@ -240,67 +236,9 @@ ob_start();
             </div>
         </div>
     </div>
-
-    <!-- SECTION 2: SPORTS DISCIPLINES (AUTHORITATIVE MASTER) -->
-    <div class="col-lg-6">
-        <div class="ks-card p-4 h-100">
-            <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom" style="border-color: var(--ks-border-light) !important;">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-trophy" style="color: var(--ks-primary); font-size: 20px;"></i>
-                    <h4 class="fw-bold text-navy mb-0" style="font-size: 16px;">Sports Disciplines</h4>
-                </div>
-                <span class="ks-badge ks-badge-blue">Authoritative Master</span>
-            </div>
-            <p class="small text-muted mb-3">
-                Sporting disciplines configured in the global sports master for this organization. Used authoritatively across athletes, coaches, teams, tournaments, and training sessions.
-            </p>
-            <div class="d-flex flex-wrap gap-2 mb-4">
-                <?php foreach ($sportsMaster as $s): ?>
-                    <span class="ks-badge ks-badge-blue" style="font-size: 13px; padding: 6px 12px;">
-                        <i class="bi bi-check2-circle text-primary"></i> <?= htmlspecialchars($s['name'], ENT_QUOTES, 'UTF-8') ?>
-                    </span>
-                <?php endforeach; ?>
-            </div>
-            <div class="mt-auto pt-3 border-top d-flex gap-2" style="border-color: var(--ks-border-light) !important;">
-                <a href="/teams" class="ks-btn ks-btn-secondary" style="font-size: 12px; height: 32px;">Manage Teams</a>
-                <a href="/tournaments" class="ks-btn ks-btn-secondary" style="font-size: 12px; height: 32px;">Tournaments</a>
-                <a href="/training" class="ks-btn ks-btn-secondary" style="font-size: 12px; height: 32px;">Training</a>
-            </div>
-        </div>
-    </div>
-
-    <!-- SECTION 3: ACCESS CONTROL & RBAC -->
-    <div class="col-lg-6">
-        <div class="ks-card p-4 h-100">
-            <div class="d-flex align-items-center justify-content-between mb-3 pb-2 border-bottom" style="border-color: var(--ks-border-light) !important;">
-                <div class="d-flex align-items-center gap-2">
-                    <i class="bi bi-shield-lock" style="color: var(--ks-primary); font-size: 20px;"></i>
-                    <h4 class="fw-bold text-navy mb-0" style="font-size: 16px;">Access Control & RBAC</h4>
-                </div>
-                <span class="ks-badge ks-badge-confirmed">Multi-Tenant Enforced</span>
-            </div>
-            <p class="small text-muted mb-3">
-                Security and permission governance for academy personnel. User identities, role assignments, and granular operational permissions are managed through the central RBAC module.
-            </p>
-            <div class="d-flex flex-wrap gap-2 mb-4">
-                <span class="ks-badge ks-badge-secondary" style="font-size: 12px;">Sports Administrator</span>
-                <span class="ks-badge ks-badge-secondary" style="font-size: 12px;">Coach</span>
-                <span class="ks-badge ks-badge-secondary" style="font-size: 12px;">Athlete</span>
-                <span class="ks-badge ks-badge-secondary" style="font-size: 12px;">Venue Operator</span>
-                <span class="ks-badge ks-badge-secondary" style="font-size: 12px;">HR & Finance</span>
-                <span class="ks-badge ks-badge-secondary" style="font-size: 12px;">Inventory Manager</span>
-            </div>
-            <div class="mt-auto pt-3 border-top d-flex gap-2" style="border-color: var(--ks-border-light) !important;">
-                <a href="/users" class="ks-btn ks-btn-primary" style="font-size: 12px; height: 32px;">
-                    <i class="bi bi-people"></i>
-                    <span>Manage Users & RBAC</span>
-                </a>
-            </div>
-        </div>
-    </div>
 </div>
 
-<!-- SECTION 4: ADVANCED SYSTEM CONFIGURATION (TENANT KEY-VALUE STORE) -->
+<!-- ADVANCED SYSTEM CONFIGURATION (TENANT KEY-VALUE STORE) -->
 <div class="ks-table-card">
     <div class="ks-table-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
