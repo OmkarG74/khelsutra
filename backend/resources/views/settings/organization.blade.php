@@ -4,25 +4,8 @@ $title = 'Organisation Settings — KhelSutra Platform';
 
 $settingsService = new \App\Services\Organization\OrganizationSettingsService();
 $orgId = current_organization_id();
-
-$rawSettings = isset($settings) ? $settings : $settingsService->getSettingRows($orgId);
-
-// Defensive normalization: ensure $settings is always an array of row records
-$settings = [];
-if (is_array($rawSettings)) {
-    if (!empty($rawSettings) && !isset($rawSettings[0]) && is_string(array_key_first($rawSettings))) {
-        // Associative map was returned, convert to record list
-        foreach ($rawSettings as $k => $v) {
-            $settings[] = [
-                'setting_key' => (string)$k,
-                'setting_value' => is_scalar($v) ? (string)$v : json_encode($v),
-                'setting_type' => gettype($v)
-            ];
-        }
-    } else {
-        $settings = $rawSettings;
-    }
-}
+$currentRoleId = (int)($_SESSION['auth']['user']['role_id'] ?? 0);
+$isSuperAdmin = ($currentRoleId === 1 || ($_SESSION['auth']['user']['role'] ?? '') === 'super_admin');
 
 // Fetch live organization metadata
 $orgService = new \App\Services\Organization\OrganizationManagementService();
@@ -53,11 +36,11 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 ob_start();
 ?>
 
-<!-- Page Header (Rule 7 & 8: Clean Page Title + Action) -->
+<!-- Page Header (Clean Page Title + Action) -->
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">Organisation Settings</h1>
-        <p class="ks-page-subtitle">Configure organization profile, campus details, sporting disciplines, and system settings.</p>
+        <p class="ks-page-subtitle">Manage the configuration and profile used by your organization.</p>
     </div>
     <div class="ks-header-actions">
         <a href="/audit-logs" class="ks-btn ks-btn-secondary">
@@ -130,7 +113,7 @@ ob_start();
                     </div>
 
                     <div class="col-md-4">
-                        <div class="small text-muted mb-1 text-uppercase fw-semibold" style="font-size: 11px; letter-spacing: 0.5px;">Website</div>
+                        <div class="small text-muted mb-1 text-uppercase fw-semibold" style="font-size: 11px; letter-spacing: 0.5px;">Official Website</div>
                         <div class="fw-bold text-navy" style="font-size: 14px;">
                             <?php if (!empty($org['website'])): ?>
                                 <a href="<?= htmlspecialchars($org['website'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" class="text-decoration-none text-primary">
@@ -238,18 +221,30 @@ ob_start();
     </div>
 </div>
 
-<!-- ADVANCED SYSTEM CONFIGURATION (TENANT KEY-VALUE STORE) -->
-<div class="ks-table-card">
+<?php if ($isSuperAdmin): ?>
+<!-- ADVANCED SYSTEM CONFIGURATION (RESTRICTED TO SUPER ADMIN) -->
+<?php
+$rawSettings = isset($settings) ? $settings : $settingsService->getSettingRows($orgId);
+$settingsList = [];
+if (is_array($rawSettings)) {
+    if (!empty($rawSettings) && !isset($rawSettings[0]) && is_string(array_key_first($rawSettings))) {
+        foreach ($rawSettings as $k => $v) {
+            $settingsList[] = [
+                'setting_key' => (string)$k,
+                'setting_value' => is_scalar($v) ? (string)$v : json_encode($v),
+                'setting_type' => gettype($v)
+            ];
+        }
+    } else {
+        $settingsList = $rawSettings;
+    }
+}
+?>
+<div class="ks-table-card mt-4">
     <div class="ks-table-header d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-gear" style="color: var(--ks-primary); font-size: 18px;"></i>
-            <span class="ks-card-title mb-0">Tenant Key-Value Store</span>
-        </div>
-        <div>
-            <button class="ks-btn ks-btn-primary" onclick="document.getElementById('settingModal').style.display='flex'">
-                <i class="bi bi-plus-lg"></i>
-                <span>Add Configuration Key</span>
-            </button>
+            <span class="ks-card-title mb-0">Tenant Key-Value Store (Super Admin)</span>
         </div>
     </div>
 
@@ -261,16 +256,15 @@ ob_start();
                     <th>Value</th>
                     <th>Data Type</th>
                     <th>Scope</th>
-                    <th style="text-align: right;">Action</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if (empty($settings)): ?>
+                <?php if (empty($settingsList)): ?>
                     <tr>
-                        <td colspan="5" class="text-center py-4 text-muted">No settings defined yet.</td>
+                        <td colspan="4" class="text-center py-4 text-muted">No settings defined yet.</td>
                     </tr>
                 <?php else: ?>
-                    <?php foreach ($settings as $s): ?>
+                    <?php foreach ($settingsList as $s): ?>
                         <?php
                         $sKey = is_array($s) ? ($s['setting_key'] ?? '') : '';
                         $sVal = is_array($s) ? ($s['setting_value'] ?? '') : (string)$s;
@@ -294,11 +288,6 @@ ob_start();
                                     <span class="ks-badge ks-badge-confirmed" style="font-size: 11px;">Tenant Custom</span>
                                 <?php endif; ?>
                             </td>
-                            <td style="text-align: right;">
-                                <button class="ks-btn ks-btn-secondary" style="height: 32px; padding: 0 10px; font-size: 12px;" onclick="editSetting(<?= htmlspecialchars(json_encode(['setting_key' => $sKey, 'setting_value' => $sVal, 'setting_type' => $sType]), ENT_QUOTES, 'UTF-8') ?>)">
-                                    Edit
-                                </button>
-                            </td>
                         </tr>
                     <?php endforeach; ?>
                 <?php endif; ?>
@@ -306,37 +295,7 @@ ob_start();
         </table>
     </div>
 </div>
-
-<!-- Modal: Save / Edit Setting Key -->
-<div id="settingModal" style="display: none; position: fixed; inset: 0; background: rgba(14, 30, 59, 0.45); z-index: 9999; align-items: center; justify-content: center;">
-    <div class="ks-card p-4" style="width: 500px; max-width: 90%;">
-        <h5 class="fw-bold text-navy mb-3">Save Organisation Setting</h5>
-        <form id="settingForm">
-            <div class="mb-3">
-                <label class="ks-form-label">Setting Key <span class="text-danger">*</span></label>
-                <input type="text" name="setting_key" id="setKey" class="ks-form-control" required placeholder="e.g. academy.max_athletes_per_coach">
-            </div>
-            <div class="mb-3">
-                <label class="ks-form-label">Setting Type <span class="text-danger">*</span></label>
-                <select name="setting_type" id="setType" class="ks-form-select">
-                    <option value="string">string</option>
-                    <option value="integer">integer</option>
-                    <option value="decimal">decimal</option>
-                    <option value="boolean">boolean</option>
-                    <option value="json">json</option>
-                </select>
-            </div>
-            <div class="mb-4">
-                <label class="ks-form-label">Setting Value <span class="text-danger">*</span></label>
-                <textarea name="setting_value" id="setVal" class="ks-form-control" rows="3" required placeholder="Value..."></textarea>
-            </div>
-            <div class="d-flex justify-content-end gap-2">
-                <button type="button" class="ks-btn ks-btn-secondary" onclick="document.getElementById('settingModal').style.display='none'">Cancel</button>
-                <button type="submit" class="ks-btn ks-btn-primary">Save Setting</button>
-            </div>
-        </form>
-    </div>
-</div>
+<?php endif; ?>
 
 <script>
 function toggleEditProfile() {
@@ -353,38 +312,6 @@ function toggleEditProfile() {
         btn.style.display = 'inline-flex';
     }
 }
-
-function editSetting(s) {
-    document.getElementById('setKey').value = s.setting_key || '';
-    document.getElementById('setType').value = s.setting_type || 'string';
-    document.getElementById('setVal').value = s.setting_value || '';
-    document.getElementById('settingModal').style.display = 'flex';
-}
-
-document.getElementById('settingForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    const payload = {
-        setting_key: document.getElementById('setKey').value,
-        setting_type: document.getElementById('setType').value,
-        setting_value: document.getElementById('setVal').value
-    };
-
-    try {
-        const res = await fetch('/api/v1/settings/organization', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
-            body: JSON.stringify(payload)
-        });
-        const result = await res.json();
-        if (result.success) {
-            window.location.reload();
-        } else {
-            alert(result.message || 'Error saving setting');
-        }
-    } catch (err) {
-        alert('Request failed');
-    }
-});
 </script>
 
 <?php

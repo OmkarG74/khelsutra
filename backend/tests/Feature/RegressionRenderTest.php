@@ -33,7 +33,7 @@ class RegressionRenderTest
         '}}'
     ];
 
-    private function setupSession(int $orgId = 1, int $userId = 2): void
+    private function setupSession(int $orgId = 1, int $userId = 102): void
     {
         if (session_status() === PHP_SESSION_NONE && !headers_sent()) {
             @session_start();
@@ -178,7 +178,7 @@ class RegressionRenderTest
         // Render view with rows
         $output = $this->renderView($viewFile, ['settings' => $rows]);
         return !empty($output) &&
-               str_contains($output, 'Tenant Key-Value Store') &&
+               str_contains($output, 'Organisation Settings') &&
                $this->assertNoRawDirectives($output, 'Organization Settings');
     }
 
@@ -190,7 +190,7 @@ class RegressionRenderTest
         $viewFile = dirname(__DIR__, 2) . '/resources/views/settings/organization.blade.php';
         $output = $this->renderView($viewFile, ['settings' => []]);
         return !empty($output) &&
-               str_contains($output, 'No settings defined yet.') &&
+               str_contains($output, 'Organisation Settings') &&
                $this->assertNoRawDirectives($output, 'Empty Organization Settings');
     }
 

@@ -259,6 +259,11 @@ class SettingsConfigurationModuleTest
     public function testSettingsPageRendersCleanlyWithoutRawDirectives(): bool
     {
         $viewFile = dirname(__DIR__, 2) . '/resources/views/settings/organization.blade.php';
+        $_SESSION['auth'] = [
+            'authenticated' => true,
+            'user' => ['id' => 102, 'role_id' => 2, 'role' => 'sports_admin'],
+            'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'code' => 'ORG-DEMO']
+        ];
         ob_start();
         $settings = $this->settingsService->getSettingRows(1);
         include $viewFile;
@@ -267,10 +272,12 @@ class SettingsConfigurationModuleTest
         $hasProfile = str_contains($output, 'Organisation Settings') && str_contains($output, 'Organisation Profile');
         $noSportsCard = !str_contains($output, 'Sports Disciplines');
         $noRbacCard = !str_contains($output, 'Access Control & RBAC');
-        $hasKeyValue = str_contains($output, 'Tenant Key-Value Store');
+        $noRawKeyValue = !str_contains($output, 'Tenant Key-Value Store');
+        $noAddConfigKey = !str_contains($output, 'Add Configuration Key');
+        $noSettingModal = !str_contains($output, 'Save Organisation Setting');
         $noRawDirectives = !str_contains($output, '@if') && !str_contains($output, '@foreach') && !str_contains($output, '@end');
 
-        return !empty($output) && $hasProfile && $noSportsCard && $noRbacCard && $hasKeyValue && $noRawDirectives;
+        return !empty($output) && $hasProfile && $noSportsCard && $noRbacCard && $noRawKeyValue && $noAddConfigKey && $noSettingModal && $noRawDirectives;
     }
 
     /**
