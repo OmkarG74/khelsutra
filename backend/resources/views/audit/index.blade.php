@@ -1,16 +1,21 @@
 <?php
-$activePage = 'settings';
+$activePage = 'audit';
 $title = 'Audit Logs — KhelSutra Platform';
 
 $auditService = new \App\Services\Audit\AuditLogService();
-$orgId = $_SESSION['current_organization_id'] ?? 1;
+$authRole = $_SESSION['auth']['role'] ?? [];
+$isSuperAdmin = ((int)($authRole['id'] ?? 0) === 1) 
+             || (($authRole['slug'] ?? '') === 'super_admin') 
+             || (($authRole['name'] ?? '') === 'Super Admin');
+
+$orgId = $isSuperAdmin ? null : ($_SESSION['current_organization_id'] ?? ($_SESSION['auth']['organization']['id'] ?? 1));
 
 $filters = [
     'module' => $_GET['module'] ?? null,
     'action' => $_GET['action'] ?? null,
 ];
 
-$logs = $auditService->getLogs($orgId, $filters, 50);
+$logs = $auditService->getLogs($orgId, 50, 0, $filters);
 
 ob_start();
 ?>
@@ -19,23 +24,67 @@ ob_start();
 <div class="ks-page-header">
     <div>
         <h1 class="ks-page-title">Platform Audit Trail</h1>
-        <p class="ks-page-subtitle">Immutable security ledger capturing compliance events, role modifications, and administrative operations.</p>
     </div>
-    <div class="ks-header-actions">
-        <span class="ks-badge ks-badge-confirmed fs-6 px-3 py-2">
-            <i class="bi bi-shield-check me-1"></i>Creds Redacted
-        </span>
     </div>
-</div>
+
+<?php if ($isSuperAdmin): ?>
+    <?php
+        $totalLogsCount = count($logs);
+        $todayLogsCount = count(array_filter($logs, fn($l) => !empty($l['created_at']) && str_starts_with($l['created_at'], date('Y-m-d'))));
+        $uniqueUsersCount = count(array_unique(array_filter(array_column($logs, 'user_id'))));
+        $uniqueModulesCount = count(array_unique(array_filter(array_column($logs, 'module'))));
+    ?>
+    <div class="ks-sa-kpi-grid">
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-blue ks-sa-kpi-icon">
+                    <i class="bi bi-journal-text"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Total Events</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $totalLogsCount ?></div>
+        </div>
+
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-green ks-sa-kpi-icon">
+                    <i class="bi bi-calendar-event"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Today</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $todayLogsCount ?></div>
+        </div>
+
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-purple ks-sa-kpi-icon">
+                    <i class="bi bi-people"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Users</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $uniqueUsersCount ?></div>
+        </div>
+
+        <div class="ks-sa-kpi-card">
+            <div class="ks-sa-kpi-left">
+                <div class="ks-icon-box ks-icon-amber ks-sa-kpi-icon">
+                    <i class="bi bi-grid-fill"></i>
+                </div>
+                <span class="ks-sa-kpi-label">Modules</span>
+            </div>
+            <div class="ks-sa-kpi-value"><?= $uniqueModulesCount ?></div>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="ks-table-card">
-    <div class="ks-table-header flex-wrap gap-3">
+    <div class="ks-table-header flex-wrap gap-2">
         <div class="d-flex align-items-center gap-2">
-            <i class="bi bi-journal-check" style="color: var(--ks-primary); font-size: 18px;"></i>
+            <i class="bi bi-journal-check" style="color: var(--ks-primary); font-size: 16px;"></i>
             <span class="ks-card-title mb-0">System Activity Ledger</span>
         </div>
         <form method="GET" action="/audit-logs" class="d-flex align-items-center gap-2">
-            <select name="module" class="ks-form-select" style="height: 36px; font-size: 13px; width: 150px;" onchange="this.form.submit()">
+            <select name="module" class="ks-form-select" style="height: 32px; font-size: 12px; width: 140px; padding: 0 8px;" onchange="this.form.submit()">
                 <option value="">All Modules</option>
                 <option value="auth" <?= ($filters['module'] === 'auth') ? 'selected' : '' ?>>Auth</option>
                 <option value="organization" <?= ($filters['module'] === 'organization') ? 'selected' : '' ?>>Organization</option>

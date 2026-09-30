@@ -85,15 +85,11 @@ $navMenus = [
         ['key' => 'settings', 'label' => 'Settings', 'icon' => 'bi-gear-fill', 'url' => '/settings/organization'],
     ],
     'super_admin' => [
-        ['key' => 'dashboard', 'label' => 'Platform Dashboard', 'icon' => 'bi-speedometer2', 'url' => '/dashboard'],
+        ['key' => 'dashboard', 'label' => 'Dashboard', 'icon' => 'bi-speedometer2', 'url' => '/dashboard'],
         ['key' => 'organizations', 'label' => 'Organisations', 'icon' => 'bi-building-fill', 'url' => '/super-admin/organizations'],
-        ['key' => 'users', 'label' => 'Platform Users', 'icon' => 'bi-people-fill', 'url' => '/users'],
-        ['key' => 'roles', 'label' => 'Roles & RBAC', 'icon' => 'bi-shield-lock-fill', 'url' => '/roles'],
-        ['key' => 'sports', 'label' => 'Sports Catalog', 'icon' => 'bi-trophy-fill', 'url' => '/tournaments'],
-        ['key' => 'finance', 'label' => 'Finance & Accounting', 'icon' => 'bi-wallet-fill', 'url' => '/finance'],
-        ['key' => 'audit', 'label' => 'Audit Trail', 'icon' => 'bi-journal-check', 'url' => '/audit-logs'],
-        ['key' => 'reports', 'label' => 'Global Analytics', 'icon' => 'bi-graph-up', 'url' => '/reports'],
-        ['key' => 'settings', 'label' => 'Global Settings', 'icon' => 'bi-sliders', 'url' => '/settings/organization'],
+        ['key' => 'users', 'label' => 'Users', 'icon' => 'bi-people-fill', 'url' => '/users'],
+        ['key' => 'audit', 'label' => 'Audit Logs', 'icon' => 'bi-journal-check', 'url' => '/audit-logs'],
+        ['key' => 'profile', 'label' => 'Account Settings', 'icon' => 'bi-person-circle', 'url' => '/settings'],
     ],
 ];
 

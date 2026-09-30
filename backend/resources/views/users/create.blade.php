@@ -22,9 +22,9 @@ ob_start();
     </div>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="ks-card p-4">
+<div class="row">
+    <div class="col-lg-10 col-xl-9">
+        <div class="ks-card p-3 p-md-4">
             <form id="createUserForm">
                 <h5 class="fw-bold text-navy mb-3">1. Account Information</h5>
                 <div class="row g-3 mb-4">
@@ -70,7 +70,10 @@ ob_start();
                         <label class="ks-form-label">Role <span class="text-danger">*</span></label>
                         <select name="role_id" class="ks-form-select" required>
                             <?php foreach ($roles as $r): ?>
-                                <option value="<?= $r['id'] ?>"><?= htmlspecialchars($r['name']) ?> — <?= htmlspecialchars($r['description'] ?? '') ?></option>
+                                <?php 
+                                    $rName = ((int)$r['id'] === 2) ? 'Organisation Admin' : $r['name'];
+                                ?>
+                                <option value="<?= $r['id'] ?>"><?= htmlspecialchars($rName) ?> — <?= htmlspecialchars($r['description'] ?? '') ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>

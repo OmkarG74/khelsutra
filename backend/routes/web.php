@@ -260,6 +260,12 @@ return [
     '/super-admin/organizations/{id}/edit' => function($id) {
         return ['view' => 'super-admin/organizations-edit', 'data' => ['id' => $id]];
     },
+    '/super-admin/organizations/{id}/admins/create' => function($id) {
+        return ['view' => 'super-admin/organizations-edit', 'data' => ['id' => $id, 'action' => 'add-admin']];
+    },
+    '/super-admin/organizations/{id}/admins/{adminId}/edit' => function($id, $adminId) {
+        return ['view' => 'super-admin/organizations-edit', 'data' => ['id' => $id, 'adminId' => $adminId]];
+    },
 
     // ==========================================
     // Member 1: Users & RBAC
