@@ -96,9 +96,9 @@ return function ($uri, $method, $requestData = []) {
                 $checkList = is_array($requiredPermissions) ? $requiredPermissions : [$requiredPermissions];
                 foreach ($checkList as $perm) {
                     $ovStmt = $db->prepare("
-                        SELECT upo.override_type 
-                        FROM user_permission_overrides upo 
-                        JOIN permissions p ON upo.permission_id = p.id 
+                        SELECT upo.override_type
+                        FROM user_permission_overrides upo
+                        JOIN permissions p ON upo.permission_id = p.id
                         WHERE upo.user_id = :uid AND upo.organization_id = :oid AND p.name = :pname
                         LIMIT 1
                     ");
@@ -632,7 +632,7 @@ return function ($uri, $method, $requestData = []) {
         }
     }
 
-    
+
     // Member 4: Operations Bookings
     if ($uri === '/api/v1/bookings' && $method === 'GET') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'view_venues')) return ApiResponse::error('Forbidden', null, 403);
@@ -660,7 +660,7 @@ return function ($uri, $method, $requestData = []) {
         return $controller->facilityAvailability($orgId, (int)$matches[1], $requestData);
     }
 
-    
+
     // Member 4: Operations Maintenance & Housekeeping
     if ($uri === '/api/v1/maintenance' && $method === 'GET') {
         if (!\App\Helpers\OperationsPermissionHelper::hasAny($performedBy, 'manage_maintenance')) return ApiResponse::error('Forbidden', null, 403);
@@ -955,7 +955,7 @@ return function ($uri, $method, $requestData = []) {
     }
 
     // ==========================================
-    // Member 5: Equipment Management
+    // Member 5: Equipment Management (Rentals)
     // ==========================================
     if ($uri === '/api/v1/equipment') {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
@@ -965,7 +965,7 @@ return function ($uri, $method, $requestData = []) {
         }
         if ($method === 'POST') {
             if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
-            return $controller->store($orgId, $requestData, $performedBy);
+            return $controller->issue($orgId, $requestData, $performedBy);
         }
     }
     if (preg_match('#^/api/v1/equipment/(\d+)$#', $uri, $m)) {
@@ -975,22 +975,6 @@ return function ($uri, $method, $requestData = []) {
             if (!$checkPermission(['equipment.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
             return $controller->show($orgId, $targetId);
         }
-        if ($method === 'PUT' || $method === 'POST') {
-            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
-            return $controller->update($orgId, $targetId, $requestData, $performedBy);
-        }
-        if ($method === 'DELETE') {
-            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
-            return $controller->destroy($orgId, $targetId, $performedBy);
-        }
-    }
-    if (preg_match('#^/api/v1/equipment/(\d+)/assign$#', $uri, $m)) {
-        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
-        $targetId = (int)$m[1];
-        if ($method === 'POST') {
-            if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
-            return $controller->assign($orgId, $targetId, $requestData, $performedBy);
-        }
     }
     if (preg_match('#^/api/v1/equipment/(\d+)/return$#', $uri, $m)) {
         $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
@@ -998,14 +982,6 @@ return function ($uri, $method, $requestData = []) {
         if ($method === 'POST') {
             if (!$checkPermission('equipment.manage')) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
             return $controller->returnItem($orgId, $targetId, $requestData, $performedBy);
-        }
-    }
-    if (preg_match('#^/api/v1/equipment/(\d+)/assignments$#', $uri, $m)) {
-        $controller = new \App\Http\Controllers\Api\V1\Equipment\EquipmentController();
-        $targetId = (int)$m[1];
-        if ($method === 'GET') {
-            if (!$checkPermission(['equipment.manage', 'inventory.view', 'inventory.manage'])) return ApiResponse::error('Forbidden: Insufficient permissions', null, 403);
-            return $controller->assignments($orgId, $targetId);
         }
     }
 

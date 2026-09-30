@@ -147,18 +147,20 @@ ob_start();
                                     </span>
                                 </td>
                                 <td class="py-3 px-3 text-end">
-                                    <div class="btn-group btn-group-sm">
-                                        <a href="/inventory/<?= (int)$item['id'] ?>" class="btn btn-outline-secondary" style="border-radius: 6px 0 0 6px;" title="View Details & Movement">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <a href="/inventory/<?= (int)$item['id'] ?>/edit" class="btn btn-outline-secondary" style="border-radius: 0;" title="Edit Item">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form action="/inventory/<?= (int)$item['id'] ?>/delete" method="POST" style="display: contents;" class="d-inline" onsubmit="return confirm('Are you sure you want to delete \'<?= addslashes(htmlspecialchars($item['item_name'])) ?>\'?');">
-                                            <button type="submit" class="btn btn-outline-danger" style="border-radius: 0 6px 6px 0; border-left: 0; padding: 4px 8px; font-size: 12px;" title="Delete Item">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </form>
+                                    <div class="d-inline-flex">
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <a href="/inventory/<?= (int)$item['id'] ?>" class="btn btn-outline-secondary d-inline-flex align-items-center justify-content-center gap-1" style="width: 80px; height: 30px;" title="View Details & Movement">
+                                                <i class="bi bi-eye"></i> View
+                                            </a>
+                                            <a href="/inventory/<?= (int)$item['id'] ?>/edit" class="btn btn-outline-secondary d-inline-flex align-items-center justify-content-center gap-1" style="width: 80px; height: 30px;" title="Edit Item">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </a>
+                                            <form action="/inventory/<?= (int)$item['id'] ?>/delete" method="POST" class="m-0 p-0" onsubmit="return confirm('Are you sure you want to delete \'<?= addslashes(htmlspecialchars($item['item_name'])) ?>\'?');">
+                                                <button type="submit" class="btn btn-outline-danger d-inline-flex align-items-center justify-content-center gap-1" style="width: 85px; height: 30px; border-top-left-radius: 0; border-bottom-left-radius: 0;" title="Delete Item">
+                                                    <i class="bi bi-trash"></i> Delete
+                                                </button>
+                                            </form>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
