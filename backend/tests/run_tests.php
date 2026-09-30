@@ -291,6 +291,11 @@ $tests = [
         $t = new \Tests\Feature\AthleteSportSlugTest();
         return $t->testSportSlugResolution();
     },
+    'Feature: Training Session Module Comprehensive (21-Point Verification)' => function() {
+        require_once __DIR__ . '/Feature/TrainingSessionModuleComprehensiveTest.php';
+        $t = new \Tests\Feature\TrainingSessionModuleComprehensiveTest();
+        return $t->runAllTests();
+    },
 ];
 
 $passed = 0;
