@@ -54,19 +54,46 @@ class AuditLogService extends BaseService
         ]);
     }
 
-    public function getLogs(?int $orgId = null, int $limit = 50, int $offset = 0): array
+    public function getLogs(?int $orgId = null, int|array $limit = 50, int|array $offset = 0, array $filters = []): array
     {
+        if (is_array($limit)) {
+            $filters = $limit;
+            $limit = is_numeric($offset) ? (int)$offset : 50;
+            $offset = 0;
+        } elseif (is_array($offset)) {
+            $filters = $offset;
+            $offset = 0;
+        }
+
+        if (isset($filters['limit']) && is_numeric($filters['limit'])) {
+            $limit = (int)$filters['limit'];
+        }
+        if (isset($filters['offset']) && is_numeric($filters['offset'])) {
+            $offset = (int)$filters['offset'];
+        }
+
         if (!$this->pdo) return [];
 
         $sql = "SELECT a.*, u.first_name, u.last_name, u.email as user_email, o.name as organization_name 
                 FROM audit_logs a 
                 LEFT JOIN users u ON a.user_id = u.id 
-                LEFT JOIN organizations o ON a.organization_id = o.id ";
+                LEFT JOIN organizations o ON a.organization_id = o.id 
+                WHERE 1=1 ";
         $params = [];
 
         if ($orgId !== null) {
-            $sql .= " WHERE a.organization_id = :org_id ";
+            $sql .= " AND a.organization_id = :org_id ";
             $params[':org_id'] = $orgId;
+        }
+
+        if (!empty($filters['module'])) {
+            $sql .= " AND a.module = :module ";
+            $params[':module'] = $filters['module'];
+        }
+
+        if (!empty($filters['action'])) {
+            $sql .= " AND a.action = :action ";
+            $params[':action'] = $filters['action'];
         }
 
         $sql .= " ORDER BY a.created_at DESC LIMIT :limit OFFSET :offset";
@@ -74,8 +101,8 @@ class AuditLogService extends BaseService
         foreach ($params as $k => $v) {
             $stmt->bindValue($k, $v);
         }
-        $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+        $stmt->bindValue(':offset', (int)$offset, PDO::PARAM_INT);
         $stmt->execute();
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
