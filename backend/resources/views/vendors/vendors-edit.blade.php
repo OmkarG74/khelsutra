@@ -31,7 +31,7 @@ ob_start();
             </div>
         </div>
     <?php else: ?>
-        <div class="d-flex align-items-center justify-content-between mb-4">
+        <div class="ks-page-header mb-4">
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <a href="/vendors" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Vendors Directory</a>
@@ -40,10 +40,11 @@ ob_start();
                     <span class="text-muted small">/</span>
                     <span class="text-dark small fw-semibold">Edit</span>
                 </div>
-                <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Edit Vendor: <?= htmlspecialchars($vendor['company_name'], ENT_QUOTES, 'UTF-8') ?></h1>
+                <h1 class="ks-page-title mb-1">Edit Vendor: <?= htmlspecialchars($vendor['company_name'], ENT_QUOTES, 'UTF-8') ?></h1>
+                <p class="ks-page-subtitle">Update vendor profile, contacts, financial status, and addresses</p>
             </div>
-            <div>
-                <a href="/vendors/<?= (int)$vendor['id'] ?>" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+            <div class="ks-header-actions">
+                <a href="/vendors/<?= (int)$vendor['id'] ?>" class="ks-btn ks-btn-secondary">
                     Cancel
                 </a>
             </div>
@@ -214,10 +215,10 @@ ob_start();
                 </div>
 
                 <div class="d-flex justify-content-end gap-2 pt-3 border-top">
-                    <a href="/vendors/<?= (int)$vendor['id'] ?>" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+                    <a href="/vendors/<?= (int)$vendor['id'] ?>" class="ks-btn ks-btn-secondary">
                         Cancel
                     </a>
-                    <button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 24px;">
+                    <button type="submit" class="ks-btn ks-btn-primary">
                         <i class="bi bi-check2"></i> Update Vendor
                     </button>
                 </div>
