@@ -17,7 +17,7 @@ use PDO;
 class SportsAdminFlowTest
 {
     private int $orgId = 1; // Apex Sports Academy
-    private int $userId = 2; // Sports Admin / Authorized user
+    private int $userId = 102; // Canonical Sports Admin (sportsadmin@khelsutra.local)
     private ?PDO $pdo;
 
     public function __construct()
@@ -128,15 +128,24 @@ class SportsAdminFlowTest
         $service = new TeamService();
         $code = 'TM-' . rand(100, 999);
 
+        // Fetch valid coach and active athletes for sport 1
+        $cStmt = $this->pdo->prepare("SELECT id FROM coach_profiles WHERE organization_id = :org AND status = 'active' AND deleted_at IS NULL LIMIT 1");
+        $cStmt->execute([':org' => $this->orgId]);
+        $coachId = (int)($cStmt->fetchColumn() ?: 1);
+
+        $aStmt = $this->pdo->prepare("SELECT id FROM athletes WHERE organization_id = :org AND current_sport_id = 1 AND status = 'active' AND deleted_at IS NULL LIMIT 2");
+        $aStmt->execute([':org' => $this->orgId]);
+        $athleteIds = array_map('intval', $aStmt->fetchAll(PDO::FETCH_COLUMN) ?: []);
+
         // 1. Create Team with Coach and Athletes
         $team = $service->createTeam($this->orgId, [
             'name' => 'Apex Test Strikers',
             'team_code' => $code,
             'sport_id' => 1,
-            'gender' => 'men',
+            'gender' => 'open',
             'age_group' => 'senior',
-            'coach_id' => 1,
-            'athlete_ids' => [1, 2],
+            'coach_id' => $coachId,
+            'athlete_ids' => $athleteIds,
             'status' => 'active',
         ], $this->userId);
 

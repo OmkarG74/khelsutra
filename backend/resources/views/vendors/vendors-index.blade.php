@@ -44,7 +44,7 @@ ob_start();
 
 <div class="ks-content">
     <?php if (!empty($_GET['success'])): ?>
-        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+        <div class="alert alert-success alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13.5px;">
             <i class="bi bi-check-circle-fill fs-5"></i>
             <div><?= htmlspecialchars($_GET['success'], ENT_QUOTES, 'UTF-8') ?></div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -52,132 +52,163 @@ ob_start();
     <?php endif; ?>
 
     <?php if (!empty($_GET['error'])): ?>
-        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+        <div class="alert alert-danger alert-dismissible fade show d-flex align-items-center gap-2 mb-4" role="alert" style="border-radius: var(--ks-radius-button); font-size: 13.5px;">
             <i class="bi bi-exclamation-triangle-fill fs-5"></i>
             <div><?= htmlspecialchars($_GET['error'], ENT_QUOTES, 'UTF-8') ?></div>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
     <?php endif; ?>
 
-    <!-- Page Header Standard -->
-    <div class="d-flex align-items-center justify-content-between mb-4">
+    <!-- Standard Page Header -->
+    <div class="ks-page-header mb-4">
         <div>
-            <div class="d-flex align-items-center gap-2 mb-1">
-                <a href="/inventory" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Inventory</a>
-                <span class="text-muted small">/</span>
-                <span class="text-dark small fw-semibold">Vendors</span>
-            </div>
-            <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Vendors & Suppliers</h1>
+            <h1 class="ks-page-title mb-1">Vendors & Suppliers</h1>
+            <p class="ks-page-subtitle">Manage approved suppliers, procurement partners, and vendor invoices</p>
         </div>
-        <div class="d-flex gap-2">
-            <a href="/inventory" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 16px;">
-                <i class="bi bi-boxes"></i> Stock Inventory
-            </a>
-            <a href="/vendors/create" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 18px;">
-                <i class="bi bi-plus-lg"></i> Add Vendor
+        <div class="ks-header-actions">
+            <a href="/vendors/create" class="ks-btn ks-btn-primary">
+                <i class="bi bi-plus-lg"></i>
+                <span>Add Vendor</span>
             </a>
         </div>
     </div>
 
-    <!-- Quick Stat Cards -->
+    <!-- KPI Summary Cards -->
     <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-lg-3">
-            <div class="card p-3" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold">Total Vendors</span>
-                    <span class="badge bg-light text-primary border"><i class="bi bi-truck"></i></span>
+        <div class="col-xl-3 col-md-6">
+            <div class="ks-kpi-card">
+                <div class="ks-kpi-top">
+                    <div class="ks-icon-box ks-icon-blue">
+                        <i class="bi bi-truck fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="ks-kpi-label">TOTAL VENDORS</div>
+                        <div class="ks-kpi-value"><?= number_format($stats['total_vendors'] ?? 0) ?></div>
+                    </div>
                 </div>
-                <div class="h3 fw-bold mb-0" style="color: var(--ks-navy);"><?= number_format($stats['total_vendors'] ?? 0) ?></div>
-                <span class="text-muted" style="font-size: 12px;">Registered supplier partners</span>
+                <div class="ks-kpi-bottom">
+                    <span class="ks-trend-text text-muted">Registered supplier partners</span>
+                </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card p-3" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold">Active Suppliers</span>
-                    <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check2-circle"></i></span>
+        <div class="col-xl-3 col-md-6">
+            <div class="ks-kpi-card">
+                <div class="ks-kpi-top">
+                    <div class="ks-icon-box ks-icon-green">
+                        <i class="bi bi-check2-circle fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="ks-kpi-label">ACTIVE SUPPLIERS</div>
+                        <div class="ks-kpi-value text-success"><?= number_format($stats['active_vendors'] ?? 0) ?></div>
+                    </div>
                 </div>
-                <div class="h3 fw-bold mb-0 text-success"><?= number_format($stats['active_vendors'] ?? 0) ?></div>
-                <span class="text-muted" style="font-size: 12px;">Authorized for procurement</span>
+                <div class="ks-kpi-bottom">
+                    <span class="ks-trend-text ks-trend-positive">Authorized for procurement</span>
+                </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card p-3" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold">Total Invoiced</span>
-                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle"><i class="bi bi-receipt"></i></span>
+        <div class="col-xl-3 col-md-6">
+            <div class="ks-kpi-card">
+                <div class="ks-kpi-top">
+                    <div class="ks-icon-box ks-icon-purple">
+                        <i class="bi bi-receipt fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="ks-kpi-label">TOTAL INVOICED</div>
+                        <div class="ks-kpi-value">₹<?= number_format((float)($stats['total_invoiced'] ?? 0), 2) ?></div>
+                    </div>
                 </div>
-                <div class="h3 fw-bold mb-0" style="color: var(--ks-navy);">₹<?= number_format((float)($stats['total_invoiced'] ?? 0), 2) ?></div>
-                <span class="text-muted" style="font-size: 12px;">Lifetime vendor billing</span>
+                <div class="ks-kpi-bottom">
+                    <span class="ks-trend-text text-muted">Lifetime vendor billing</span>
+                </div>
             </div>
         </div>
-        <div class="col-sm-6 col-lg-3">
-            <div class="card p-3" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                    <span class="text-muted small fw-semibold">Unpaid Invoices</span>
-                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"><i class="bi bi-clock-history"></i></span>
+        <div class="col-xl-3 col-md-6">
+            <div class="ks-kpi-card">
+                <div class="ks-kpi-top">
+                    <div class="ks-icon-box ks-icon-amber">
+                        <i class="bi bi-clock-history fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="ks-kpi-label">UNPAID INVOICES</div>
+                        <div class="ks-kpi-value <?= ($stats['unpaid_invoices_count'] ?? 0) > 0 ? 'text-warning' : '' ?>"><?= number_format($stats['unpaid_invoices_count'] ?? 0) ?></div>
+                    </div>
                 </div>
-                <div class="h3 fw-bold mb-0 text-warning"><?= number_format($stats['unpaid_invoices_count'] ?? 0) ?></div>
-                <span class="text-muted" style="font-size: 12px;">Pending payment settlement</span>
+                <div class="ks-kpi-bottom">
+                    <span class="ks-trend-text <?= ($stats['unpaid_invoices_count'] ?? 0) > 0 ? 'ks-trend-negative' : 'text-muted' ?>">Pending payment settlement</span>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- Search & Filters Toolbar -->
-    <div class="card p-3 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-        <form method="GET" action="/vendors" class="row g-2 align-items-center">
-            <div class="col-md-5">
-                <div class="input-group">
-                    <span class="input-group-text bg-white border-end-0" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button) 0 0 var(--ks-radius-button);">
-                        <i class="bi bi-search text-muted" style="font-size: 13px;"></i>
-                    </span>
-                    <input type="text" name="search" class="form-control border-start-0" placeholder="Search company name, code, contact person, city, GSTIN..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="border-color: var(--ks-border); border-radius: 0 var(--ks-radius-button) var(--ks-radius-button) 0; font-size: 13px;">
-                </div>
+    <div class="ks-filter-bar mb-4">
+        <form method="GET" action="/vendors">
+            <div style="position: relative;">
+                <i class="bi bi-search" style="position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ks-text-muted); font-size: 13px; pointer-events: none;"></i>
+                <input type="text" name="search" class="form-control ks-form-control" placeholder="Search company name, code, contact person, city, GSTIN..." value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" style="padding-left: 36px;">
             </div>
-            <div class="col-md-3">
-                <select name="status" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
+            <div>
+                <select name="status" class="form-select ks-form-select">
                     <option value="">All Vendor Statuses</option>
                     <option value="active" <?= $status === 'active' ? 'selected' : '' ?>>Active</option>
                     <option value="inactive" <?= $status === 'inactive' ? 'selected' : '' ?>>Inactive</option>
                     <option value="blacklisted" <?= $status === 'blacklisted' ? 'selected' : '' ?>>Blacklisted</option>
                 </select>
             </div>
-            <div class="col-md-2">
-                <select name="vendor_type" class="form-select" style="border-color: var(--ks-border); border-radius: var(--ks-radius-button); font-size: 13px;">
+            <div>
+                <select name="vendor_type" class="form-select ks-form-select">
                     <option value="">All Categories</option>
                     <?php foreach ($vendorTypes as $vt): ?>
                         <option value="<?= htmlspecialchars($vt, ENT_QUOTES, 'UTF-8') ?>" <?= $vendorType === $vt ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($vt, ENT_QUOTES, 'UTF-8') ?>
+                            <?= htmlspecialchars(ucfirst(str_replace('_', ' ', $vt)), ENT_QUOTES, 'UTF-8') ?>
                         </option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-primary flex-grow-1" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 500; font-size: 13px;">
-                    Filter
+            <div class="d-flex align-items-center gap-2">
+                <button type="submit" class="ks-btn ks-btn-primary">
+                    <i class="bi bi-funnel"></i>
+                    <span>Filter</span>
                 </button>
                 <?php if ($search || $status || $vendorType): ?>
-                    <a href="/vendors" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;" title="Reset filters">
-                        <i class="bi bi-x-lg"></i>
+                    <a href="/vendors" class="ks-btn ks-btn-secondary" title="Reset all filters">
+                        <i class="bi bi-x-circle"></i>
+                        <span>Clear</span>
                     </a>
                 <?php endif; ?>
             </div>
         </form>
     </div>
 
-    <!-- Vendors Table -->
-    <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff; overflow: hidden;">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+    <!-- Vendors Table Card -->
+    <div class="ks-table-card">
+        <div class="ks-table-header">
+            <div class="ks-header-left">
+                <i class="bi bi-truck text-primary fs-5"></i>
+                <h3 class="ks-header-title">Vendor Directory</h3>
+                <span class="badge bg-light text-secondary border ms-2 fw-medium" style="font-size: 11px;">
+                    <?= number_format($total) ?> <?= $total === 1 ? 'partner' : 'partners' ?>
+                </span>
+            </div>
+            <?php if ($search || $status || $vendorType): ?>
+                <div class="d-flex align-items-center gap-2 small">
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Filtered</span>
+                    <a href="/vendors" class="text-muted text-decoration-none small"><i class="bi bi-x"></i> Reset</a>
+                </div>
+            <?php endif; ?>
+        </div>
+        <div class="ks-table-responsive">
+            <table class="table ks-table align-middle mb-0">
+                <thead>
                     <tr>
-                        <th class="py-3 px-3 text-muted fw-semibold" style="width: 270px;">Company / Vendor</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Contact Person</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Phone & Email</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">City & State</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Invoices & Billing</th>
-                        <th class="py-3 px-3 text-muted fw-semibold">Status</th>
-                        <th class="py-3 px-3 text-muted fw-semibold text-end">Actions</th>
+                        <th style="min-width: 250px;">Company / Vendor</th>
+                        <th style="min-width: 150px;">Contact Person</th>
+                        <th style="min-width: 180px;">Communication</th>
+                        <th style="min-width: 140px;">Location</th>
+                        <th class="ks-col-money" style="min-width: 150px;">Billing & Invoices</th>
+                        <th style="min-width: 100px;">Status</th>
+                        <th class="ks-col-actions" style="min-width: 130px; text-align: right;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -185,50 +216,68 @@ ob_start();
                         <?php foreach ($vendors as $v): ?>
                             <tr>
                                 <td class="py-3 px-3">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="bg-light p-2 rounded text-primary border d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                    <div class="d-flex align-items-center gap-3">
+                                        <div class="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0" style="width: 38px; height: 38px; background: var(--ks-primary-light); color: var(--ks-primary); font-size: 17px;">
                                             <i class="bi bi-building"></i>
                                         </div>
                                         <div>
-                                            <a href="/vendors/<?= (int)$v['id'] ?>" class="fw-semibold text-dark text-decoration-none">
+                                            <a href="/vendors/<?= (int)$v['id'] ?>" class="fw-semibold text-dark text-decoration-none d-block">
                                                 <?= htmlspecialchars($v['company_name'], ENT_QUOTES, 'UTF-8') ?>
                                             </a>
-                                            <div class="text-muted" style="font-size: 11px;">
-                                                Code: <span class="fw-medium text-dark"><?= htmlspecialchars($v['vendor_code'], ENT_QUOTES, 'UTF-8') ?></span>
+                                            <div class="d-flex align-items-center gap-1 mt-1">
+                                                <span class="badge bg-light text-secondary border" style="font-family: monospace; font-size: 11px; padding: 2px 6px;">
+                                                    <?= htmlspecialchars($v['vendor_code'], ENT_QUOTES, 'UTF-8') ?>
+                                                </span>
                                                 <?php if (!empty($v['vendor_type'])): ?>
-                                                    &bull; <span class="badge bg-light text-secondary border"><?= htmlspecialchars($v['vendor_type'], ENT_QUOTES, 'UTF-8') ?></span>
+                                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle" style="font-size: 10.5px; padding: 2px 6px;">
+                                                        <?= htmlspecialchars(ucfirst(str_replace('_', ' ', $v['vendor_type'])), ENT_QUOTES, 'UTF-8') ?>
+                                                    </span>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
                                     </div>
                                 </td>
                                 <td class="py-3 px-3">
-                                    <div class="text-dark fw-medium"><?= htmlspecialchars($v['contact_person'] ?: 'N/A', ENT_QUOTES, 'UTF-8') ?></div>
+                                    <?php if (!empty($v['contact_person'])): ?>
+                                        <div class="text-dark fw-medium"><?= htmlspecialchars($v['contact_person'], ENT_QUOTES, 'UTF-8') ?></div>
+                                    <?php else: ?>
+                                        <span class="text-muted fst-italic small">Not specified</span>
+                                    <?php endif; ?>
                                     <?php if (!empty($v['gst_number'])): ?>
-                                        <div class="text-muted" style="font-size: 11px;">GST: <?= htmlspecialchars($v['gst_number'], ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="text-muted" style="font-size: 11px; font-family: monospace;">GST: <?= htmlspecialchars($v['gst_number'], ENT_QUOTES, 'UTF-8') ?></div>
                                     <?php endif; ?>
-                                </td>
-                                <td class="py-3 px-3 text-muted">
-                                    <?php if (!empty($v['phone'])): ?>
-                                        <div><i class="bi bi-telephone me-1"></i><?= htmlspecialchars($v['phone'], ENT_QUOTES, 'UTF-8') ?></div>
-                                    <?php endif; ?>
-                                    <?php if (!empty($v['email'])): ?>
-                                        <div style="font-size: 11px;"><i class="bi bi-envelope me-1"></i><?= htmlspecialchars($v['email'], ENT_QUOTES, 'UTF-8') ?></div>
-                                    <?php endif; ?>
-                                    <?php if (empty($v['phone']) && empty($v['email'])): ?>
-                                        <span class="fst-italic">Not provided</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 px-3 text-muted">
-                                    <i class="bi bi-geo-alt me-1 text-secondary"></i>
-                                    <?= htmlspecialchars(trim(($v['city'] ?? '') . ', ' . ($v['state'] ?? '')) ?: 'India', ENT_QUOTES, 'UTF-8') ?>
                                 </td>
                                 <td class="py-3 px-3">
+                                    <?php if (!empty($v['phone'])): ?>
+                                        <div class="small">
+                                            <a href="tel:<?= htmlspecialchars($v['phone'], ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none text-secondary">
+                                                <i class="bi bi-telephone me-1 text-muted"></i><?= htmlspecialchars($v['phone'], ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (!empty($v['email'])): ?>
+                                        <div class="small mt-1">
+                                            <a href="mailto:<?= htmlspecialchars($v['email'], ENT_QUOTES, 'UTF-8') ?>" class="text-decoration-none text-secondary">
+                                                <i class="bi bi-envelope me-1 text-muted"></i><?= htmlspecialchars($v['email'], ENT_QUOTES, 'UTF-8') ?>
+                                            </a>
+                                        </div>
+                                    <?php endif; ?>
+                                    <?php if (empty($v['phone']) && empty($v['email'])): ?>
+                                        <span class="text-muted fst-italic small">No contact details</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="py-3 px-3">
+                                    <div class="text-secondary small d-flex align-items-center gap-1">
+                                        <i class="bi bi-geo-alt text-muted"></i>
+                                        <span><?= htmlspecialchars(trim(($v['city'] ?? '') . ', ' . ($v['state'] ?? '')) ?: 'India', ENT_QUOTES, 'UTF-8') ?></span>
+                                    </div>
+                                </td>
+                                <td class="py-3 px-3 ks-col-money">
                                     <div class="fw-semibold text-dark">₹<?= number_format((float)($v['total_invoiced_amount'] ?? 0), 2) ?></div>
                                     <div class="text-muted" style="font-size: 11px;">
-                                        <?= (int)($v['total_invoices_count'] ?? 0) ?> invoice(s)
+                                        <?= (int)($v['total_invoices_count'] ?? 0) ?> <?= ((int)($v['total_invoices_count'] ?? 0) === 1) ? 'bill' : 'bills' ?>
                                         <?php if ((int)($v['unpaid_invoices_count'] ?? 0) > 0): ?>
-                                            &bull; <span class="text-warning fw-semibold"><?= (int)$v['unpaid_invoices_count'] ?> unpaid</span>
+                                            &bull; <span class="text-danger fw-medium"><?= (int)$v['unpaid_invoices_count'] ?> unpaid</span>
                                         <?php endif; ?>
                                     </div>
                                 </td>
@@ -241,36 +290,33 @@ ob_start();
                                         default => 'bg-light text-dark border'
                                     };
                                     ?>
-                                    <span class="badge <?= $vBadge ?> fw-semibold" style="font-size: 11px;">
+                                    <span class="badge <?= $vBadge ?> fw-semibold" style="font-size: 11px; padding: 4px 8px;">
                                         <?= htmlspecialchars(ucfirst($v['status']), ENT_QUOTES, 'UTF-8') ?>
                                     </span>
                                 </td>
-                                <td class="py-3 px-3 text-end">
-                                    <div class="d-inline-flex gap-1">
-                                        <a href="/vendors/<?= (int)$v['id'] ?>" class="btn btn-sm btn-light border" style="font-size: 12px;" title="View Profile & Invoices">
+                                <td class="py-3 px-3 ks-col-actions text-end">
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/vendors/<?= (int)$v['id'] ?>" class="btn btn-outline-secondary" title="View Profile & Invoices">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        <a href="/vendors/<?= (int)$v['id'] ?>/edit" class="btn btn-sm btn-light border" style="font-size: 12px;" title="Edit">
+                                        <a href="/vendors/<?= (int)$v['id'] ?>/edit" class="btn btn-outline-secondary" title="Edit Vendor">
                                             <i class="bi bi-pencil"></i>
                                         </a>
-
-                                        <!-- Status Toggle Form -->
-                                        <form method="POST" action="/vendors/<?= (int)$v['id'] ?>/status" style="display:inline;">
+                                        <form method="POST" action="/vendors/<?= (int)$v['id'] ?>/status" class="d-inline" style="display: contents;">
                                             <?php if ($v['status'] === 'active'): ?>
                                                 <input type="hidden" name="status" value="inactive">
-                                                <button type="submit" class="btn btn-sm btn-light border text-warning" style="font-size: 12px;" title="Deactivate Vendor">
+                                                <button type="submit" class="btn btn-outline-secondary text-warning" title="Deactivate Vendor">
                                                     <i class="bi bi-pause-circle"></i>
                                                 </button>
                                             <?php else: ?>
                                                 <input type="hidden" name="status" value="active">
-                                                <button type="submit" class="btn btn-sm btn-light border text-success" style="font-size: 12px;" title="Activate Vendor">
+                                                <button type="submit" class="btn btn-outline-secondary text-success" title="Activate Vendor">
                                                     <i class="bi bi-play-circle"></i>
                                                 </button>
                                             <?php endif; ?>
                                         </form>
-
-                                        <form method="POST" action="/vendors/<?= (int)$v['id'] ?>/delete" onsubmit="return confirm('Are you sure you want to remove this vendor?');" style="display:inline;">
-                                            <button type="submit" class="btn btn-sm btn-light border text-danger" style="font-size: 12px;" title="Delete">
+                                        <form method="POST" action="/vendors/<?= (int)$v['id'] ?>/delete" class="d-inline" style="display: contents;" onsubmit="return confirm('Are you sure you want to remove this vendor?');">
+                                            <button type="submit" class="btn btn-outline-secondary text-danger" title="Delete Vendor">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         </form>
@@ -280,13 +326,27 @@ ob_start();
                         <?php endforeach; ?>
                     <?php else: ?>
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
-                                <i class="bi bi-truck d-block fs-1 mb-2 opacity-50"></i>
-                                <p class="mb-2 fw-medium">No vendors found matching your criteria.</p>
-                                <p class="text-muted small mb-3">Add equipment suppliers, merchandise vendors, and service contractors to manage procurement.</p>
-                                <a href="/vendors/create" class="btn btn-sm btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue); font-size: 12px;">
-                                    <i class="bi bi-plus-lg me-1"></i> Add First Vendor
-                                </a>
+                            <td colspan="7">
+                                <div class="ks-empty-state">
+                                    <div class="ks-empty-icon">
+                                        <i class="bi bi-truck fs-3"></i>
+                                    </div>
+                                    <div class="ks-empty-title">No vendors found</div>
+                                    <p class="ks-empty-desc">
+                                        <?= ($search || $status || $vendorType) 
+                                            ? 'No suppliers match your active filter criteria. Try clearing search or status filters.' 
+                                            : 'Add equipment suppliers, merchandise vendors, and service contractors to manage procurement.' ?>
+                                    </p>
+                                    <?php if ($search || $status || $vendorType): ?>
+                                        <a href="/vendors" class="ks-btn ks-btn-secondary">
+                                            <i class="bi bi-x-circle me-1"></i> Clear Filters
+                                        </a>
+                                    <?php else: ?>
+                                        <a href="/vendors/create" class="ks-btn ks-btn-primary">
+                                            <i class="bi bi-plus-lg me-1"></i> Add First Vendor
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                         </tr>
                     <?php endif; ?>
@@ -295,7 +355,7 @@ ob_start();
         </div>
 
         <?php if ($totalPages > 1): ?>
-            <div class="d-flex align-items-center justify-content-between p-3 border-top" style="font-size: 13px;">
+            <div class="d-flex align-items-center justify-content-between p-3 border-top" style="font-size: 13px; background: #fff;">
                 <span class="text-muted">Showing page <?= $page ?> of <?= $totalPages ?> (<?= $total ?> items)</span>
                 <nav>
                     <ul class="pagination pagination-sm mb-0">

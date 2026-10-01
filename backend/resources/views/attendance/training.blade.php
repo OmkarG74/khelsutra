@@ -19,21 +19,28 @@ $records = $attService->listTrainingAttendance($orgId, $filters);
 ob_start();
 ?>
 
-<!-- Page Header (Section 31 & 45) -->
+<!-- Back Link -->
+<div class="mb-2">
+    <a href="/training" class="text-decoration-none text-muted small fw-medium d-inline-flex align-items-center gap-1">
+        <i class="bi bi-arrow-left"></i> Back to Training Sessions
+    </a>
+</div>
+
+<!-- Page Header (Section 29 & 31) -->
 <div class="ks-page-header">
     <div>
-        <h1 class="ks-page-title">Training Attendance</h1>
-        <p class="ks-page-subtitle">Mark and monitor training session presence for athletes, coaches, and staff (Member 2 Foundation).</p>
+        <h1 class="ks-page-title">Training Attendance History</h1>
+        <p class="ks-page-subtitle">Historical audit and individual attendance records log across all training sessions.</p>
     </div>
     <div class="ks-header-actions">
-        <a href="/attendance/history" class="ks-btn ks-btn-secondary">
-            <i class="bi bi-clock-history"></i>
-            <span>Attendance History</span>
+        <a href="/training" class="ks-btn ks-btn-secondary">
+            <i class="bi bi-stopwatch"></i>
+            <span>Training Sessions</span>
         </a>
-        <button class="ks-btn ks-btn-primary" onclick="document.getElementById('markTrainingModal').style.display='flex'">
-            <i class="bi bi-check2-circle"></i>
-            <span>Mark Training Attendance</span>
-        </button>
+        <a href="/training/create" class="ks-btn ks-btn-primary">
+            <i class="bi bi-plus-lg"></i>
+            <span>Add Training Session</span>
+        </a>
     </div>
 </div>
 
@@ -46,12 +53,12 @@ ob_start();
                     <i class="bi bi-card-checklist fs-4"></i>
                 </div>
                 <div>
-                    <div class="ks-kpi-label">Recorded Sessions</div>
+                    <div class="ks-kpi-label">Recorded Entries</div>
                     <div class="ks-kpi-value"><?= count($records) ?></div>
                 </div>
             </div>
             <div class="ks-kpi-bottom">
-                <span class="ks-trend-text ks-trend-positive">Total Logged</span>
+                <span class="ks-trend-text ks-trend-positive">Total Logged Records</span>
             </div>
         </div>
     </div>
@@ -110,7 +117,7 @@ ob_start();
     <div class="ks-table-header flex-wrap gap-3">
         <div class="d-flex align-items-center gap-2">
             <i class="bi bi-calendar2-check" style="color: var(--ks-primary); font-size: 18px;"></i>
-            <span class="ks-card-title mb-0">Training Attendance Roster</span>
+            <span class="ks-card-title mb-0">Attendance Audit Log</span>
         </div>
         <form method="GET" action="/attendance/training" class="d-flex align-items-center gap-2">
             <select name="attendance_status" class="ks-form-select" style="height: 36px; font-size: 13px; width: 150px;" onchange="this.form.submit()">
@@ -127,7 +134,7 @@ ob_start();
         <table class="ks-table ks-table-training-attendance">
             <thead>
                 <tr>
-                    <th>Session ID</th>
+                    <th>Session</th>
                     <th>Participant Type</th>
                     <th>Participant Name</th>
                     <th>Status</th>
@@ -143,9 +150,26 @@ ob_start();
                     </tr>
                 <?php else: ?>
                     <?php foreach ($records as $rec): ?>
+                        <?php
+                            $sessId = (int)$rec['training_session_id'];
+                            $sessTitle = $rec['session_title'] ?? ('Session #' . $sessId);
+                            $sessRef = $rec['training_reference'] ?? '';
+                            $pName = !empty($rec['participant_name']) ? $rec['participant_name'] : (!empty($rec['athlete_name']) ? $rec['athlete_name'] : (!empty($rec['employee_name']) ? $rec['employee_name'] : 'Participant'));
+                            $regCode = $rec['athlete_code'] ?? ($rec['employee_code'] ?? ($rec['coach_code'] ?? ''));
+                        ?>
                         <tr>
                             <td>
-                                <span class="badge bg-light text-dark fw-bold">Session #<?= htmlspecialchars((string)$rec['training_session_id']) ?></span>
+                                <div>
+                                    <a href="/training/<?= $sessId ?>" class="fw-bold text-navy text-decoration-none hover-primary">
+                                        <?= htmlspecialchars($sessTitle) ?>
+                                    </a>
+                                    <div class="small text-muted font-monospace">
+                                        <?= htmlspecialchars($sessRef ?: ('#' . $sessId)) ?>
+                                        <?php if (!empty($rec['training_date'])): ?>
+                                            &bull; <?= date('d M Y', strtotime($rec['training_date'])) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 <?php if (!empty($rec['athlete_id'])): ?>
@@ -157,7 +181,12 @@ ob_start();
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <span class="fw-bold text-navy"><?= htmlspecialchars($rec['participant_name'] ?? 'ID #' . ($rec['athlete_id'] ?? $rec['coach_id'] ?? $rec['employee_id'])) ?></span>
+                                <div>
+                                    <span class="fw-bold text-navy"><?= htmlspecialchars($pName) ?></span>
+                                    <?php if (!empty($regCode)): ?>
+                                        <div class="small text-muted font-monospace"><?= htmlspecialchars($regCode) ?></div>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                             <td>
                                 <?php if ($rec['attendance_status'] === 'present'): ?>

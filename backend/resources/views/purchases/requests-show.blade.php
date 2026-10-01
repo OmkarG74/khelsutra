@@ -48,15 +48,15 @@ ob_start();
         </div>
     <?php else: ?>
         <!-- Header -->
-        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+        <div class="ks-page-header mb-4">
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
-                    <a href="/purchases?tab=requests" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchase Requests</a>
+                    <a href="/purchases?tab=requests" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchases & Orders</a>
                     <span class="text-muted small">/</span>
                     <span class="text-dark small fw-semibold"><?= htmlspecialchars($pr['request_reference'], ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
-                <div class="d-flex align-items-center gap-3">
-                    <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">
+                <div class="d-flex align-items-center gap-3 flex-wrap">
+                    <h1 class="ks-page-title mb-0">
                         <?= htmlspecialchars($pr['request_reference'], ENT_QUOTES, 'UTF-8') ?>
                     </h1>
                     <?php
@@ -77,34 +77,34 @@ ob_start();
             </div>
 
             <!-- Workflow Action Buttons -->
-            <div class="d-flex gap-2">
+            <div class="ks-header-actions d-flex gap-2">
                 <?php if ($pr['status'] === 'draft'): ?>
                     <form method="POST" action="/purchases/requests/<?= (int)$pr['id'] ?>/submit" class="d-inline">
-                        <button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px;">
-                            <i class="bi bi-send-check"></i> Submit for Approval
+                        <button type="submit" class="ks-btn ks-btn-primary">
+                            <i class="bi bi-send-check me-1"></i> Submit for Approval
                         </button>
                     </form>
                     <form method="POST" action="/purchases/requests/<?= (int)$pr['id'] ?>/cancel" class="d-inline" onsubmit="return confirm('Cancel this requisition request?');">
-                        <button type="submit" class="btn btn-outline-danger" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                            Cancel Request
+                        <button type="submit" class="ks-btn ks-btn-danger">
+                            <i class="bi bi-x-circle me-1"></i> Cancel Request
                         </button>
                     </form>
                 <?php elseif ($pr['status'] === 'submitted'): ?>
                     <form method="POST" action="/purchases/requests/<?= (int)$pr['id'] ?>/approve" class="d-inline">
-                        <button type="submit" class="btn btn-success d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px;">
-                            <i class="bi bi-check-circle"></i> Approve Request
+                        <button type="submit" class="ks-btn ks-btn-success">
+                            <i class="bi bi-check-circle me-1"></i> Approve Request
                         </button>
                     </form>
-                    <button type="button" class="btn btn-outline-danger d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#rejectModal" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                        <i class="bi bi-x-circle"></i> Reject
+                    <button type="button" class="ks-btn ks-btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                        <i class="bi bi-x-circle me-1"></i> Reject
                     </button>
                 <?php elseif ($pr['status'] === 'approved'): ?>
-                    <a href="/purchases/orders/create?purchase_request_id=<?= (int)$pr['id'] ?>" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px;">
-                        <i class="bi bi-cart-plus"></i> Generate Purchase Order
+                    <a href="/purchases/orders/create?purchase_request_id=<?= (int)$pr['id'] ?>" class="ks-btn ks-btn-primary">
+                        <i class="bi bi-cart-plus me-1"></i> Generate Purchase Order
                     </a>
                 <?php elseif ($pr['status'] === 'converted' && $linkedPo): ?>
-                    <a href="/purchases/orders/<?= (int)$linkedPo['id'] ?>" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px;">
-                        <i class="bi bi-box-arrow-up-right"></i> View Order (<?= htmlspecialchars($linkedPo['po_number'], ENT_QUOTES, 'UTF-8') ?>)
+                    <a href="/purchases/orders/<?= (int)$linkedPo['id'] ?>" class="ks-btn ks-btn-secondary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> View Order (<?= htmlspecialchars($linkedPo['po_number'], ENT_QUOTES, 'UTF-8') ?>)
                     </a>
                 <?php endif; ?>
             </div>
@@ -123,21 +123,27 @@ ob_start();
         <div class="row g-4 mb-4">
             <div class="col-lg-8">
                 <!-- Requisition Line Items -->
-                <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
-                        <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-list-check me-2 text-primary"></i> Requisition Line Items (<?= count($pr['items']) ?>)
-                        </h6>
+                <div class="ks-table-card">
+                    <div class="ks-table-header">
+                        <div class="ks-header-left">
+                            <div class="ks-icon-box ks-icon-blue" style="width: 28px; height: 28px; font-size: 13px;">
+                                <i class="bi bi-list-check"></i>
+                            </div>
+                            <h3 class="ks-header-title">Requisition Line Items</h3>
+                            <span class="badge bg-light text-secondary border ms-2 fw-medium" style="font-size: 11px;">
+                                <?= count($pr['items']) ?> items
+                            </span>
+                        </div>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0" style="font-size: 13px;">
-                            <thead style="background: var(--ks-page-bg); border-bottom: 1px solid var(--ks-border);">
+                    <div class="ks-table-responsive">
+                        <table class="table ks-table align-middle mb-0">
+                            <thead>
                                 <tr>
-                                    <th class="py-2 px-3 text-muted fw-semibold">Item Name</th>
-                                    <th class="py-2 px-3 text-muted fw-semibold">Stock Link</th>
-                                    <th class="py-2 px-3 text-muted fw-semibold text-center">Quantity</th>
-                                    <th class="py-2 px-3 text-muted fw-semibold text-end">Est. Unit Cost</th>
-                                    <th class="py-2 px-3 text-muted fw-semibold text-end">Est. Total</th>
+                                    <th style="min-width: 200px;">Item Name</th>
+                                    <th style="min-width: 170px;">Stock Link</th>
+                                    <th style="min-width: 100px; text-align: center;">Quantity</th>
+                                    <th class="ks-col-money" style="min-width: 130px;">Est. Unit Cost</th>
+                                    <th class="ks-col-money" style="min-width: 140px;">Est. Total</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -155,7 +161,7 @@ ob_start();
                                         </td>
                                         <td class="py-3 px-3 text-muted">
                                             <?php if (!empty($item['item_code'])): ?>
-                                                <a href="/inventory/<?= (int)$item['inventory_item_id'] ?>" class="text-decoration-none">
+                                                <a href="/inventory/<?= (int)$item['inventory_item_id'] ?>" class="text-decoration-none fw-medium">
                                                     <?= htmlspecialchars($item['stock_item_name'] ?? $item['item_code'], ENT_QUOTES, 'UTF-8') ?>
                                                     <span class="badge bg-light text-dark border ms-1" style="font-size: 10px;">Stock: <?= (float)($item['in_stock_quantity'] ?? 0) ?></span>
                                                 </a>
@@ -166,10 +172,10 @@ ob_start();
                                         <td class="py-3 px-3 text-center fw-semibold font-monospace">
                                             <?= number_format((float)$item['quantity'], 2) ?>
                                         </td>
-                                        <td class="py-3 px-3 text-end font-monospace text-muted">
+                                        <td class="py-3 px-3 ks-col-money font-monospace text-muted">
                                             ₹<?= number_format((float)$item['estimated_unit_cost'], 2) ?>
                                         </td>
-                                        <td class="py-3 px-3 text-end font-monospace fw-bold text-dark">
+                                        <td class="py-3 px-3 ks-col-money font-monospace fw-bold text-dark">
                                             ₹<?= number_format((float)$item['estimated_total'], 2) ?>
                                         </td>
                                     </tr>
@@ -177,8 +183,8 @@ ob_start();
                             </tbody>
                             <tfoot style="background: #fafafa;">
                                 <tr>
-                                    <th colspan="4" class="text-end">Total Estimated Cost:</th>
-                                    <th class="text-end font-monospace fw-bold text-primary">₹<?= number_format($totalEst, 2) ?></th>
+                                    <th colspan="4" class="text-end text-muted fw-normal">Total Estimated Cost:</th>
+                                    <th class="ks-col-money font-monospace fw-bold text-primary">₹<?= number_format($totalEst, 2) ?></th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -188,10 +194,13 @@ ob_start();
 
             <!-- Sidebar: Overview & Audit -->
             <div class="col-lg-4">
-                <div class="card mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card mb-4 border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-blue" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-info-circle"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-info-circle me-2 text-primary"></i> Request Details
+                            Request Details
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -217,10 +226,13 @@ ob_start();
                 </div>
 
                 <!-- Approval Sign-off Card -->
-                <div class="card" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <div class="card-header bg-white border-bottom p-3">
+                <div class="card border-0 shadow-sm" style="border-radius: var(--ks-radius-card); background: #fff;">
+                    <div class="card-header bg-white border-bottom p-3 d-flex align-items-center gap-2">
+                        <div class="ks-icon-box ks-icon-green" style="width: 28px; height: 28px; font-size: 13px;">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
                         <h6 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 14px;">
-                            <i class="bi bi-shield-check me-2 text-primary"></i> Sign-off Status
+                            Sign-off Status
                         </h6>
                     </div>
                     <div class="card-body p-3" style="font-size: 13px;">
@@ -250,21 +262,23 @@ ob_start();
         <!-- Reject Modal -->
         <div class="modal fade" id="rejectModal" tabindex="-1" aria-hidden="true">
             <div class="modal-dialog">
-                <div class="modal-content" style="border-radius: var(--ks-radius-card);">
+                <div class="modal-content border-0 shadow" style="border-radius: var(--ks-radius-card);">
                     <form method="POST" action="/purchases/requests/<?= (int)$pr['id'] ?>/reject">
-                        <div class="modal-header">
-                            <h5 class="modal-title fw-bold" style="font-size: 16px;">Reject Purchase Request</h5>
+                        <div class="modal-header border-bottom px-4 py-3">
+                            <h5 class="modal-title fw-bold" style="font-size: 16px; color: var(--ks-navy);">Reject Purchase Request</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body">
+                        <div class="modal-body p-4">
                             <div class="mb-3">
                                 <label class="form-label small fw-semibold text-dark">Reason for Rejection <span class="text-danger">*</span></label>
-                                <textarea name="rejection_reason" class="form-control" rows="3" required placeholder="Specify budget limitation, alternate stock availability, or clarification required..." style="font-size: 13px;"></textarea>
+                                <textarea name="rejection_reason" class="form-control ks-form-control" rows="3" required placeholder="Specify budget limitation, alternate stock availability, or clarification required..."></textarea>
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                            <button type="submit" class="btn btn-danger">Reject Request</button>
+                        <div class="modal-footer px-4 py-3 border-top">
+                            <button type="button" class="ks-btn ks-btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="ks-btn ks-btn-danger">
+                                <i class="bi bi-x-circle me-1"></i> Reject Request
+                            </button>
                         </div>
                     </form>
                 </div>

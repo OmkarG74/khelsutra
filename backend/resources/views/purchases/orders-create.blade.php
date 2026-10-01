@@ -27,18 +27,19 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <div class="d-flex align-items-center justify-content-between mb-4">
+    <div class="ks-page-header mb-4">
         <div>
             <div class="d-flex align-items-center gap-2 mb-1">
-                <a href="/purchases?tab=orders" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Procurement</a>
+                <a href="/purchases?tab=orders" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchases & Orders</a>
                 <span class="text-muted small">/</span>
-                <span class="text-dark small fw-semibold">New Purchase Order</span>
+                <span class="text-dark small fw-semibold">Issue Purchase Order</span>
             </div>
-            <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Issue Purchase Order</h1>
+            <h1 class="ks-page-title mb-1">Issue Purchase Order</h1>
+            <p class="ks-page-subtitle">Generate an official procurement order for vendors with itemized pricing, taxes, and delivery schedules</p>
         </div>
-        <div>
-            <a href="/purchases?tab=orders" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                Cancel
+        <div class="ks-header-actions">
+            <a href="/purchases?tab=orders" class="ks-btn ks-btn-secondary">
+                <i class="bi bi-x-lg me-1"></i> Cancel
             </a>
         </div>
     </div>
@@ -52,21 +53,26 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <div class="card p-4 mx-auto" style="max-width: 1000px; border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+    <div class="card p-4 mx-auto border-0 shadow-sm" style="max-width: 1060px; border-radius: var(--ks-radius-card); background: #fff;">
         <form method="POST" action="/purchases/orders/create" id="poForm">
             <?php if ($preloadedPr): ?>
                 <input type="hidden" name="purchase_request_id" value="<?= (int)$preloadedPr['id'] ?>">
             <?php endif; ?>
 
             <!-- PO Details Header -->
-            <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 8px;">
-                <i class="bi bi-cart-check me-1 text-primary"></i> Order & Supplier Information
-            </h5>
+            <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+                <div class="ks-icon-box ks-icon-blue" style="width: 32px; height: 32px; font-size: 14px;">
+                    <i class="bi bi-cart-check"></i>
+                </div>
+                <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">
+                    Order & Supplier Information
+                </h5>
+            </div>
 
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <label class="form-label small fw-semibold text-dark">Supplier / Vendor <span class="text-danger">*</span></label>
-                    <select name="vendor_id" class="form-select" required style="font-size: 13px;">
+                    <select name="vendor_id" class="form-select ks-form-select" required>
                         <option value="">-- Choose Approved Supplier --</option>
                         <?php foreach ($vendors as $v): ?>
                             <option value="<?= (int)$v['id'] ?>">
@@ -78,23 +84,23 @@ ob_start();
 
                 <div class="col-md-3">
                     <label class="form-label small fw-semibold text-dark">Order Date <span class="text-danger">*</span></label>
-                    <input type="date" name="order_date" class="form-control" value="<?= date('Y-m-d') ?>" required style="font-size: 13px;">
+                    <input type="date" name="order_date" class="form-control ks-form-control" value="<?= date('Y-m-d') ?>" required>
                 </div>
 
                 <div class="col-md-3">
                     <label class="form-label small fw-semibold text-dark">Expected Delivery Date</label>
-                    <input type="date" name="expected_delivery_date" class="form-control" value="<?= date('Y-m-d', strtotime('+14 days')) ?>" style="font-size: 13px;">
+                    <input type="date" name="expected_delivery_date" class="form-control ks-form-control" value="<?= date('Y-m-d', strtotime('+14 days')) ?>">
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-dark">Custom PO Number</label>
-                    <input type="text" name="po_number" class="form-control" placeholder="Leave blank to auto-generate" style="font-size: 13px;">
+                    <input type="text" name="po_number" class="form-control ks-form-control" placeholder="Leave blank to auto-generate">
                     <span class="text-muted" style="font-size: 11px;">e.g. PO-20260923-0001</span>
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-dark">Initial Order Status</label>
-                    <select name="status" class="form-select" style="font-size: 13px;">
+                    <select name="status" class="form-select ks-form-select">
                         <option value="draft" selected>Draft (Save internally)</option>
                         <option value="sent">Sent to Supplier</option>
                         <option value="confirmed">Confirmed by Supplier</option>
@@ -103,27 +109,32 @@ ob_start();
 
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-dark">Linked Requisition</label>
-                    <input type="text" class="form-control bg-light" readonly value="<?= $preloadedPr ? htmlspecialchars($preloadedPr['request_reference'], ENT_QUOTES, 'UTF-8') : 'None (Direct Order)' ?>" style="font-size: 13px;">
+                    <input type="text" class="form-control ks-form-control bg-light" readonly value="<?= $preloadedPr ? htmlspecialchars($preloadedPr['request_reference'], ENT_QUOTES, 'UTF-8') : 'None (Direct Order)' ?>">
                 </div>
 
                 <div class="col-12">
                     <label class="form-label small fw-semibold text-dark">Order Notes / Terms</label>
-                    <textarea name="notes" class="form-control" rows="2" placeholder="Delivery instructions, packaging terms, payment conditions..." style="font-size: 13px;"><?= $preloadedPr ? htmlspecialchars($preloadedPr['purpose'] ?? '', ENT_QUOTES, 'UTF-8') : '' ?></textarea>
+                    <textarea name="notes" class="form-control ks-form-control" rows="2" placeholder="Delivery instructions, packaging terms, payment conditions..."><?= $preloadedPr ? htmlspecialchars($preloadedPr['purpose'] ?? '', ENT_QUOTES, 'UTF-8') : '' ?></textarea>
                 </div>
             </div>
 
             <!-- Ordered Line Items -->
-            <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">
-                    <i class="bi bi-box-seam me-1 text-primary"></i> Order Line Items
-                </h5>
-                <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" onclick="addPoRow()">
-                    <i class="bi bi-plus-circle"></i> Add Item
+            <div class="d-flex justify-content-between align-items-center mb-2 pt-3 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="ks-icon-box ks-icon-purple" style="width: 32px; height: 32px; font-size: 14px;">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">Order Line Items</h5>
+                        <p class="text-muted small mb-0" style="font-size: 12px;">Item prices, tax amounts, and discounts for each procurement item.</p>
+                    </div>
+                </div>
+                <button type="button" class="ks-btn ks-btn-secondary" onclick="addPoRow()">
+                    <i class="bi bi-plus-lg me-1"></i> Add Item
                 </button>
             </div>
-            <p class="text-muted small mb-3">Item prices, GST/tax amounts, and discounts for each ordered asset.</p>
 
-            <div class="table-responsive mb-4">
+            <div class="table-responsive mb-4 mt-3">
                 <table class="table table-bordered align-middle mb-0" id="poItemsTable" style="font-size: 13px;">
                     <thead style="background: var(--ks-page-bg);">
                         <tr>
@@ -147,7 +158,7 @@ ob_start();
                         ?>
                             <tr class="po-item-row">
                                 <td>
-                                    <select name="items[<?= $idx ?>][inventory_item_id]" class="form-select mb-1 po-item-select" onchange="onPoItemSelect(this)" style="font-size: 13px;">
+                                    <select name="items[<?= $idx ?>][inventory_item_id]" class="form-select ks-form-select mb-1 po-item-select" onchange="onPoItemSelect(this)" style="font-size: 12.5px;">
                                         <option value="">-- Standalone Item (No Inventory Link) --</option>
                                         <?php foreach ($inventoryItems as $inv): ?>
                                             <option value="<?= (int)$inv['id'] ?>" data-name="<?= htmlspecialchars($inv['item_name'], ENT_QUOTES, 'UTF-8') ?>" data-cost="<?= (float)$inv['unit_cost'] ?>" <?= $pInvId === (int)$inv['id'] ? 'selected' : '' ?>>
@@ -155,22 +166,22 @@ ob_start();
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
-                                    <input type="text" name="items[<?= $idx ?>][item_name]" class="form-control po-item-name" value="<?= htmlspecialchars($pName, ENT_QUOTES, 'UTF-8') ?>" placeholder="Item name..." required style="font-size: 13px;">
+                                    <input type="text" name="items[<?= $idx ?>][item_name]" class="form-control ks-form-control po-item-name" value="<?= htmlspecialchars($pName, ENT_QUOTES, 'UTF-8') ?>" placeholder="Item name..." required style="font-size: 12.5px;">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" min="0.01" name="items[<?= $idx ?>][ordered_quantity]" class="form-control font-monospace po-item-qty" value="<?= $pQty ?>" required oninput="recalcPoRow(this)" style="font-size: 13px;">
+                                    <input type="number" step="0.01" min="0.01" name="items[<?= $idx ?>][ordered_quantity]" class="form-control ks-form-control font-monospace po-item-qty" value="<?= $pQty ?>" required oninput="recalcPoRow(this)">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" min="0" name="items[<?= $idx ?>][unit_cost]" class="form-control font-monospace po-item-cost" value="<?= $pCost ?>" required oninput="recalcPoRow(this)" style="font-size: 13px;">
+                                    <input type="number" step="0.01" min="0" name="items[<?= $idx ?>][unit_cost]" class="form-control ks-form-control font-monospace po-item-cost" value="<?= $pCost ?>" required oninput="recalcPoRow(this)">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" min="0" name="items[<?= $idx ?>][tax_amount]" class="form-control font-monospace po-item-tax" value="0.00" oninput="recalcPoRow(this)" style="font-size: 13px;">
+                                    <input type="number" step="0.01" min="0" name="items[<?= $idx ?>][tax_amount]" class="form-control ks-form-control font-monospace po-item-tax" value="0.00" oninput="recalcPoRow(this)">
                                 </td>
                                 <td>
-                                    <input type="number" step="0.01" min="0" name="items[<?= $idx ?>][discount_amount]" class="form-control font-monospace po-item-disc" value="0.00" oninput="recalcPoRow(this)" style="font-size: 13px;">
+                                    <input type="number" step="0.01" min="0" name="items[<?= $idx ?>][discount_amount]" class="form-control ks-form-control font-monospace po-item-disc" value="0.00" oninput="recalcPoRow(this)">
                                 </td>
                                 <td class="text-end">
-                                    <input type="text" class="form-control bg-light font-monospace text-end po-item-total" readonly value="0.00" style="font-size: 13px;">
+                                    <input type="text" class="form-control ks-form-control bg-light font-monospace text-end po-item-total" readonly value="0.00">
                                 </td>
                                 <td class="text-center">
                                     <button type="button" class="btn btn-sm btn-outline-danger" onclick="removePoRow(this)" <?= count($itemsToRender) <= 1 ? 'disabled' : '' ?>>
@@ -182,21 +193,21 @@ ob_start();
                     </tbody>
                     <tfoot style="background: #fafafa;">
                         <tr>
-                            <th colspan="5" class="text-end">Subtotal:</th>
+                            <th colspan="5" class="text-end text-muted fw-normal">Subtotal:</th>
                             <th class="text-end font-monospace" id="poSubtotalDisplay">₹0.00</th>
                             <th></th>
                         </tr>
                         <tr>
-                            <th colspan="5" class="text-end">Total Tax (+):</th>
+                            <th colspan="5" class="text-end text-muted fw-normal">Total Tax (+):</th>
                             <th class="text-end font-monospace text-muted" id="poTaxDisplay">₹0.00</th>
                             <th></th>
                         </tr>
                         <tr>
-                            <th colspan="5" class="text-end">Total Discount (-):</th>
+                            <th colspan="5" class="text-end text-muted fw-normal">Total Discount (-):</th>
                             <th class="text-end font-monospace text-muted" id="poDiscDisplay">₹0.00</th>
                             <th></th>
                         </tr>
-                        <tr style="background: #f1f5f9;">
+                        <tr style="background: #f8fafc;">
                             <th colspan="5" class="text-end h6 fw-bold mb-0">Grand Order Total:</th>
                             <th class="text-end font-monospace h5 fw-bold text-primary mb-0" id="poGrandTotalDisplay">₹0.00</th>
                             <th></th>
@@ -206,11 +217,11 @@ ob_start();
             </div>
 
             <div class="d-flex justify-content-end gap-2 pt-3 border-top">
-                <a href="/purchases?tab=orders" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+                <a href="/purchases?tab=orders" class="ks-btn ks-btn-secondary">
                     Cancel
                 </a>
-                <button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 24px;">
-                    <i class="bi bi-check2"></i> Issue Purchase Order
+                <button type="submit" class="ks-btn ks-btn-primary">
+                    <i class="bi bi-check2 me-1"></i> Issue Purchase Order
                 </button>
             </div>
         </form>

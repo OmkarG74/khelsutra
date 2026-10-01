@@ -16,18 +16,48 @@ class TournamentService extends BaseService
         $this->auditLog = $auditLog ?? new AuditLogService($this->pdo);
     }
 
-    public function listTournaments(int $organizationId, int $page = 1, int $limit = 15, ?string $search = null, ?string $status = null, ?int $sportId = null): array
-    {
+    public function listTournaments(
+        int $organizationId,
+        int $page = 1,
+        int $limit = 20,
+        ?string $search = null,
+        ?string $status = null,
+        ?int $sportId = null
+    ): array {
         if (!$this->pdo) {
-            return ['data' => [], 'total' => 0, 'page' => 1, 'limit' => $limit, 'total_pages' => 0];
+            return [
+                'data' => [],
+                'total' => 0,
+                'page' => 1,
+                'limit' => $limit,
+                'total_pages' => 0,
+                'from' => 0,
+                'to' => 0,
+            ];
         }
+
+        $page = max(1, $page);
+        $limit = max(1, $limit);
 
         $conditions = ["t.organization_id = :org_id", "t.deleted_at IS NULL"];
         $params = [':org_id' => $organizationId];
 
-        if (!empty($search)) {
-            $conditions[] = "(t.name LIKE :search OR t.tournament_reference LIKE :search OR t.organizer_name LIKE :search)";
-            $params[':search'] = "%{$search}%";
+        if ($search !== null && trim($search) !== '') {
+            $q = '%' . trim($search) . '%';
+            $conditions[] = "(
+                t.name LIKE :search1
+                OR t.tournament_reference LIKE :search2
+                OR t.organizer_name LIKE :search3
+                OR t.location_name LIKE :search4
+                OR t.city LIKE :search5
+                OR s.name LIKE :search6
+            )";
+            $params[':search1'] = $q;
+            $params[':search2'] = $q;
+            $params[':search3'] = $q;
+            $params[':search4'] = $q;
+            $params[':search5'] = $q;
+            $params[':search6'] = $q;
         }
 
         if (!empty($status)) {
@@ -42,29 +72,41 @@ class TournamentService extends BaseService
 
         $whereClause = implode(' AND ', $conditions);
 
-        $countStmt = $this->pdo->prepare("SELECT COUNT(*) FROM tournaments t WHERE {$whereClause}");
+        $countSql = "
+            SELECT COUNT(DISTINCT t.id)
+            FROM tournaments t
+            LEFT JOIN sports s ON t.sport_id = s.id
+            WHERE {$whereClause}
+        ";
+        $countStmt = $this->pdo->prepare($countSql);
         $countStmt->execute($params);
         $total = (int)$countStmt->fetchColumn();
 
+        $totalPages = $total > 0 ? (int)ceil($total / $limit) : 1;
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
         $offset = ($page - 1) * $limit;
 
+        // ONE TOURNAMENT = ONE ROW (strictly grouped by t.id)
         $sql = "
             SELECT 
                 t.*,
                 s.name as sport_name,
                 tl.name as level_name,
                 tf.name as format_name,
-                COUNT(DISTINCT tt.team_id) as enrolled_teams_count,
+                COUNT(DISTINCT tm.id) as enrolled_teams_count,
                 COUNT(DISTINCT f.id) as fixtures_count
             FROM tournaments t
             LEFT JOIN sports s ON t.sport_id = s.id
             LEFT JOIN tournament_levels tl ON t.tournament_level_id = tl.id
             LEFT JOIN tournament_formats tf ON t.tournament_format_id = tf.id
-            LEFT JOIN tournament_teams tt ON t.id = tt.tournament_id
+            LEFT JOIN tournament_teams tt ON t.id = tt.tournament_id AND (tt.status IS NULL OR tt.status != 'withdrawn')
+            LEFT JOIN teams tm ON tt.team_id = tm.id AND tm.deleted_at IS NULL AND tm.organization_id = t.organization_id
             LEFT JOIN fixtures f ON t.id = f.tournament_id AND f.deleted_at IS NULL
             WHERE {$whereClause}
-            GROUP BY t.id, s.name, tl.name, tf.name
-            ORDER BY t.start_date DESC
+            GROUP BY t.id
+            ORDER BY t.start_date DESC, t.id DESC
             LIMIT :limit OFFSET :offset
         ";
 
@@ -77,13 +119,87 @@ class TournamentService extends BaseService
         $stmt->execute();
         $tournaments = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
+        $tournaments = $this->attachTournamentVenues($organizationId, $tournaments);
+
+        $rowCount = count($tournaments);
+        $from = ($total > 0 && $rowCount > 0) ? ($offset + 1) : 0;
+        $to = ($total > 0 && $rowCount > 0) ? min($total, $offset + $rowCount) : 0;
+
         return [
             'data' => $tournaments,
             'total' => $total,
             'page' => $page,
             'limit' => $limit,
-            'total_pages' => ceil($total / max(1, $limit)),
+            'total_pages' => $total > 0 ? (int)ceil($total / $limit) : 0,
+            'from' => $from,
+            'to' => $to,
         ];
+    }
+
+    /**
+     * Attach assigned venues to each tournament row without causing SQL row duplication.
+     */
+    protected function attachTournamentVenues(int $organizationId, array $tournaments): array
+    {
+        if (!$this->pdo || empty($tournaments)) {
+            return $tournaments;
+        }
+
+        $tournIds = [];
+        foreach ($tournaments as $t) {
+            $tid = (int)($t['id'] ?? 0);
+            if ($tid > 0) {
+                $tournIds[] = $tid;
+            }
+        }
+        $tournIds = array_values(array_unique($tournIds));
+        if (empty($tournIds)) {
+            return $tournaments;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($tournIds), '?'));
+        $sql = "
+            SELECT
+                tv.tournament_id,
+                tv.venue_id,
+                tv.is_primary,
+                v.name as venue_name,
+                v.city
+            FROM tournament_venues tv
+            JOIN venues v ON tv.venue_id = v.id AND v.deleted_at IS NULL
+            WHERE v.organization_id = ?
+              AND tv.tournament_id IN ({$placeholders})
+            ORDER BY tv.is_primary DESC, v.name ASC
+        ";
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute(array_merge([$organizationId], $tournIds));
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        $venuesByTourn = [];
+        foreach ($rows as $r) {
+            $tid = (int)$r['tournament_id'];
+            $vid = (int)$r['venue_id'];
+            if (!isset($venuesByTourn[$tid][$vid])) {
+                $venuesByTourn[$tid][$vid] = $r;
+            }
+        }
+
+        foreach ($tournaments as &$tourn) {
+            $tid = (int)($tourn['id'] ?? 0);
+            $venues = isset($venuesByTourn[$tid]) ? array_values($venuesByTourn[$tid]) : [];
+            $primaryVenue = $venues[0] ?? null;
+
+            $tourn['venues'] = $venues;
+            $tourn['primary_venue_name'] = $primaryVenue ? $primaryVenue['venue_name'] : ($tourn['location_name'] ?? null);
+            $tourn['extra_venues_count'] = max(0, count($venues) - 1);
+            $tourn['all_venues_label'] = !empty($venues)
+                ? implode(', ', array_map(fn($v) => $v['venue_name'], $venues))
+                : ($tourn['location_name'] ?? '');
+        }
+        unset($tourn);
+
+        return $tournaments;
     }
 
     public function getTournament(int $organizationId, int $id): ?array
@@ -108,7 +224,7 @@ class TournamentService extends BaseService
 
         if (!$tournament) return null;
 
-        // Participating Teams
+        // Participating Teams (exclude soft-deleted teams)
         $ttStmt = $this->pdo->prepare("
             SELECT 
                 tt.*,
@@ -116,11 +232,11 @@ class TournamentService extends BaseService
                 tm.team_code,
                 tm.age_group
             FROM tournament_teams tt
-            JOIN teams tm ON tt.team_id = tm.id
+            JOIN teams tm ON tt.team_id = tm.id AND tm.deleted_at IS NULL AND tm.organization_id = :org_id
             WHERE tt.tournament_id = :tour_id
             ORDER BY tt.seed_number ASC, tm.name ASC
         ");
-        $ttStmt->execute([':tour_id' => $id]);
+        $ttStmt->execute([':tour_id' => $id, ':org_id' => $organizationId]);
         $tournament['participating_teams'] = $ttStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Tournament Venues
@@ -132,11 +248,11 @@ class TournamentService extends BaseService
                 v.venue_code,
                 v.status as venue_status
             FROM tournament_venues tv
-            JOIN venues v ON tv.venue_id = v.id AND v.deleted_at IS NULL
+            JOIN venues v ON tv.venue_id = v.id AND v.deleted_at IS NULL AND v.organization_id = :org_id
             WHERE tv.tournament_id = :tour_id
             ORDER BY tv.is_primary DESC, v.name ASC
         ");
-        $tvStmt->execute([':tour_id' => $id]);
+        $tvStmt->execute([':tour_id' => $id, ':org_id' => $organizationId]);
         $tournament['venues'] = $tvStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         // Fixtures and Matches
@@ -173,11 +289,11 @@ class TournamentService extends BaseService
                 tm.name as team_name,
                 tm.team_code
             FROM tournament_standings ts
-            JOIN teams tm ON ts.team_id = tm.id
+            JOIN teams tm ON ts.team_id = tm.id AND tm.deleted_at IS NULL AND tm.organization_id = :org_id
             WHERE ts.tournament_id = :tour_id
             ORDER BY ts.points DESC, ts.difference DESC, ts.scored DESC
         ");
-        $stdStmt->execute([':tour_id' => $id]);
+        $stdStmt->execute([':tour_id' => $id, ':org_id' => $organizationId]);
         $tournament['standings'] = $stdStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
         return $tournament;
@@ -190,6 +306,20 @@ class TournamentService extends BaseService
         $this->pdo->beginTransaction();
         try {
             $ref = $data['tournament_reference'] ?? ('TOURN-' . date('Y') . '-' . strtoupper(substr(uniqid(), -4)));
+
+            $validVenueId = null;
+            $venueNameForLoc = null;
+            if (!empty($data['venue_id'])) {
+                $vChk = $this->pdo->prepare("SELECT id, name FROM venues WHERE id = :vid AND organization_id = :org_id AND deleted_at IS NULL LIMIT 1");
+                $vChk->execute([':vid' => (int)$data['venue_id'], ':org_id' => $organizationId]);
+                $vRow = $vChk->fetch(PDO::FETCH_ASSOC);
+                if ($vRow) {
+                    $validVenueId = (int)$vRow['id'];
+                    $venueNameForLoc = $vRow['name'];
+                }
+            }
+
+            $locationName = !empty($data['location_name']) ? trim((string)$data['location_name']) : ($venueNameForLoc ?: 'Main Stadium Complex');
 
             $sql = "
                 INSERT INTO tournaments (
@@ -215,7 +345,7 @@ class TournamentService extends BaseService
                 ':format_id' => !empty($data['tournament_format_id']) ? (int)$data['tournament_format_id'] : 1,
                 ':sdate' => $data['start_date'] ?? date('Y-m-d'),
                 ':edate' => $data['end_date'] ?? date('Y-m-d', strtotime('+3 days')),
-                ':loc' => $data['location_name'] ?? 'Main Stadium Complex',
+                ':loc' => $locationName,
                 ':city' => $data['city'] ?? 'Mumbai',
                 ':state' => $data['state'] ?? 'Maharashtra',
                 ':organizer' => $data['organizer_name'] ?? 'Apex Sports Academy',
@@ -228,10 +358,10 @@ class TournamentService extends BaseService
             $tournamentId = (int)$this->pdo->lastInsertId();
 
             // 1. Assign Primary Venue
-            if (!empty($data['venue_id'])) {
+            if ($validVenueId) {
                 $vSql = "INSERT INTO tournament_venues (tournament_id, venue_id, is_primary, created_at) VALUES (:t_id, :v_id, 1, NOW())";
                 $vStmt = $this->pdo->prepare($vSql);
-                $vStmt->execute([':t_id' => $tournamentId, ':v_id' => (int)$data['venue_id']]);
+                $vStmt->execute([':t_id' => $tournamentId, ':v_id' => $validVenueId]);
             }
 
             // 2. Assign Participating Teams & Initialize Standings

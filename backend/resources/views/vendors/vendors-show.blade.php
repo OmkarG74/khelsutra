@@ -113,13 +113,13 @@ ob_start();
                 </div>
             </div>
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-size: 13px;" data-bs-toggle="modal" data-bs-target="#statusModal">
+                <button type="button" class="ks-btn ks-btn-secondary" data-bs-toggle="modal" data-bs-target="#statusModal">
                     <i class="bi bi-arrow-repeat"></i> Change Status
                 </button>
-                <a href="/vendors/<?= (int)$vendor['id'] ?>/edit" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+                <a href="/vendors/<?= (int)$vendor['id'] ?>/edit" class="ks-btn ks-btn-secondary">
                     <i class="bi bi-pencil-square"></i> Edit Vendor
                 </a>
-                <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px;" data-bs-toggle="modal" data-bs-target="#recordInvoiceModal">
+                <button type="button" class="ks-btn ks-btn-primary" data-bs-toggle="modal" data-bs-target="#recordInvoiceModal">
                     <i class="bi bi-receipt"></i> Record Invoice
                 </button>
             </div>
@@ -128,33 +128,69 @@ ob_start();
         <!-- KPI Metrics Row -->
         <div class="row g-3 mb-4">
             <div class="col-sm-6 col-xl-3">
-                <div class="card p-3 h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <span class="text-muted small fw-medium">Total Invoiced</span>
-                    <h3 class="fw-bold mt-1 mb-0" style="color: var(--ks-navy);">₹<?= number_format($stats['total_invoiced'], 2) ?></h3>
-                    <span class="text-muted" style="font-size: 11px;"><?= $stats['invoice_count'] ?> recorded invoices</span>
+                <div class="ks-kpi-card">
+                    <div class="ks-kpi-top">
+                        <div class="ks-icon-box ks-icon-purple">
+                            <i class="bi bi-receipt fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="ks-kpi-label">TOTAL INVOICED</div>
+                            <div class="ks-kpi-value">₹<?= number_format($stats['total_invoiced'], 2) ?></div>
+                        </div>
+                    </div>
+                    <div class="ks-kpi-bottom">
+                        <span class="ks-trend-text text-muted"><?= $stats['invoice_count'] ?> recorded invoices</span>
+                    </div>
                 </div>
             </div>
             <div class="col-sm-6 col-xl-3">
-                <div class="card p-3 h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <span class="text-muted small fw-medium">Total Paid</span>
-                    <h3 class="fw-bold mt-1 mb-0 text-success">₹<?= number_format($stats['total_paid'], 2) ?></h3>
-                    <span class="text-muted" style="font-size: 11px;">Cleared supplier disbursements</span>
+                <div class="ks-kpi-card">
+                    <div class="ks-kpi-top">
+                        <div class="ks-icon-box ks-icon-green">
+                            <i class="bi bi-check2-circle fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="ks-kpi-label">TOTAL PAID</div>
+                            <div class="ks-kpi-value text-success">₹<?= number_format($stats['total_paid'], 2) ?></div>
+                        </div>
+                    </div>
+                    <div class="ks-kpi-bottom">
+                        <span class="ks-trend-text ks-trend-positive">Cleared supplier disbursements</span>
+                    </div>
                 </div>
             </div>
             <div class="col-sm-6 col-xl-3">
-                <div class="card p-3 h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <span class="text-muted small fw-medium">Outstanding Balance</span>
-                    <h3 class="fw-bold mt-1 mb-0 <?= $stats['outstanding_balance'] > 0 ? 'text-danger' : 'text-muted' ?>">
-                        ₹<?= number_format($stats['outstanding_balance'], 2) ?>
-                    </h3>
-                    <span class="text-muted" style="font-size: 11px;"><?= $stats['unpaid_count'] ?> pending or partial bills</span>
+                <div class="ks-kpi-card">
+                    <div class="ks-kpi-top">
+                        <div class="ks-icon-box <?= $stats['outstanding_balance'] > 0 ? 'ks-icon-red' : 'ks-icon-blue' ?>">
+                            <i class="bi bi-clock-history fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="ks-kpi-label">OUTSTANDING BALANCE</div>
+                            <div class="ks-kpi-value <?= $stats['outstanding_balance'] > 0 ? 'text-danger' : 'text-muted' ?>">
+                                ₹<?= number_format($stats['outstanding_balance'], 2) ?>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ks-kpi-bottom">
+                        <span class="ks-trend-text <?= $stats['outstanding_balance'] > 0 ? 'ks-trend-negative' : 'text-muted' ?>"><?= $stats['unpaid_count'] ?> pending or partial bills</span>
+                    </div>
                 </div>
             </div>
             <div class="col-sm-6 col-xl-3">
-                <div class="card p-3 h-100" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                    <span class="text-muted small fw-medium">Purchase Orders</span>
-                    <h3 class="fw-bold mt-1 mb-0" style="color: var(--ks-navy);"><?= count($purchaseOrders) ?></h3>
-                    <span class="text-muted" style="font-size: 11px;">Associated purchase orders</span>
+                <div class="ks-kpi-card">
+                    <div class="ks-kpi-top">
+                        <div class="ks-icon-box ks-icon-blue">
+                            <i class="bi bi-cart-check fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="ks-kpi-label">PURCHASE ORDERS</div>
+                            <div class="ks-kpi-value"><?= count($purchaseOrders) ?></div>
+                        </div>
+                    </div>
+                    <div class="ks-kpi-bottom">
+                        <span class="ks-trend-text text-muted">Associated purchase orders</span>
+                    </div>
                 </div>
             </div>
         </div>

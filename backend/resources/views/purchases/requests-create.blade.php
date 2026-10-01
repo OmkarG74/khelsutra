@@ -24,43 +24,49 @@ ob_start();
         </div>
     <?php endif; ?>
 
-    <div class="d-flex align-items-center justify-content-between mb-4">
+    <div class="ks-page-header mb-4">
         <div>
             <div class="d-flex align-items-center gap-2 mb-1">
-                <a href="/purchases?tab=requests" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Procurement</a>
+                <a href="/purchases?tab=requests" class="text-muted text-decoration-none small"><i class="bi bi-arrow-left"></i> Purchases & Orders</a>
                 <span class="text-muted small">/</span>
                 <span class="text-dark small fw-semibold">New Purchase Request</span>
             </div>
-            <h1 class="h3 fw-bold mb-0" style="color: var(--ks-navy); letter-spacing: -0.02em;">Requisition Request</h1>
+            <h1 class="ks-page-title mb-1">Requisition Request</h1>
+            <p class="ks-page-subtitle">Initiate an internal request for items, equipment replenishment, or departmental purchases</p>
         </div>
-        <div>
-            <a href="/purchases?tab=requests" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;">
-                Cancel
+        <div class="ks-header-actions">
+            <a href="/purchases?tab=requests" class="ks-btn ks-btn-secondary">
+                <i class="bi bi-x-lg me-1"></i> Cancel
             </a>
         </div>
     </div>
 
-    <div class="card p-4 mx-auto" style="max-width: 960px; border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
+    <div class="card p-4 mx-auto border-0 shadow-sm" style="max-width: 980px; border-radius: var(--ks-radius-card); background: #fff;">
         <form method="POST" action="/purchases/requests/create" id="prForm">
             <!-- Header Information -->
-            <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 8px;">
-                <i class="bi bi-file-earmark-text me-1 text-primary"></i> Requisition Overview
-            </h5>
+            <div class="d-flex align-items-center gap-2 mb-3 pb-2 border-bottom">
+                <div class="ks-icon-box ks-icon-blue" style="width: 32px; height: 32px; font-size: 14px;">
+                    <i class="bi bi-file-earmark-text"></i>
+                </div>
+                <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">
+                    Requisition Overview
+                </h5>
+            </div>
 
             <div class="row g-3 mb-4">
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-dark">Request Date <span class="text-danger">*</span></label>
-                    <input type="date" name="request_date" class="form-control" value="<?= date('Y-m-d') ?>" required style="font-size: 13px;">
+                    <input type="date" name="request_date" class="form-control ks-form-control" value="<?= date('Y-m-d') ?>" required>
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-dark">Required By Date</label>
-                    <input type="date" name="required_date" class="form-control" value="<?= date('Y-m-d', strtotime('+14 days')) ?>" style="font-size: 13px;">
+                    <input type="date" name="required_date" class="form-control ks-form-control" value="<?= date('Y-m-d', strtotime('+14 days')) ?>">
                 </div>
 
                 <div class="col-md-4">
                     <label class="form-label small fw-semibold text-dark">Department</label>
-                    <select name="department_id" class="form-select" style="font-size: 13px;">
+                    <select name="department_id" class="form-select ks-form-select">
                         <option value="">-- General / Sports Academy --</option>
                         <?php foreach ($departments as $d): ?>
                             <option value="<?= (int)$d['id'] ?>"><?= htmlspecialchars($d['name'], ENT_QUOTES, 'UTF-8') ?></option>
@@ -70,22 +76,27 @@ ob_start();
 
                 <div class="col-12">
                     <label class="form-label small fw-semibold text-dark">Purpose / Justification</label>
-                    <textarea name="purpose" class="form-control" rows="2" placeholder="e.g. Replenishment of footballs and cones for upcoming state championship camp" style="font-size: 13px;"></textarea>
+                    <textarea name="purpose" class="form-control ks-form-control" rows="2" placeholder="e.g. Replenishment of footballs and cones for upcoming state championship camp"></textarea>
                 </div>
             </div>
 
             <!-- Requested Line Items -->
-            <div class="d-flex justify-content-between align-items-center mb-2 pt-2 border-top">
-                <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">
-                    <i class="bi bi-list-check me-1 text-primary"></i> Requested Line Items
-                </h5>
-                <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" onclick="addRow()">
-                    <i class="bi bi-plus-circle"></i> Add Item
+            <div class="d-flex justify-content-between align-items-center mb-2 pt-3 border-top">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="ks-icon-box ks-icon-purple" style="width: 32px; height: 32px; font-size: 14px;">
+                        <i class="bi bi-list-check"></i>
+                    </div>
+                    <div>
+                        <h5 class="fw-bold mb-0" style="color: var(--ks-navy); font-size: 15px;">Requested Line Items</h5>
+                        <p class="text-muted small mb-0" style="font-size: 12px;">Select an existing inventory catalog item or type a custom item description.</p>
+                    </div>
+                </div>
+                <button type="button" class="ks-btn ks-btn-secondary" onclick="addRow()">
+                    <i class="bi bi-plus-lg me-1"></i> Add Item
                 </button>
             </div>
-            <p class="text-muted small mb-3">Select an existing inventory catalog item or type a custom item description.</p>
 
-            <div class="table-responsive mb-4">
+            <div class="table-responsive mb-4 mt-3">
                 <table class="table table-bordered align-middle mb-0" id="itemsTable" style="font-size: 13px;">
                     <thead style="background: var(--ks-page-bg);">
                         <tr>
@@ -99,7 +110,7 @@ ob_start();
                     <tbody id="itemsBody">
                         <tr class="item-row">
                             <td>
-                                <select name="items[0][inventory_item_id]" class="form-select mb-1 item-select" onchange="onItemSelect(this, 0)" style="font-size: 13px;">
+                                <select name="items[0][inventory_item_id]" class="form-select ks-form-select mb-1 item-select" onchange="onItemSelect(this, 0)" style="font-size: 12.5px;">
                                     <option value="">-- Custom Item (Enter Name Below) --</option>
                                     <?php foreach ($items as $item): ?>
                                         <option value="<?= (int)$item['id'] ?>" data-name="<?= htmlspecialchars($item['item_name'], ENT_QUOTES, 'UTF-8') ?>" data-cost="<?= (float)$item['unit_cost'] ?>">
@@ -107,16 +118,16 @@ ob_start();
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <input type="text" name="items[0][item_name]" class="form-control item-name" placeholder="Item name..." required style="font-size: 13px;">
+                                <input type="text" name="items[0][item_name]" class="form-control ks-form-control item-name" placeholder="Item name..." required style="font-size: 12.5px;">
                             </td>
                             <td>
-                                <input type="number" step="0.01" min="0.01" name="items[0][quantity]" class="form-control font-monospace item-qty" value="1.00" required oninput="recalcRow(this)" style="font-size: 13px;">
+                                <input type="number" step="0.01" min="0.01" name="items[0][quantity]" class="form-control ks-form-control font-monospace item-qty" value="1.00" required oninput="recalcRow(this)">
                             </td>
                             <td>
-                                <input type="number" step="0.01" min="0" name="items[0][estimated_unit_cost]" class="form-control font-monospace item-cost" value="0.00" oninput="recalcRow(this)" style="font-size: 13px;">
+                                <input type="number" step="0.01" min="0" name="items[0][estimated_unit_cost]" class="form-control ks-form-control font-monospace item-cost" value="0.00" oninput="recalcRow(this)">
                             </td>
                             <td>
-                                <input type="text" class="form-control bg-light font-monospace item-total" readonly value="0.00" style="font-size: 13px;">
+                                <input type="text" class="form-control ks-form-control bg-light font-monospace item-total" readonly value="0.00">
                             </td>
                             <td class="text-center">
                                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeRow(this)" disabled title="Cannot remove the only item">
@@ -127,7 +138,7 @@ ob_start();
                     </tbody>
                     <tfoot style="background: #fafafa;">
                         <tr>
-                            <th colspan="3" class="text-end">Total Estimated Expenditure:</th>
+                            <th colspan="3" class="text-end text-muted fw-normal">Total Estimated Expenditure:</th>
                             <th class="font-monospace fw-bold text-primary" id="grandTotalDisplay">₹0.00</th>
                             <th></th>
                         </tr>
@@ -136,11 +147,11 @@ ob_start();
             </div>
 
             <div class="d-flex justify-content-end gap-2 pt-3 border-top">
-                <a href="/purchases?tab=requests" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-size: 13px;">
+                <a href="/purchases?tab=requests" class="ks-btn ks-btn-secondary">
                     Cancel
                 </a>
-                <button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 9px 24px;">
-                    <i class="bi bi-check2"></i> Save Purchase Request
+                <button type="submit" class="ks-btn ks-btn-primary">
+                    <i class="bi bi-check2 me-1"></i> Save Purchase Request
                 </button>
             </div>
         </form>

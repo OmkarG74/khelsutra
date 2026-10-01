@@ -1,6 +1,44 @@
 <?php
 $tournId = (int)($id ?? ($_GET['id'] ?? 0));
 $orgId = current_organization_id();
+
+$currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
+$currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? 2);
+$currentUser = $_SESSION['auth']['user'] ?? [
+    'id' => 102,
+    'email' => 'sportsadmin@khelsutra.local',
+    'role_id' => 2,
+];
+$userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+
+$isAthlete = ($currentRoleSlug === 'athlete') || ($currentRoleId === 5) || !empty($currentUser['athlete_id']);
+$isCoach = ($currentRoleSlug === 'coach') || ($currentRoleId === 4) || !empty($currentUser['coach_id']);
+
+$permissionService = new \App\Services\Rbac\PermissionService();
+$userPayload = array_merge(
+    $_SESSION['auth'] ?? [],
+    $currentUser,
+    [
+        'id' => $userId,
+        'role_id' => $currentRoleId,
+        'role' => $_SESSION['auth']['role'] ?? ['id' => $currentRoleId, 'slug' => $currentRoleSlug],
+        'permissions' => $_SESSION['auth']['permissions'] ?? ($currentUser['permissions'] ?? []),
+    ]
+);
+
+$canEditTournament = !$isCoach && !$isAthlete && (
+    $permissionService->hasPermission($userPayload, 'tournament.update', $orgId) ||
+    $permissionService->hasPermission($userPayload, 'tournament.manage', $orgId)
+);
+
+if (!$canEditTournament) {
+    if (!headers_sent()) {
+        http_response_code(403);
+    }
+    echo '<div class="p-5 text-center text-danger fw-bold">403 Forbidden: You do not have permission to edit tournaments.</div>';
+    return;
+}
+
 $tournService = new \App\Services\Tournament\TournamentService();
 $tournament = $tournService->getTournament($orgId, $tournId);
 
@@ -11,214 +49,196 @@ foreach (config('sports.catalog') ?? [] as $key => $name) {
     $dbId = $sportService->resolveSportId($key);
     $sports[] = ['id' => $dbId, 'name' => $name];
 }
-usort($sports, function($a, $b) {
-    return strcmp($a['name'], $b['name']);
-});
+usort($sports, fn($a, $b) => strcmp($a['name'], $b['name']));
 
-$lvlStmt = $db->query("SELECT id, name FROM tournament_levels ORDER BY id ASC");
-$levels = $lvlStmt ? $lvlStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+$levels = [];
+$formats = [];
+if ($db) {
+    $lvlStmt = $db->query("SELECT id, name FROM tournament_levels ORDER BY id ASC");
+    $levels = $lvlStmt ? $lvlStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
-$fmtStmt = $db->query("SELECT id, name FROM tournament_formats ORDER BY id ASC");
-$formats = $fmtStmt ? $fmtStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+    $fmtStmt = $db->query("SELECT id, name FROM tournament_formats ORDER BY id ASC");
+    $formats = $fmtStmt ? $fmtStmt->fetchAll(PDO::FETCH_ASSOC) : [];
+}
 
-$pageTitle = $tournament ? 'Edit Tournament — ' . htmlspecialchars($tournament['name']) : 'Edit Tournament';
+$title = $tournament ? 'Edit Tournament — ' . htmlspecialchars($tournament['name']) : 'Edit Tournament';
+$pageTitle = $title;
 $activePage = 'tournaments';
 
 ob_start();
 ?>
 
-<div class="ks-content">
+<div class="ks-page">
     <?php if (!$tournament): ?>
-        <div class="card p-5 text-center" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-            <div class="mb-3"><i class="bi bi-trophy-fill fs-1 text-muted"></i></div>
-            <h4 class="fw-bold" style="color: var(--ks-navy);">Tournament Not Found</h4>
-            <p class="text-muted small">The requested tournament championship does not exist or does not belong to your organisation.</p>
+        <div class="ks-content-card p-5 text-center my-4">
+            <div class="mb-3"><i class="bi bi-trophy fs-1 text-muted"></i></div>
+            <h4 class="fw-bold text-dark">Tournament Not Found</h4>
+            <p class="text-muted small">The requested tournament championship does not exist, has been archived, or does not belong to your organisation.</p>
             <div class="mt-3">
-                <a href="/tournaments" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-weight: 500;">
+                <a href="/tournaments" class="btn btn-outline-secondary" style="border-radius: 8px; font-weight: 500;">
                     <i class="bi bi-arrow-left me-1"></i> Back to Tournaments
                 </a>
             </div>
         </div>
     <?php else: ?>
-        <!-- Back Navigation -->
+        <!-- Page Header -->
         <div class="mb-3">
-            <a href="/tournaments/<?= (int)$tournament['id'] ?>" class="text-decoration-none text-muted small fw-medium">
-                <i class="bi bi-arrow-left me-1"></i> Back to Tournament Details
+            <a href="/tournaments/<?= (int)$tournament['id'] ?>" class="text-decoration-none text-muted small fw-medium d-inline-flex align-items-center gap-1 mb-2" style="font-size: 12.5px;">
+                <i class="bi bi-arrow-left"></i> Back to Tournament Details
             </a>
-        </div>
-
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <div>
-                <h1 class="h4 fw-bold mb-0" style="color: var(--ks-navy);">Edit Tournament: <?= htmlspecialchars($tournament['name'] ?? '', ENT_QUOTES, 'UTF-8') ?></h1>
-                <div class="text-muted small mt-1">Ref: <strong><?= htmlspecialchars($tournament['tournament_reference'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div class="ks-page-header mb-0">
+                <div>
+                    <h1 class="ks-page-title mb-1">Edit Tournament</h1>
+                    <p class="text-muted small mb-0">
+                        Updating tournament settings for <strong><?= htmlspecialchars($tournament['name'] ?? '', ENT_QUOTES, 'UTF-8') ?></strong>
+                        (<?= htmlspecialchars($tournament['tournament_reference'] ?? '', ENT_QUOTES, 'UTF-8') ?>)
+                    </p>
+                </div>
+                <div class="ks-header-actions">
+                    <a href="/tournaments/<?= (int)$tournament['id'] ?>" class="btn btn-outline-secondary px-3 py-2" style="border-radius: 8px; font-size: 13px; font-weight: 500;">Cancel</a>
+                    <button type="submit" form="editTournamentForm" class="ks-btn ks-btn-primary px-4 py-2">
+                        <i class="bi bi-check-lg"></i>
+                        <span>Save Tournament</span>
+                    </button>
+                </div>
             </div>
         </div>
 
         <form action="/tournaments/<?= (int)$tournament['id'] ?>/edit" method="POST" id="editTournamentForm">
             <!-- Section 1: Tournament Profile -->
-            <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                    1. Tournament Information
-                </h5>
+            <div class="ks-content-card mb-3">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-trophy-fill text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">1. Tournament Information</h3>
+                    </div>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Tournament Name <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="ks-form-control" value="<?= htmlspecialchars($tournament['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Sport <span class="text-danger">*</span></label>
+                            <select name="sport_id" id="sportSelect" class="ks-form-select" required>
+                                <?php foreach ($sports as $s): ?>
+                                    <option value="<?= (int)$s['id'] ?>" <?= $tournament['sport_id'] == $s['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($s['name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
 
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Tournament Name <span class="text-danger">*</span></label>
-                        <input type="text" name="name" class="form-control" value="<?= htmlspecialchars($tournament['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Sport <span class="text-danger">*</span></label>
-                        <select name="sport_id" id="sportSelect" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <?php foreach ($sports as $s): ?>
-                                <option value="<?= (int)$s['id'] ?>" <?= $tournament['sport_id'] == $s['id'] ? 'selected' : '' ?>><?= htmlspecialchars($s['name'], ENT_QUOTES, 'UTF-8') ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Competition Level <span class="text-danger">*</span></label>
-                        <select name="tournament_level_id" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <?php foreach ($levels as $lvl): ?>
-                                <option value="<?= (int)$lvl['id'] ?>" <?= $tournament['tournament_level_id'] == $lvl['id'] ? 'selected' : '' ?>><?= htmlspecialchars($lvl['name'], ENT_QUOTES, 'UTF-8') ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Tournament Format <span class="text-danger">*</span></label>
-                        <select name="tournament_format_id" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <?php foreach ($formats as $fmt): ?>
-                                <option value="<?= (int)$fmt['id'] ?>" <?= $tournament['tournament_format_id'] == $fmt['id'] ? 'selected' : '' ?>><?= htmlspecialchars($fmt['name'], ENT_QUOTES, 'UTF-8') ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label small fw-semibold text-dark">Status <span class="text-danger">*</span></label>
-                        <select name="status" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                            <option value="draft" <?= ($tournament['status'] ?? '') === 'draft' ? 'selected' : '' ?>>Draft</option>
-                            <option value="registration_open" <?= ($tournament['status'] ?? '') === 'registration_open' ? 'selected' : '' ?>>Registration Open</option>
-                            <option value="registration_closed" <?= ($tournament['status'] ?? '') === 'registration_closed' ? 'selected' : '' ?>>Registration Closed</option>
-                            <option value="ongoing" <?= ($tournament['status'] ?? '') === 'ongoing' ? 'selected' : '' ?>>Ongoing</option>
-                            <option value="completed" <?= ($tournament['status'] ?? '') === 'completed' ? 'selected' : '' ?>>Completed</option>
-                            <option value="cancelled" <?= ($tournament['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
-                        </select>
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold text-dark">Organizer Name</label>
-                        <input type="text" name="organizer_name" class="form-control" value="<?= htmlspecialchars($tournament['organizer_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Competition Level <span class="text-danger">*</span></label>
+                            <select name="tournament_level_id" class="ks-form-select" required>
+                                <?php foreach ($levels as $lvl): ?>
+                                    <option value="<?= (int)$lvl['id'] ?>" <?= $tournament['tournament_level_id'] == $lvl['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($lvl['name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Tournament Format <span class="text-danger">*</span></label>
+                            <select name="tournament_format_id" class="ks-form-select" required>
+                                <?php foreach ($formats as $fmt): ?>
+                                    <option value="<?= (int)$fmt['id'] ?>" <?= $tournament['tournament_format_id'] == $fmt['id'] ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($fmt['name'], ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="ks-form-label">Status <span class="text-danger">*</span></label>
+                            <select name="status" class="ks-form-select" required>
+                                <option value="draft" <?= ($tournament['status'] ?? '') === 'draft' ? 'selected' : '' ?>>Draft</option>
+                                <option value="registration_open" <?= ($tournament['status'] ?? '') === 'registration_open' ? 'selected' : '' ?>>Registration Open</option>
+                                <option value="registration_closed" <?= ($tournament['status'] ?? '') === 'registration_closed' ? 'selected' : '' ?>>Registration Closed</option>
+                                <option value="ongoing" <?= ($tournament['status'] ?? '') === 'ongoing' ? 'selected' : '' ?>>Ongoing</option>
+                                <option value="completed" <?= ($tournament['status'] ?? '') === 'completed' ? 'selected' : '' ?>>Completed</option>
+                                <option value="cancelled" <?= ($tournament['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="ks-form-label">Organizer Name</label>
+                            <input type="text" name="organizer_name" class="ks-form-control" value="<?= htmlspecialchars($tournament['organizer_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Section 2: Dates & Location -->
-            <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                    2. Dates & Location
-                </h5>
+            <div class="ks-content-card mb-3">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-geo-alt-fill text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">2. Dates &amp; Location</h3>
+                    </div>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Start Date <span class="text-danger">*</span></label>
+                            <input type="date" name="start_date" class="ks-form-control" value="<?= htmlspecialchars($tournament['start_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="ks-form-label">End Date <span class="text-danger">*</span></label>
+                            <input type="date" name="end_date" class="ks-form-control" value="<?= htmlspecialchars($tournament['end_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required>
+                        </div>
 
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Start Date <span class="text-danger">*</span></label>
-                        <input type="date" name="start_date" class="form-control" value="<?= htmlspecialchars($tournament['start_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">End Date <span class="text-danger">*</span></label>
-                        <input type="date" name="end_date" class="form-control" value="<?= htmlspecialchars($tournament['end_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label small fw-semibold text-dark">Location Name</label>
-                        <input type="text" name="location_name" class="form-control" value="<?= htmlspecialchars($tournament['location_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold text-dark">City</label>
-                        <input type="text" name="city" class="form-control" value="<?= htmlspecialchars($tournament['city'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small fw-semibold text-dark">State</label>
-                        <input type="text" name="state" class="form-control" value="<?= htmlspecialchars($tournament['state'] ?? '', ENT_QUOTES, 'UTF-8') ?>" style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <div class="col-md-6">
+                            <label class="ks-form-label">Location Name</label>
+                            <input type="text" name="location_name" class="ks-form-control" value="<?= htmlspecialchars($tournament['location_name'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="ks-form-label">City</label>
+                            <input type="text" name="city" class="ks-form-control" value="<?= htmlspecialchars($tournament['city'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="ks-form-label">State</label>
+                            <input type="text" name="state" class="ks-form-control" value="<?= htmlspecialchars($tournament['state'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Section 3: Rules & Guidelines -->
-            <div class="card p-4 mb-4" style="border: 1px solid var(--ks-border); border-radius: var(--ks-radius-card); background: #fff;">
-                <h5 class="fw-bold mb-3" style="color: var(--ks-navy); font-size: 15px; border-bottom: 1px solid var(--ks-border-light); padding-bottom: 10px;">
-                    3. Description & Competition Rules
-                </h5>
-
-                <div class="row g-3">
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold text-dark">Tournament Description</label>
-                        <textarea name="description" class="form-control" rows="2" style="font-size: 13px; border-radius: var(--ks-radius-button);"><?= htmlspecialchars($tournament['description'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+            <div class="ks-content-card mb-4">
+                <div class="ks-card-header py-2 px-3">
+                    <div class="ks-header-left">
+                        <i class="bi bi-card-text text-primary fs-6"></i>
+                        <h3 class="ks-header-title mb-0" style="font-size: 14.5px;">3. Description &amp; Competition Rules</h3>
                     </div>
-                    <div class="col-12">
-                        <label class="form-label small fw-semibold text-dark">Rules & Regulations</label>
-                        <textarea name="rules" class="form-control" rows="2" style="font-size: 13px; border-radius: var(--ks-radius-button);"><?= htmlspecialchars($tournament['rules'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                </div>
+                <div class="p-3 px-4">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="ks-form-label">Tournament Description</label>
+                            <textarea name="description" class="ks-form-control" rows="2" style="height: auto;"><?= htmlspecialchars($tournament['description'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="ks-form-label">Rules &amp; Regulations</label>
+                            <textarea name="rules" class="ks-form-control" rows="2" style="height: auto;"><?= htmlspecialchars($tournament['rules'] ?? '', ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Form Actions -->
-            <div class="d-flex align-items-center justify-content-end gap-3 mb-5">
-                <a href="/tournaments/<?= (int)$tournament['id'] ?>" class="btn btn-outline-secondary" style="border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 10px 24px;">
+            <div class="d-flex align-items-center justify-content-end gap-2 mb-4">
+                <a href="/tournaments/<?= (int)$tournament['id'] ?>" class="btn btn-outline-secondary px-4 py-2" style="border-radius: 8px; font-size: 13px; font-weight: 500;">
                     Cancel
                 </a>
-                <button type="submit" class="btn btn-primary" style="background: var(--ks-blue); border-color: var(--ks-blue); border-radius: var(--ks-radius-button); font-weight: 600; font-size: 13px; padding: 10px 24px;">
-                    <i class="bi bi-check2 me-1"></i> Save Changes
+                <button type="submit" class="ks-btn ks-btn-primary px-4 py-2">
+                    <i class="bi bi-check-lg"></i>
+                    <span>Save Tournament</span>
                 </button>
             </div>
         </form>
     <?php endif; ?>
 </div>
-
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const sportSelect = document.getElementById('sportSelect');
-    const venueSelect = document.getElementById('venueSelect');
-    
-    if (sportSelect && venueSelect) {
-        // Clone all original options
-        const allOptions = Array.from(venueSelect.options).map(opt => opt.cloneNode(true));
-        
-        sportSelect.addEventListener('change', function() {
-            const selectedSport = this.value;
-            const currentSelectedVenue = venueSelect.value;
-            
-            // Clear current options
-            venueSelect.innerHTML = '';
-            
-            // Filter options
-            allOptions.forEach(opt => {
-                if (opt.value === '') {
-                    venueSelect.appendChild(opt.cloneNode(true)); // Add placeholder
-                } else {
-                    const sportsStr = opt.getAttribute('data-sports') || '';
-                    const sportsArr = sportsStr.split(',');
-                    
-                    // If no sport selected, or venue has no sports (assume general purpose), or venue has the sport
-                    if (!selectedSport || sportsStr === '' || sportsArr.includes(selectedSport)) {
-                        venueSelect.appendChild(opt.cloneNode(true));
-                    }
-                }
-            });
-            
-            // Try to restore previous selection if it's still available
-            let match = Array.from(venueSelect.options).find(opt => opt.value === currentSelectedVenue);
-            if (match) {
-                venueSelect.value = currentSelectedVenue;
-            } else {
-                venueSelect.value = '';
-            }
-        });
-        
-        // Trigger initial filter
-        const initialVenue = venueSelect.value;
-        sportSelect.dispatchEvent(new Event('change'));
-        if(initialVenue) venueSelect.value = initialVenue;
-    }
-});
-</script>
 
 <?php
 $slot = ob_get_clean();

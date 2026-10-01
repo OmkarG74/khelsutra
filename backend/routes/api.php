@@ -50,7 +50,16 @@ return function ($uri, $method, $requestData = []) {
     }
 
     // 3. Resolve Current User Context & Tenant Isolation
-    $currentUser = $tokenUser ?? ($requestData['user'] ?? [
+    $sessionUser = null;
+    if (session_status() === PHP_SESSION_ACTIVE && isset($_SESSION['auth']['user'])) {
+        $sessionUser = $_SESSION['auth']['user'];
+        $sessionUser['role'] = $_SESSION['auth']['role'] ?? ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'];
+        $sessionUser['role_id'] = (int)($sessionUser['role']['id'] ?? 2);
+        $sessionUser['organization'] = $_SESSION['auth']['organization'] ?? ['id' => 1, 'name' => 'Apex Sports Academy'];
+        $sessionUser['permissions'] = $_SESSION['auth']['permissions'] ?? [];
+    }
+
+    $currentUser = $tokenUser ?? ($requestData['user'] ?? ($sessionUser ?? [
         'id' => 5,
         'first_name' => 'Demo',
         'last_name' => 'Admin',
@@ -59,23 +68,23 @@ return function ($uri, $method, $requestData = []) {
         'role' => ['id' => 2, 'name' => 'Sports Administrator', 'slug' => 'sports_admin'],
         'role_id' => 2,
         'organization' => ['id' => 1, 'name' => 'Apex Sports Academy', 'organization_code' => 'ORG-DEMO']
-    ]);
+    ]));
 
     $currentRoleId = (int)($currentUser['role']['id'] ?? ($currentUser['role_id'] ?? 2));
-    $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin');
+    $isSuperAdmin = ($currentRoleId === 1) || (($currentUser['role']['name'] ?? '') === 'Super Admin') || (($currentUser['role']['slug'] ?? '') === 'super_admin');
 
     // Tenant Resolution & Cross-Tenant Rejection
     $requestedOrgId = isset($requestData['headers']['x-organization-id'])
         ? (int)$requestData['headers']['x-organization-id']
         : (isset($requestData['organization_id']) ? (int)$requestData['organization_id'] : null);
 
-    $userOrgId = isset($currentUser['organization']['id']) ? (int)$currentUser['organization']['id'] : 1;
+    $userOrgId = isset($currentUser['organization']['id']) ? (int)$currentUser['organization']['id'] : (\App\Helpers\AuthContext::getOrganizationId() ?: 1);
 
     if (!$isSuperAdmin && $requestedOrgId !== null && $requestedOrgId !== $userOrgId) {
         return ApiResponse::error('Access denied: Unauthorized cross-tenant access.', null, 403);
     }
 
-    $orgId = $isSuperAdmin ? ($requestedOrgId ?: 1) : $userOrgId;
+    $orgId = $isSuperAdmin ? ($requestedOrgId ?: $userOrgId) : $userOrgId;
     $performedBy = (int)($currentUser['id'] ?? 1);
     $userId = $performedBy;
 
@@ -136,6 +145,27 @@ return function ($uri, $method, $requestData = []) {
         return false;
     };
 
+    // 3.5 Global Platform Search Endpoint
+    if ($uri === '/api/v1/search/global' && $method === 'GET') {
+        $controller = new \App\Http\Controllers\Api\V1\Search\GlobalSearchController();
+        return $controller->search($requestData, $currentUser, $isSuperAdmin);
+    }
+
+    // 3.6 Organisation Profile & Settings Endpoint (Member 1 Settings)
+    if ($uri === '/api/v1/settings/organization' || $uri === '/api/v1/settings/profile') {
+        $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+        if ($method === 'GET') {
+            return $controller->getProfileSettings($orgId);
+        }
+        if ($method === 'POST' || $method === 'PUT' || $method === 'PATCH') {
+            if (!$isSuperAdmin && !$checkPermission(['organization.manage', 'settings.manage'])) {
+                // If Sports Administrator (role_id 2), $checkPermission returns true automatically
+                return ApiResponse::error('Forbidden: Insufficient privileges to update organisation settings.', null, 403);
+            }
+            return $controller->updateProfileSettings($orgId, $requestData, $performedBy);
+        }
+    }
+
     // 4. Multi-Tenant Organizations Management (Super Admin Platform Level Only)
     if (str_starts_with($uri, '/api/v1/organizations')) {
         if (!$isSuperAdmin) {
@@ -165,6 +195,93 @@ return function ($uri, $method, $requestData = []) {
             $targetId = (int)$m[1];
             if ($method === 'GET') return $controller->getSettings($targetId);
             if ($method === 'POST' || $method === 'PUT') return $controller->updateSettings($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/profile-settings$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->getProfileSettings($targetId);
+            if ($method === 'POST' || $method === 'PUT') return $controller->updateProfileSettings($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/admins$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            if ($method === 'GET') return $controller->getAdmins($targetId);
+            if ($method === 'POST') return $controller->storeAdmin($targetId, $requestData, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/admins/(\d+)$#', $uri, $m)) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            $targetId = (int)$m[1];
+            $adminId = (int)$m[2];
+            if ($method === 'GET') return $controller->showAdmin($targetId, $adminId);
+            if ($method === 'PUT' || $method === 'PATCH') return $controller->updateAdmin($targetId, $adminId, $requestData, $performedBy);
+            if ($method === 'DELETE') return $controller->destroyAdmin($targetId, $adminId, $performedBy);
+        }
+        if (preg_match('#^/api/v1/organizations/(\d+)/admins/(\d+)/status$#', $uri, $m) && ($method === 'PATCH' || $method === 'POST')) {
+            $controller = new \App\Http\Controllers\Api\V1\Organizations\OrganizationController();
+            return $controller->updateAdminStatus((int)$m[1], (int)$m[2], $requestData, $performedBy);
+        }
+    }
+
+    // 4b. Tenant-Scoped Organisation Settings & Profile (Sports Admin & Super Admin)
+    if ($uri === '/api/v1/settings/organization') {
+        if (!$checkPermission(['settings.manage', 'organization.manage'])) {
+            return ApiResponse::error('Forbidden: Insufficient permissions to manage settings.', null, 403);
+        }
+        $settingsService = new \App\Services\Organization\OrganizationSettingsService();
+        if ($method === 'GET') {
+            $rows = $settingsService->getSettingRows($orgId);
+            return ApiResponse::success($rows, 'Organization settings retrieved', 200);
+        }
+        if ($method === 'POST') {
+            $key = trim($requestData['setting_key'] ?? '');
+            $type = trim($requestData['setting_type'] ?? 'string');
+            $val = $requestData['setting_value'] ?? '';
+            if ($key === '') {
+                return ApiResponse::error('Setting key is required.', ['setting_key' => ['The setting key field is required.']], 422);
+            }
+            $allowedTypes = ['string', 'integer', 'decimal', 'boolean', 'json'];
+            if (!in_array($type, $allowedTypes, true)) {
+                $type = 'string';
+            }
+            $ok = $settingsService->set($orgId, $key, $val, $type, $performedBy);
+            if ($ok) {
+                return ApiResponse::success([
+                    'setting_key' => $key,
+                    'setting_value' => is_scalar($val) ? (string)$val : json_encode($val),
+                    'setting_type' => $type
+                ], 'Setting saved successfully', 200);
+            }
+            return ApiResponse::error('Failed to save setting.', null, 500);
+        }
+    }
+
+    if ($uri === '/api/v1/settings/profile') {
+        if ($method === 'GET') {
+            if (!$checkPermission(['organization.view', 'organization.manage', 'settings.manage'])) {
+                return ApiResponse::error('Forbidden: Insufficient permissions to view organization profile.', null, 403);
+            }
+            $orgService = new \App\Services\Organization\OrganizationManagementService();
+            $org = $orgService->getOrganization($orgId);
+            if (!$org) return ApiResponse::error('Organization not found', null, 404);
+            return ApiResponse::success($org, 'Organization profile retrieved', 200);
+        }
+        if ($method === 'PUT' || $method === 'POST') {
+            if (!$checkPermission(['organization.update', 'organization.manage', 'settings.manage'])) {
+                return ApiResponse::error('Forbidden: Insufficient permissions to update organization profile.', null, 403);
+            }
+            $orgService = new \App\Services\Organization\OrganizationManagementService();
+            $name = trim($requestData['name'] ?? '');
+            if ($name === '') {
+                return ApiResponse::error('Organization name is required.', ['name' => ['The name field is required.']], 422);
+            }
+            $updated = $orgService->updateOrganization($orgId, $requestData, $performedBy);
+            if ($updated) {
+                if (isset($_SESSION['auth']['organization'])) {
+                    $_SESSION['auth']['organization']['name'] = $updated['name'];
+                }
+                return ApiResponse::success($updated, 'Organization profile updated successfully', 200);
+            }
+            return ApiResponse::error('Failed to update organization profile.', null, 500);
         }
     }
 

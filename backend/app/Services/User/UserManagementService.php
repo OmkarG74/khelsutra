@@ -67,6 +67,31 @@ class UserManagementService extends BaseService
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
+    public function getUserDetails(int $id, ?int $orgId = null): ?array
+    {
+        if (!$this->pdo) return null;
+        $user = $this->getUser($id);
+        if (!$user) return null;
+
+        // Fetch organization memberships
+        $stmt = $this->pdo->prepare("
+            SELECT o.id, o.name, o.organization_code, ou.access_status as status, r.name as role_name,
+                   (CASE WHEN ou.organization_id = :current_org THEN 1 ELSE 0 END) as is_default
+            FROM organization_users ou
+            JOIN organizations o ON ou.organization_id = o.id
+            JOIN roles r ON ou.role_id = r.id
+            WHERE ou.user_id = :uid AND o.deleted_at IS NULL
+            ORDER BY is_default DESC, o.id ASC
+        ");
+        $stmt->execute([
+            ':uid' => $id,
+            ':current_org' => $orgId ?: ($user['organization_id'] ?? 1)
+        ]);
+        $user['organizations'] = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        return $user;
+    }
+
     public function createUser(array $data, int $orgId, ?int $performedBy = null): ?array
     {
         if (!$this->pdo) return null;
