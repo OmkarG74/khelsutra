@@ -20,7 +20,10 @@ $currentUser = $_SESSION['auth']['user'] ?? [
 $orgId = current_organization_id();
 $currentRoleSlug = $_SESSION['auth']['role']['slug'] ?? ($_SESSION['role_slug'] ?? 'sports_admin');
 $currentRoleId = (int)($_SESSION['auth']['role']['id'] ?? ($currentUser['role_id'] ?? 2));
-$userId = current_user_id() ?? (int)($currentUser['id'] ?? 102);
+$globalUserId = current_user_id();
+$userId = $globalUserId !== null
+    ? (int) $globalUserId
+    : (int) ($currentUser['id'] ?? 0);
 
 // Athlete POST authorization check
 if ($currentRoleSlug === 'athlete' || $currentRoleId === 5) {
@@ -1212,7 +1215,7 @@ if (preg_match('#^/teams/(\d+)/coaches/(\d+)/edit$#', $uri, $m)) {
         header('Location: /teams/' . $teamId . '?error=' . urlencode('Invalid coach specified.'));
         exit;
     }
-    
+
     $role = trim((string)($_POST['coach_role'] ?? ''));
     $isPrimary = null;
     if (isset($_POST['is_primary'])) {
@@ -2588,80 +2591,32 @@ if (preg_match('#^/inventory/categories/(\d+)/delete$#', $uri, $m)) {
 }
 
 // ==========================================
-// Equipment Actions
+// Equipment Actions (Rentals)
 // ==========================================
-if ($uri === '/equipment/create') {
+if ($uri === '/equipment/issue') {
     $eqService = new \App\Services\Equipment\EquipmentService();
     try {
-        $created = $eqService->createEquipment($orgId, $_POST, $userId);
-        header('Location: /equipment/' . $created['id'] . '?success=' . urlencode("Equipment '{$created['equipment_name']}' created successfully."));
+        $created = $eqService->issueEquipment($orgId, $_POST, $userId);
+        header('Location: /equipment?success=' . urlencode("Equipment issued successfully."));
         exit;
     } catch (\Throwable $e) {
-        header('Location: /equipment/create?error=' . urlencode($e->getMessage()));
-        exit;
-    }
-}
-
-if (preg_match('#^/equipment/(\d+)/edit$#', $uri, $m)) {
-    $eqId = (int)$m[1];
-    $eqService = new \App\Services\Equipment\EquipmentService();
-    try {
-        $ok = $eqService->updateEquipment($orgId, $eqId, $_POST, $userId);
-        if ($ok) {
-            header('Location: /equipment/' . $eqId . '?success=' . urlencode('Equipment updated successfully.'));
-        } else {
-            header('Location: /equipment/' . $eqId . '/edit?error=' . urlencode('Failed to update equipment.'));
-        }
-        exit;
-    } catch (\Throwable $e) {
-        header('Location: /equipment/' . $eqId . '/edit?error=' . urlencode($e->getMessage()));
-        exit;
-    }
-}
-
-if (preg_match('#^/equipment/(\d+)/delete$#', $uri, $m)) {
-    $eqId = (int)$m[1];
-    $eqService = new \App\Services\Equipment\EquipmentService();
-    try {
-        $eqService->deleteEquipment($orgId, $eqId, $userId);
-        header('Location: /equipment?success=' . urlencode('Equipment removed successfully.'));
-        exit;
-    } catch (\Throwable $e) {
-        $referer = $_SERVER['HTTP_REFERER'] ?? '/equipment';
-        $redirectUrl = str_contains($referer, '/equipment') ? $referer : '/equipment';
-        header('Location: ' . $redirectUrl . (str_contains($redirectUrl, '?') ? '&' : '?') . 'error=' . urlencode($e->getMessage()));
-        exit;
-    }
-}
-
-if (preg_match('#^/equipment/(\d+)/assign$#', $uri, $m)) {
-    $eqId = (int)$m[1];
-    $eqService = new \App\Services\Equipment\EquipmentService();
-    $referer = $_SERVER['HTTP_REFERER'] ?? ('/equipment/' . $eqId);
-    try {
-        $res = $eqService->assignEquipment($orgId, $eqId, $_POST, $userId);
-        $redirectUrl = str_contains($referer, '/equipment') ? $referer : ('/equipment/' . $eqId);
-        header('Location: ' . $redirectUrl . (str_contains($redirectUrl, '?') ? '&' : '?') . 'success=' . urlencode("Equipment assigned to {$res['assignee_name']}."));
-        exit;
-    } catch (\Throwable $e) {
-        $redirectUrl = str_contains($referer, '/equipment') ? $referer : ('/equipment/' . $eqId);
-        header('Location: ' . $redirectUrl . (str_contains($redirectUrl, '?') ? '&' : '?') . 'error=' . urlencode($e->getMessage()));
+        header('Location: /equipment?error=' . urlencode($e->getMessage()));
         exit;
     }
 }
 
 if (preg_match('#^/equipment/(\d+)/return$#', $uri, $m)) {
-    $eqId = (int)$m[1];
+    $rentalId = (int)$m[1];
     $eqService = new \App\Services\Equipment\EquipmentService();
-    $referer = $_SERVER['HTTP_REFERER'] ?? ('/equipment/' . $eqId);
+    $referer = $_SERVER['HTTP_REFERER'] ?? '/equipment';
     try {
-        $res = $eqService->returnEquipment($orgId, $eqId, $_POST, $userId);
-        $statusMsg = $res['equipment_status'] === 'available' ? 'Available' : ucfirst($res['equipment_status']);
-        $redirectUrl = str_contains($referer, '/equipment') ? $referer : ('/equipment/' . $eqId);
-        header('Location: ' . $redirectUrl . (str_contains($redirectUrl, '?') ? '&' : '?') . 'success=' . urlencode("Equipment returned. Current status: {$statusMsg}."));
+        $res = $eqService->returnEquipment($orgId, $rentalId, $_POST, $userId);
+        $statusMsg = $res['status'] === 'returned' ? 'Returned' : ucfirst(str_replace('_', ' ', $res['status']));
+        $redirectUrl = str_contains($referer, '/equipment') ? $referer : '/equipment';
+        header('Location: ' . $redirectUrl . (str_contains($redirectUrl, '?') ? '&' : '?') . 'success=' . urlencode("Equipment return processed. Status: {$statusMsg}."));
         exit;
     } catch (\Throwable $e) {
-        $redirectUrl = str_contains($referer, '/equipment') ? $referer : ('/equipment/' . $eqId);
+        $redirectUrl = str_contains($referer, '/equipment') ? $referer : '/equipment';
         header('Location: ' . $redirectUrl . (str_contains($redirectUrl, '?') ? '&' : '?') . 'error=' . urlencode($e->getMessage()));
         exit;
     }

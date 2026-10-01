@@ -104,6 +104,45 @@ class ReportService extends BaseService
         ];
     }
 
+    public function getInventoryDashboardMetrics(int $organizationId): array
+    {
+        if (!$this->pdo) {
+            return [
+                'total_items' => 0,
+                'ready_to_use' => 0,
+                'low_stock' => 0,
+                'out_of_stock' => 0,
+            ];
+        }
+
+        // 1. Total Inventory Items
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM inventory_items WHERE organization_id = :org AND deleted_at IS NULL");
+        $stmt->execute([':org' => $organizationId]);
+        $totalItems = (int)$stmt->fetchColumn();
+
+        // 2. Ready to Use
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM inventory_items WHERE organization_id = :org AND quantity > 0 AND status = 'active' AND deleted_at IS NULL");
+        $stmt->execute([':org' => $organizationId]);
+        $readyToUse = (int)$stmt->fetchColumn();
+
+        // 3. Low Stock
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM inventory_items WHERE organization_id = :org AND quantity <= reorder_level AND quantity > 0 AND deleted_at IS NULL");
+        $stmt->execute([':org' => $organizationId]);
+        $lowStock = (int)$stmt->fetchColumn();
+
+        // 4. Out of Stock
+        $stmt = $this->pdo->prepare("SELECT COUNT(*) FROM inventory_items WHERE organization_id = :org AND quantity <= 0 AND deleted_at IS NULL");
+        $stmt->execute([':org' => $organizationId]);
+        $outOfStock = (int)$stmt->fetchColumn();
+
+        return [
+            'total_items' => $totalItems,
+            'ready_to_use' => $readyToUse,
+            'low_stock' => $lowStock,
+            'out_of_stock' => $outOfStock,
+        ];
+    }
+
     public function getUpcomingFixtures(int $organizationId, int $limit = 5): array
     {
         if (!$this->pdo) return [];

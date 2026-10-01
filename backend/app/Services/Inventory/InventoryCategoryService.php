@@ -19,6 +19,46 @@ class InventoryCategoryService extends BaseService
     }
 
     /**
+     * Provision missing sport-specific inventory categories for an organization.
+     * Synchronizes with the centralized sports configuration.
+     *
+     * @param int $orgId
+     * @param int|null $performedBy
+     * @return void
+     */
+    public function provisionSportCategories(int $orgId, ?int $performedBy = null): void
+    {
+        if (!$this->pdo) {
+            return;
+        }
+
+        // Fetch central sports catalog
+        $sportService = new \App\Services\Sport\SportService($this->pdo);
+        $sports = $sportService->getSportsCatalog();
+
+        // Get existing category names
+        $stmt = $this->pdo->prepare("SELECT name FROM inventory_categories WHERE organization_id = :org_id");
+        $stmt->execute([':org_id' => $orgId]);
+        $existingNames = $stmt->fetchAll(\PDO::FETCH_COLUMN);
+        $existingLower = array_map('strtolower', $existingNames);
+
+        $allowedInventorySports = ['athletics', 'badminton', 'basketball', 'cricket', 'football', 'swimming'];
+
+        foreach ($sports as $sport) {
+            $sportNameLower = strtolower($sport['name']);
+            if (in_array($sportNameLower, $allowedInventorySports, true)) {
+                if (!in_array($sportNameLower, $existingLower, true)) {
+                    $this->createCategory($orgId, [
+                        'name' => $sport['name'],
+                        'description' => $sport['name'] . ' Equipment',
+                        'status' => 'active'
+                    ], $performedBy);
+                }
+            }
+        }
+    }
+
+    /**
      * List all categories for the given organization.
      * Optionally filter by status ('active' | 'inactive').
      *

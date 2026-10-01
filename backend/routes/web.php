@@ -7,9 +7,15 @@
 
 return [
     '/' => function() {
+        if (\App\Helpers\AuthContext::getRoleSlug() === 'inventory_manager') {
+            return ['view' => 'dashboard/inventory-manager'];
+        }
         return ['view' => 'dashboard/index'];
     },
     '/dashboard' => function() {
+        if (\App\Helpers\AuthContext::getRoleSlug() === 'inventory_manager') {
+            return ['view' => 'dashboard/inventory-manager'];
+        }
         return ['view' => 'dashboard/index'];
     },
     '/athletes' => function() {
@@ -33,10 +39,10 @@ return [
         $teamsList = $teamService->getActiveTeams($orgId) ?? [];
 
         return [
-            'view' => 'sports/athletes-create', 
+            'view' => 'sports/athletes-create',
             'data' => [
-                'sportsList' => $sportsList, 
-                'sportMap' => $sportMap, 
+                'sportsList' => $sportsList,
+                'sportMap' => $sportMap,
                 'teamsList' => $teamsList
             ]
         ];
@@ -46,7 +52,7 @@ return [
     },
     '/athletes/{id}/edit' => function($id) {
         $orgId = current_organization_id();
-        
+
         $athleteService = new \App\Services\Athlete\AthleteService();
         $athlete = $athleteService->getAthlete($orgId, $id);
 
@@ -66,7 +72,7 @@ return [
         $teams = $teamService->getActiveTeams($orgId) ?? [];
 
         return [
-            'view' => 'sports/athletes-edit', 
+            'view' => 'sports/athletes-edit',
             'data' => [
                 'id' => $id,
                 'athlete' => $athlete,
@@ -162,15 +168,6 @@ return [
     },
     '/equipment' => function() {
         return ['view' => 'equipment/equipment-index'];
-    },
-    '/equipment/create' => function() {
-        return ['view' => 'equipment/equipment-create'];
-    },
-    '/equipment/{id}' => function($id) {
-        return ['view' => 'equipment/equipment-show', 'data' => ['id' => $id, 'data' => ['id' => $id]]];
-    },
-    '/equipment/{id}/edit' => function($id) {
-        return ['view' => 'equipment/equipment-edit', 'data' => ['id' => $id, 'data' => ['id' => $id]]];
     },
     '/vendors' => function() {
         return ['view' => 'vendors/vendors-index'];

@@ -63,7 +63,7 @@ class InventoryService extends BaseService
         $offset = max(0, ($page - 1) * $limit);
 
         $sql = "
-            SELECT 
+            SELECT
                 ii.*,
                 ic.name as category_name,
                 (ii.quantity <= ii.reorder_level) as is_low_stock
@@ -100,7 +100,7 @@ class InventoryService extends BaseService
         if (!$this->pdo) return null;
 
         $stmt = $this->pdo->prepare("
-            SELECT ii.*, 
+            SELECT ii.*,
                    ic.name as category_name,
                    (ii.quantity <= ii.reorder_level) as is_low_stock
             FROM inventory_items ii
@@ -115,7 +115,7 @@ class InventoryService extends BaseService
 
         // Stock Transactions (Up to 50 recent records)
         $txStmt = $this->pdo->prepare("
-            SELECT st.*, 
+            SELECT st.*,
                    COALESCE(CONCAT(e.first_name, ' ', e.last_name), CONCAT(u.first_name, ' ', u.last_name), 'Staff') as performer_name
             FROM stock_transactions st
             LEFT JOIN users u ON st.performed_by = u.id
@@ -153,10 +153,30 @@ class InventoryService extends BaseService
             SELECT ii.*, ic.name as category_name, 1 as is_low_stock
             FROM inventory_items ii
             LEFT JOIN inventory_categories ic ON ii.category_id = ic.id
-            WHERE ii.organization_id = :org_id 
-              AND ii.quantity <= ii.reorder_level 
+            WHERE ii.organization_id = :org_id
+              AND ii.quantity <= ii.reorder_level
               AND ii.deleted_at IS NULL
             ORDER BY (ii.quantity - ii.reorder_level) ASC, ii.id DESC
+        ");
+        $stmt->execute([':org_id' => $organizationId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Get all out-of-stock items for an organization.
+     */
+    public function getOutOfStockItems(int $organizationId): array
+    {
+        if (!$this->pdo) return [];
+
+        $stmt = $this->pdo->prepare("
+            SELECT ii.*, ic.name as category_name
+            FROM inventory_items ii
+            LEFT JOIN inventory_categories ic ON ii.category_id = ic.id
+            WHERE ii.organization_id = :org_id
+              AND ii.quantity <= 0
+              AND ii.deleted_at IS NULL
+            ORDER BY ii.item_name ASC
         ");
         $stmt->execute([':org_id' => $organizationId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
@@ -181,8 +201,8 @@ class InventoryService extends BaseService
         $categoryId = !empty($data['category_id']) ? (int)$data['category_id'] : null;
         if ($categoryId !== null) {
             $catCheck = $this->pdo->prepare("
-                SELECT id FROM inventory_categories 
-                WHERE id = :id AND organization_id = :org_id AND deleted_at IS NULL 
+                SELECT id FROM inventory_categories
+                WHERE id = :id AND organization_id = :org_id AND deleted_at IS NULL
                 LIMIT 1
             ");
             $catCheck->execute([':id' => $categoryId, ':org_id' => $organizationId]);
@@ -192,8 +212,8 @@ class InventoryService extends BaseService
         } else {
             // Pick first active category in org or create default
             $catStmt = $this->pdo->prepare("
-                SELECT id FROM inventory_categories 
-                WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL 
+                SELECT id FROM inventory_categories
+                WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL
                 ORDER BY id ASC LIMIT 1
             ");
             $catStmt->execute([':org_id' => $organizationId]);
@@ -227,8 +247,8 @@ class InventoryService extends BaseService
                 throw new InvalidArgumentException('Item code cannot exceed 50 characters.');
             }
             $dupStmt = $this->pdo->prepare("
-                SELECT id FROM inventory_items 
-                WHERE organization_id = :org_id AND item_code = :code AND deleted_at IS NULL 
+                SELECT id FROM inventory_items
+                WHERE organization_id = :org_id AND item_code = :code AND deleted_at IS NULL
                 LIMIT 1
             ");
             $dupStmt->execute([':org_id' => $organizationId, ':code' => $code]);
@@ -532,7 +552,11 @@ class InventoryService extends BaseService
 
         $auditUser = $this->resolveAuditUserId($performedBy);
 
-        $this->pdo->beginTransaction();
+        $beganTransaction = false;
+        if (!$this->pdo->inTransaction()) {
+            $this->pdo->beginTransaction();
+            $beganTransaction = true;
+        }
         try {
             // 1. Insert immutable stock transaction ledger record
             $txSql = "
@@ -562,14 +586,16 @@ class InventoryService extends BaseService
 
             // 2. Atomically update item stock level
             $upSql = "
-                UPDATE inventory_items 
-                SET quantity = :new_qty, updated_at = NOW() 
+                UPDATE inventory_items
+                SET quantity = :new_qty, updated_at = NOW()
                 WHERE id = :id AND organization_id = :org_id AND deleted_at IS NULL
             ";
             $upStmt = $this->pdo->prepare($upSql);
             $upStmt->execute([':new_qty' => $newQty, ':id' => $itemId, ':org_id' => $organizationId]);
 
-            $this->pdo->commit();
+            if ($beganTransaction) {
+                $this->pdo->commit();
+            }
 
             $this->auditLog->log(
                 $organizationId,
@@ -599,7 +625,7 @@ class InventoryService extends BaseService
                 'remarks' => $remarks,
             ];
         } catch (\Throwable $e) {
-            if ($this->pdo->inTransaction()) {
+            if ($beganTransaction && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;
@@ -641,7 +667,7 @@ class InventoryService extends BaseService
         $offset = max(0, ($page - 1) * $limit);
 
         $sql = "
-            SELECT st.*, 
+            SELECT st.*,
                    ii.item_name, ii.item_code, ii.unit,
                    COALESCE(CONCAT(e.first_name, ' ', e.last_name), CONCAT(u.first_name, ' ', u.last_name), 'Staff') as performer_name
             FROM stock_transactions st
@@ -683,8 +709,8 @@ class InventoryService extends BaseService
         }
 
         $stmt = $this->pdo->prepare("
-            UPDATE inventory_items 
-            SET deleted_at = NOW(), updated_at = NOW() 
+            UPDATE inventory_items
+            SET deleted_at = NOW(), updated_at = NOW()
             WHERE id = :id AND organization_id = :org_id AND deleted_at IS NULL
         ");
         $ok = $stmt->execute([':id' => $id, ':org_id' => $organizationId]);

@@ -4,7 +4,7 @@ $activePage = 'inventory';
 $orgId = current_organization_id();
 
 $db = \App\Services\BaseService::getDatabaseConnection();
-$catStmt = $db->prepare("SELECT id, name FROM inventory_categories WHERE organization_id = :org_id AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
+$catStmt = $db->prepare("SELECT id, name FROM inventory_categories WHERE organization_id = :org_id AND name IN ('Athletics', 'Badminton', 'Basketball', 'Cricket', 'Football', 'Swimming') AND status = 'active' AND deleted_at IS NULL ORDER BY name ASC");
 $catStmt->execute([':org_id' => $orgId]);
 $categories = $catStmt ? $catStmt->fetchAll(PDO::FETCH_ASSOC) : [];
 
@@ -47,8 +47,8 @@ ob_start();
                 </div>
                 <div class="col-md-6">
                     <label class="form-label small fw-semibold text-dark">Category</label>
-                    <select name="category_id" class="form-select" style="font-size: 13px; border-radius: var(--ks-radius-button);">
-                        <option value="">General Sports Gear</option>
+                    <select name="category_id" class="form-select" required style="font-size: 13px; border-radius: var(--ks-radius-button);">
+                        <option value="">-- Select Category --</option>
                         <?php foreach ($categories as $cat): ?>
                             <option value="<?= (int)$cat['id'] ?>"><?= htmlspecialchars($cat['name'], ENT_QUOTES, 'UTF-8') ?></option>
                         <?php endforeach; ?>
